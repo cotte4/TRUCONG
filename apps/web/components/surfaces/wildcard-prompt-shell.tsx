@@ -86,34 +86,20 @@ export function WildcardPromptShell({
             responsePending ? "border-amber-200/25 bg-amber-200/12 text-amber-50" : "border-white/10 bg-slate-950/80 text-slate-200"
           }`}
         >
-          {responsePending ? "Selection pending" : "Selection ready"}
+          {responsePending ? "Selección pendiente" : "Selección lista"}
         </span>
         <span
           className={`rounded-full border px-3 py-1 ${
             highlightSelected ? "border-emerald-200/25 bg-emerald-200/12 text-emerald-50" : "border-white/10 bg-slate-950/80 text-slate-200"
           }`}
         >
-          {highlightSelected ? "Choice pinned" : "Prompt lane open"}
+          {highlightSelected ? "Elección fijada" : "Comodín abierto"}
         </span>
-        <span className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-slate-200">
-          {flowLabel ?? "Flow ready"}
-        </span>
-      </div>
-
-      <div className="mt-5 rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Lane status</p>
-        <p className="mt-2 text-sm leading-6 text-slate-200/82">
-          {responsePending
-            ? "The room is waiting on a wildcard response, so the shell stays bright and ready for a selection payload."
-            : highlightSelected
-              ? "The current wildcard choice is pinned to the lane and can be replaced by a richer server payload later."
-              : "This lane is idle but intentionally visible, so the next wildcard prompt can land without a redesign."}
-        </p>
       </div>
 
       {flowSteps.length > 0 ? (
         <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Selection flow</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Pasos</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {flowSteps.map((step, index) => {
               const isActive = index === activeFlowStep;
@@ -130,7 +116,7 @@ export function WildcardPromptShell({
                   }`}
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.18em]">
-                    {isDone ? "Done" : isActive ? "Active" : "Queued"}
+                    {isDone ? "Listo" : isActive ? "Activo" : "En cola"}
                   </p>
                   <p className="mt-2">{step}</p>
                 </div>
@@ -148,41 +134,22 @@ export function WildcardPromptShell({
               : "border-white/10 bg-slate-950/80"
           }`}
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Selected wildcard</p>
-          <p className="mt-3 text-lg font-semibold text-white">{selectedLabel ?? "No wildcard selected"}</p>
-          <p className="mt-2 text-sm text-slate-300">
-            {attentionDescription ?? "This is a presentational shell for the wildcard chooser and its envido fixation state."}
-          </p>
-          {highlightSelected ? (
-            <p className="mt-3 text-xs uppercase tracking-[0.2em] text-amber-100/70">
-              The current wildcard choice is visually pinned to this lane.
-            </p>
-          ) : null}
-          {responsePending ? (
-            <div className="mt-4 rounded-2xl border border-amber-200/25 bg-amber-200/12 px-4 py-3 text-sm text-amber-50">
-              The room is waiting on a wildcard response, so this selection card stays visually active until the
-              server provides the final choice.
-            </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Comodín elegido</p>
+          <p className="mt-3 text-lg font-semibold text-white">{selectedLabel ?? "Sin comodín"}</p>
+          {attentionDescription ? (
+            <p className="mt-2 text-sm text-slate-300">{attentionDescription}</p>
           ) : null}
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-slate-950/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Prompt</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Elegir</p>
           <p className="mt-3 text-lg font-semibold text-white">
-            {selectedLabel ? "Confirm the wildcard reading" : "Choose the wildcard interpretation"}
-          </p>
-          <p className="mt-2 text-sm text-slate-300">
-            {responsePending
-              ? "The response is pending, so this prompt stays highlighted until a real selection arrives."
-              : "The backend can later supply the real choices. The shell is already prepared to show them here."}
+            {selectedLabel ? "Confirmá la lectura del comodín" : "Elegí cómo va a jugar el comodín"}
           </p>
           {responsePending ? (
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-full border border-amber-200/25 bg-amber-200/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-50">
-                Pending choice
-              </span>
-              <span className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-200">
-                Keep the prompt lane open
+                Elección pendiente
               </span>
             </div>
           ) : null}
@@ -206,7 +173,7 @@ export function WildcardPromptShell({
                 <p className="text-sm font-semibold uppercase tracking-[0.2em]">{option.label}</p>
                 {option.recommended ? (
                   <span className="rounded-full border border-amber-200/25 bg-amber-200/12 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-50">
-                    {responsePending ? "Pending choice" : "Recommended"}
+                    {responsePending ? "Elección pendiente" : "Recomendado"}
                   </span>
                 ) : null}
               </div>

@@ -2,24 +2,18 @@
 
 import { useEffect, useState } from "react";
 
-const chatNotes = [
-  "Private table thread",
-  "Use for quick coordination",
-  "Collapses on small screens",
-];
-
 const emotes = [
-  { label: "Alien flex", hint: "Pressure release" },
-  { label: "Hot hand", hint: "Fast reaction" },
-  { label: "Nice play", hint: "Table applause" },
-  { label: "Signal", hint: "Reconnect cue" },
+  { label: "Alien flex", hint: "Presión liberada" },
+  { label: "Mano caliente", hint: "Reacción rápida" },
+  { label: "Buena jugada", hint: "Aplauso de mesa" },
+  { label: "Señal", hint: "Aviso de reconexión" },
 ];
 
 const reactions = [
-  { label: "Nice hand", hint: "Fast applause" },
-  { label: "GG", hint: "End of trick" },
-  { label: "BONG", hint: "Social meta" },
-  { label: "Wild", hint: "Wildcard vibe" },
+  { label: "Buena mano", hint: "Aplauso rápido" },
+  { label: "GG", hint: "Fin de baza" },
+  { label: "BONG", hint: "Meta social" },
+  { label: "Comodín", hint: "Vibra alien" },
 ];
 
 export function SocialPanels() {
@@ -46,47 +40,17 @@ export function SocialPanels() {
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200/70">Table social</p>
-          <h2 className="mt-3 text-2xl font-semibold text-white">Chat, emotes, and reactions</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200/70">Mesa social</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">Chat, emotes y reacciones</h2>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-            These are lightweight placeholders for the room's social layer. They stay tucked away on mobile, but on
-            desktop they behave like a coordinated side panel that belongs to the table and its live turn flow.
+            El lado social de la mesa. Se pliega en mobile para que la mesa quede siempre visible; en desktop se abre como panel lateral.
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-50">
-            Mobile collapsed
-          </div>
-          <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-200">
-            Fits the game surface
+            Plegado en mobile
           </div>
         </div>
-      </div>
-
-      <div className="mt-5 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-100">
-        <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1 text-slate-200">Chat ready</span>
-        <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1 text-slate-200">
-          Emotes preview
-        </span>
-        <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1 text-slate-200">
-          Reactions preview
-        </span>
-      </div>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        {["Table coordination", "Desktop-first side panel", "Collapsed on smaller screens"].map((item) => (
-          <div key={item} className="rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{item}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        {chatNotes.map((item) => (
-          <div key={item} className="rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{item}</p>
-          </div>
-        ))}
       </div>
 
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -97,34 +61,24 @@ export function SocialPanels() {
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Chat</p>
-              <p className="mt-1 text-sm text-slate-400">Open by default on desktop, collapsed on mobile.</p>
+              <p className="mt-1 text-sm text-slate-400">Abierto en desktop, plegado en mobile.</p>
             </div>
             <span className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-              Soon
+              Próximamente
             </span>
           </summary>
 
           <div className="mt-4 space-y-3">
             <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">System</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Sistema</p>
               <p className="mt-2 text-sm text-slate-200/82">
-                Room chat will live here once the socket contract is finalized.
+                El chat de sala va a vivir acá.
               </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-4 text-sm text-slate-300">
-              <div className="flex items-center gap-3">
-                <span className="h-2.5 w-2.5 rounded-full bg-cyan-300" />
-                <p>Seat messages and lightweight table chatter.</p>
-              </div>
-              <div className="mt-3 flex items-center gap-3">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
-                <p>Kept below the fold on mobile so the table stays readable.</p>
-              </div>
             </div>
             <textarea
               disabled
               rows={3}
-              placeholder="Type a message for your table..."
+              placeholder="Escribí un mensaje para la mesa..."
               className="w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-slate-400 outline-none placeholder:text-slate-500 disabled:cursor-not-allowed"
             />
             <button
@@ -132,7 +86,7 @@ export function SocialPanels() {
               disabled
               className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-200/70"
             >
-              Send message
+              Enviar mensaje
             </button>
           </div>
         </details>
@@ -145,10 +99,10 @@ export function SocialPanels() {
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Emotes</p>
-                <p className="mt-1 text-sm text-slate-400">Single-tap reactions with room flavor.</p>
+                <p className="mt-1 text-sm text-slate-400">Reacciones de un toque con sabor alien.</p>
               </div>
               <span className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-                Preview
+                Vista previa
               </span>
             </summary>
 
@@ -173,11 +127,11 @@ export function SocialPanels() {
           >
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Reactions</p>
-                <p className="mt-1 text-sm text-slate-400">Quick labels that can attach to table moments.</p>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Reacciones</p>
+                <p className="mt-1 text-sm text-slate-400">Etiquetas rápidas para momentos de mesa.</p>
               </div>
               <span className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">
-                Ready
+                Lista
               </span>
             </summary>
 

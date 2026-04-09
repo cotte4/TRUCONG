@@ -69,7 +69,7 @@ export function CantoStateShell({
             responsePending ? "border-amber-200/25 bg-amber-200/12 text-amber-50" : "border-white/10 bg-slate-950/80 text-slate-200"
           }`}
         >
-          {responsePending ? "Response pending" : "Response ready"}
+          {responsePending ? "Respuesta pendiente" : "Respuesta lista"}
         </span>
         <span className="rounded-full border border-white/10 bg-slate-950/80 px-3 py-1 text-slate-200">{stageLabel}</span>
         <span
@@ -77,25 +77,22 @@ export function CantoStateShell({
             attentionLabel ? "border-cyan-300/20 bg-cyan-300/10 text-cyan-50" : "border-white/10 bg-slate-950/80 text-slate-200"
           }`}
         >
-          {attentionLabel ?? "Canto lane open"}
+          {attentionLabel ?? "Canto abierto"}
         </span>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
         <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Current canto</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Canto activo</p>
           <p className="mt-3 text-lg font-semibold text-white">{callLabel}</p>
-          <p className="mt-2 text-sm text-slate-300">
-            This shell can represent truco, envido, retruco, or any future canto that the backend exposes.
-          </p>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Response lane</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Respuesta</p>
           <p className="mt-3 text-lg font-semibold text-white">{responseLabel}</p>
-          <p className="mt-2 text-sm text-slate-300">
-            {responseDescription(responsePending, attentionDescription)}
-          </p>
+          {attentionDescription ? (
+            <p className="mt-2 text-sm text-slate-300">{attentionDescription}</p>
+          ) : null}
         </div>
       </div>
 
@@ -118,14 +115,4 @@ export function CantoStateShell({
       ) : null}
     </section>
   );
-}
-
-function responseDescription(responsePending: boolean, attentionDescription?: string) {
-  if (attentionDescription) {
-    return attentionDescription;
-  }
-
-  return responsePending
-    ? "The response is pending, so this lane stays highlighted until the server provides the real canto result."
-    : "The UI stays ready for want/no-want, pass, or hold states without requiring real backend events yet.";
 }

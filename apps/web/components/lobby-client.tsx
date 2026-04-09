@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
@@ -231,7 +232,7 @@ export function LobbyClient({ code }: { code: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [roomSessionToken, setRoomSessionToken] = useState<string | null>(null);
-  const [connectionLabel, setConnectionLabel] = useState("Connecting...");
+  const [connectionLabel, setConnectionLabel] = useState("Conectando...");
   const [socket, setSocket] = useState<Socket | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
@@ -415,12 +416,12 @@ export function LobbyClient({ code }: { code: string }) {
               Reintentar
             </button>
           ) : null}
-          <a
+          <Link
             href="/"
             className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
           >
             Ir al inicio
-          </a>
+          </Link>
         </div>
       </section>
     );

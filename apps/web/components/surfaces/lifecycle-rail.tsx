@@ -23,7 +23,7 @@ const toneClasses: Record<NonNullable<LifecycleItem["tone"]>, string> = {
 
 export function LifecycleRail({ title, subtitle, statusLabel, items, compact = false }: LifecycleRailProps) {
   const doneCount = items.filter((item) => item.done).length;
-  const activeLabel = items.find((item) => item.active)?.label ?? items.find((item) => !item.done)?.label ?? items[0]?.label ?? "None";
+  const activeLabel = items.find((item) => item.active)?.label ?? items.find((item) => !item.done)?.label ?? items[0]?.label ?? "Esperando";
 
   return (
     <section className="relative overflow-hidden rounded-[2rem] border border-white/12 bg-slate-950/72 p-6 shadow-2xl shadow-cyan-950/20 backdrop-blur">
@@ -42,10 +42,10 @@ export function LifecycleRail({ title, subtitle, statusLabel, items, compact = f
 
       <div className="mt-5 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">
         <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1">
-          {doneCount}/{items.length} settled
+          {doneCount}/{items.length} listos
         </span>
-        <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1">Active {activeLabel}</span>
-        <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1">{compact ? "Compact rail" : "Full rail"}</span>
+        <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1">Activo: {activeLabel}</span>
+        <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1">{compact ? "Compacto" : "Completo"}</span>
       </div>
 
       <div className="mt-5 h-2 overflow-hidden rounded-full border border-white/10 bg-slate-900/80">
@@ -71,11 +71,11 @@ export function LifecycleRail({ title, subtitle, statusLabel, items, compact = f
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold uppercase tracking-[0.18em]">{item.label}</span>
                   <span className="rounded-full border border-white/10 bg-black/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">
-                    {item.done ? "Done" : item.active ? "Now" : "Next"}
+                    {item.done ? "Listo" : item.active ? "Ahora" : "Siguiente"}
                   </span>
                 </div>
                 <p className="mt-2 text-[11px] leading-5 opacity-90">{item.detail}</p>
-                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] opacity-70">Step {index + 1}</p>
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.18em] opacity-70">Paso {index + 1}</p>
               </div>
             );
           })}
@@ -97,13 +97,10 @@ export function LifecycleRail({ title, subtitle, statusLabel, items, compact = f
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-80">
-                    {item.done ? "Done" : item.active ? "Active" : "Queued"}
+                    {item.done ? "Listo" : item.active ? "Activo" : "En cola"}
                   </p>
                   <p className="mt-2 text-sm font-semibold uppercase tracking-[0.18em]">{item.label}</p>
                 </div>
-                <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]">
-                  {tone}
-                </span>
               </div>
               <p className="mt-3 text-sm leading-6 opacity-90">{item.detail}</p>
             </div>

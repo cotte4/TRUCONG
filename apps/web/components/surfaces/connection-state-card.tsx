@@ -67,7 +67,7 @@ export function ConnectionStateCard({
 }: ConnectionStateCardProps) {
   const toneClass = toneClasses[tone];
   const doneCount = steps.filter((_, index) => index < activeStepIndex).length;
-  const activeStepLabel = steps[activeStepIndex] ?? steps[steps.length - 1] ?? "Waiting";
+  const activeStepLabel = steps[activeStepIndex] ?? steps[steps.length - 1] ?? "Esperando";
 
   return (
     <section className="relative overflow-hidden rounded-[2rem] border border-white/12 bg-slate-950/72 p-6 shadow-2xl shadow-cyan-950/20 backdrop-blur">
@@ -86,23 +86,23 @@ export function ConnectionStateCard({
       {steps.length > 0 ? (
         <div className="mt-5 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-100">
           <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1 text-slate-200">
-            {doneCount}/{steps.length} settled
+            {doneCount}/{steps.length} listos
           </span>
           <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1 text-slate-200">
-            Active {activeStepLabel}
+            Activo: {activeStepLabel}
           </span>
           <span className="rounded-full border border-white/10 bg-slate-900/80 px-3 py-1 text-slate-200">
-            {compact ? "Compact recovery" : "Full recovery"}
+            {compact ? "Recuperación compacta" : "Recuperación completa"}
           </span>
         </div>
       ) : null}
 
       <div className="mt-6 rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Recovery lane</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Estado de conexión</p>
         <p className="mt-2 text-sm leading-6 text-slate-200/82">
           {steps.length > 0
-            ? `The room is moving through ${activeStepLabel.toLowerCase()} and will continue to resolve the seat before the table becomes fully interactive.`
-            : "The room is reconnecting and will keep the current seat readable while the socket and snapshot settle."}
+            ? `La sala está en el paso de ${activeStepLabel.toLowerCase()} y va a resolver el asiento antes de que la mesa quede completamente activa.`
+            : "La sala se está reconectando. Tu asiento queda visible mientras el socket y el estado se sincronizan."}
         </p>
       </div>
 
@@ -118,7 +118,7 @@ export function ConnectionStateCard({
 
       {steps.length > 0 ? (
         <div className="mt-6 rounded-3xl border border-white/10 bg-slate-900/80 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Transition</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Pasos</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {steps.map((step, index) => {
               const isActive = index === activeStepIndex;
@@ -135,7 +135,7 @@ export function ConnectionStateCard({
                   }`}
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.18em]">
-                    {isDone ? "Done" : isActive ? "Active" : "Queued"}
+                    {isDone ? "Listo" : isActive ? "Activo" : "En cola"}
                   </p>
                   <p className="mt-2">{step}</p>
                 </div>
