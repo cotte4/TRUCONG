@@ -1555,6 +1555,11 @@ export class RoomStoreService {
         this.roomCodeByToken.set(occupancy.roomSessionToken, roomState.code);
       }
 
+      // If no current occupancy exists in DB, the seat is reclaimable —
+      // reset it to open so new players can join (e.g. after server restart
+      // with an incognito player whose session token is gone).
+      const hasActiveOccupancy = !!occupancy;
+
       return {
         id: seatSnapshot.id,
         persistedSeatId: persistedSeat?.id ?? null,
@@ -1563,8 +1568,8 @@ export class RoomStoreService {
         reconnectToken: latestConnection?.reconnectToken ?? null,
         seatIndex: seatSnapshot.seatIndex,
         teamSide: seatSnapshot.teamSide,
-        status: seatSnapshot.status,
-        displayName: seatSnapshot.displayName,
+        status: hasActiveOccupancy ? seatSnapshot.status : 'open',
+        displayName: hasActiveOccupancy ? seatSnapshot.displayName : null,
         isHost: seatSnapshot.isHost,
         isReady: seatSnapshot.isReady,
         roomSessionToken: occupancy?.roomSessionToken ?? null,
