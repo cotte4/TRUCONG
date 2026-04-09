@@ -540,8 +540,6 @@ export function LobbyClient({ code }: { code: string }) {
     matchView?.currentTurnSeatId ??
     matchState?.currentTurnSeatId ??
     null;
-  const currentTurnName =
-    activeSeatId ? snapshot.seats.find((seat) => seat.id === activeSeatId)?.displayName ?? "Jugador desconocido" : null;
   const isLobby = phase === "lobby" || phase === "ready_check";
   const isMyTurn = phase === "action_turn" && activeSeatId === currentSeat?.id;
   const needsWildcardSelection =
