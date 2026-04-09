@@ -1467,21 +1467,27 @@ export class RoomStoreService {
       return;
     }
 
-    const persistedRoom =
-      await this.roomPersistence.findRoomByCode(normalizedCode);
+    try {
+      const persistedRoom =
+        await this.roomPersistence.findRoomByCode(normalizedCode);
 
-    if (!persistedRoom?.snapshots[0]?.state) {
-      return;
+      if (!persistedRoom?.snapshots[0]?.state) {
+        return;
+      }
+
+      const state = persistedRoom.snapshots[0]
+        .state as unknown as PersistedSnapshotState;
+      const restoredRoom = this.hydrateRoomFromPersistence(
+        persistedRoom,
+        state,
+        persistedRoom.snapshots[0].version,
+      );
+      this.roomsByCode.set(normalizedCode, restoredRoom);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to restore room ${normalizedCode} from persistence: ${error instanceof Error ? error.message : 'unknown error'}`,
+      );
     }
-
-    const state = persistedRoom.snapshots[0]
-      .state as unknown as PersistedSnapshotState;
-    const restoredRoom = this.hydrateRoomFromPersistence(
-      persistedRoom,
-      state,
-      persistedRoom.snapshots[0].version,
-    );
-    this.roomsByCode.set(normalizedCode, restoredRoom);
   }
 
   private buildSnapshot(room: MutableRoom): RoomSnapshot {
