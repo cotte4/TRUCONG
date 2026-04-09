@@ -5,21 +5,32 @@ import { useState, useTransition } from "react";
 import type { CreateRoomRequest, JoinRoomRequest, RoomEntryResponse } from "@dimadong/contracts";
 import { apiBaseUrl } from "@/lib/config";
 
-async function postJson<TBody, TResult>(url: string, body: TBody): Promise<TResult> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+async function postJson<TBody, TResult>(url: string, body: TBody, timeoutMs = 15000): Promise<TResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "La solicitud falló.");
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || "La solicitud falló.");
+    }
+
+    return response.json() as Promise<TResult>;
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error("El servidor tardó demasiado. Puede estar iniciando — intentá de nuevo en unos segundos.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return response.json() as Promise<TResult>;
 }
 
 export function HomeClient() {
@@ -30,7 +41,8 @@ export function HomeClient() {
   const [maxPlayers, setMaxPlayers] = useState<2 | 4>(4);
   const [targetScore, setTargetScore] = useState<15 | 30>(30);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [isCreating, startCreateTransition] = useTransition();
+  const [isJoining, startJoinTransition] = useTransition();
 
   const enterRoom = (result: RoomEntryResponse) => {
     window.localStorage.setItem(`dimadong:${result.snapshot.code}:session`, result.session.roomSessionToken);
@@ -42,7 +54,7 @@ export function HomeClient() {
     event.preventDefault();
     setError(null);
 
-    startTransition(async () => {
+    startCreateTransition(async () => {
       try {
         const payload: CreateRoomRequest = {
           displayName: createName,
@@ -62,7 +74,7 @@ export function HomeClient() {
     event.preventDefault();
     setError(null);
 
-    startTransition(async () => {
+    startJoinTransition(async () => {
       try {
         const payload: JoinRoomRequest = {
           displayName: joinName,
@@ -137,10 +149,10 @@ export function HomeClient() {
         </div>
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isCreating}
           className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isPending ? "Creando..." : "Crear sala"}
+          {isCreating ? "Creando..." : "Crear sala"}
         </button>
       </form>
 
@@ -171,10 +183,10 @@ export function HomeClient() {
         </label>
         <button
           type="submit"
-          disabled={isPending}
+          disabled={isJoining}
           className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isPending ? "Entrando..." : "Entrar a la sala"}
+          {isJoining ? "Entrando..." : "Entrar a la sala"}
         </button>
       </form>
 
