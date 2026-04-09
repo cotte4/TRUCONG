@@ -429,12 +429,15 @@ export class RoomStoreService {
       this.clearReconnectTimeout(room.code);
       this.setStatus(
         room,
-        `${seat.displayName ?? 'Player'} reconnected and can act.`,
+        `${seat.displayName ?? 'Jugador'} reconectado. Le toca jugar.`,
       );
       this.scheduleTurnTimeout(room.code);
     }
 
-    this.pushEvent(room, `${seat.displayName ?? 'Player'} reconnected.`);
+    this.pushEvent(
+      room,
+      `${seat.displayName ?? 'Jugador'} volvió a conectarse.`,
+    );
     this.persistReconnect(room, seat);
     this.persistConnectionConnected(seat, socketId);
 
@@ -457,7 +460,7 @@ export class RoomStoreService {
       if (seat.roomSessionToken) {
         seat.status = 'disconnected';
         seat.isReady = false;
-        this.pushEvent(room, `${seat.displayName ?? 'Player'} disconnected.`);
+        this.pushEvent(room, `${seat.displayName ?? 'Jugador'} se desconectó.`);
         if (
           room.match &&
           room.phase === 'action_turn' &&
@@ -471,7 +474,7 @@ export class RoomStoreService {
           this.clearTurnTimeout(room.code);
           this.setStatus(
             room,
-            `Waiting for ${seat.displayName ?? 'player'} to reconnect.`,
+            `Esperando que ${seat.displayName ?? 'jugador'} se reconecte.`,
           );
           this.scheduleReconnectTimeout(room.code);
         }
@@ -551,7 +554,7 @@ export class RoomStoreService {
         seatId: play.seatId,
         displayName:
           room.seats.find((seat) => seat.id === play.seatId)?.displayName ??
-          'Player',
+          'Jugador',
         card: {
           id: play.card.id,
           rank: play.card.rank,
@@ -649,7 +652,7 @@ export class RoomStoreService {
         finalScore: handSummaryScore,
         winnerTeamSide: match.lastHandWinnerTeamSide,
         reason: match.lastHandWinnerTeamSide
-          ? `Team ${match.lastHandWinnerTeamSide} won hand ${match.handNumber}.`
+          ? `El Equipo ${match.lastHandWinnerTeamSide} ganó la mano ${match.handNumber}.`
           : null,
       },
       matchComplete,
@@ -761,7 +764,7 @@ export class RoomStoreService {
     actorSeat.status = 'occupied';
     this.pushEvent(
       room,
-      `${actorSeat.displayName ?? 'Player'} is now ${actorSeat.isReady ? 'ready' : 'not ready'}.`,
+      `${actorSeat.displayName ?? 'Jugador'} está ${actorSeat.isReady ? 'listo' : 'no listo'}.`,
     );
     this.persistAction(
       room,
@@ -804,7 +807,7 @@ export class RoomStoreService {
     this.clearReadyState(room);
     this.pushEvent(
       room,
-      `${targetSeat.displayName ?? 'Seat'} moved to Team ${payload.teamSide}.`,
+      `${targetSeat.displayName ?? 'Asiento'} pasó al Equipo ${payload.teamSide}.`,
     );
     this.persistAction(
       room,
@@ -850,8 +853,8 @@ export class RoomStoreService {
 
     room.match = this.createInitialMatch(room);
     room.phase = 'action_turn';
-    this.pushEvent(room, 'Match started. Cards dealt.');
-    this.setStatus(room, 'Hand 1 is live.');
+    this.pushEvent(room, '¡Partida iniciada! Se repartieron las cartas.');
+    this.setStatus(room, 'Mano 1 en juego.');
     this.scheduleTurnTimeout(room.code);
     this.persistMatchStarted(room, actorSeat);
 
@@ -888,9 +891,9 @@ export class RoomStoreService {
     this.clearWildcardTimeout(room.code);
     this.setStatus(
       room,
-      `Final summary opened by ${actorSeat.displayName ?? 'player'}.`,
+      `Resumen abierto por ${actorSeat.displayName ?? 'jugador'}.`,
     );
-    this.pushEvent(room, `Summary started (${source}).`);
+    this.pushEvent(room, 'Mostrando resumen de la partida.');
     this.persistAction(
       room,
       'summary_started',
@@ -966,11 +969,11 @@ export class RoomStoreService {
     this.scheduleCantoTimeout(room.code);
     this.setStatus(
       room,
-      `${actorSeat.displayName ?? 'Player'} called ${cantoType}.`,
+      `${actorSeat.displayName ?? 'Jugador'} cantó ${cantoType}.`,
     );
     this.pushEvent(
       room,
-      `${actorSeat.displayName ?? 'Player'} called ${cantoType}.`,
+      `${actorSeat.displayName ?? 'Jugador'} cantó ${cantoType}.`,
     );
     this.persistAction(
       room,
@@ -1055,7 +1058,7 @@ export class RoomStoreService {
       };
       this.pushEvent(
         room,
-        `${actorSeat.displayName ?? 'Player'} declined ${pending.cantoType}.`,
+        `${actorSeat.displayName ?? 'Jugador'} no quiso el ${pending.cantoType}.`,
       );
     } else {
       if (this.isTrucoCanto(pending.cantoType)) {
@@ -1073,8 +1076,8 @@ export class RoomStoreService {
       this.pushEvent(
         room,
         this.isTrucoCanto(pending.cantoType)
-          ? `${actorSeat.displayName ?? 'Player'} accepted ${pending.cantoType}.`
-          : `${actorSeat.displayName ?? 'Player'} accepted ${pending.cantoType}; ${this.describeAwardedTeam(scoreDelta)}.`,
+          ? `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}.`
+          : `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}; ${this.describeAwardedTeam(scoreDelta)}.`,
       );
     }
 
@@ -1096,10 +1099,10 @@ export class RoomStoreService {
       };
       this.clearTurnTimeout(room.code);
       this.clearReconnectTimeout(room.code);
-      this.setStatus(room, `Team ${winningTeam} wins the match.`);
+      this.setStatus(room, `El Equipo ${winningTeam} ganó la partida.`);
       this.pushEvent(
         room,
-        `Match finished. Team ${winningTeam} reached ${room.targetScore}.`,
+        `¡Partida terminada! El Equipo ${winningTeam} llegó a ${room.targetScore} puntos.`,
       );
       this.persistMatchFinished(room, winningTeam);
     } else {
@@ -1108,8 +1111,8 @@ export class RoomStoreService {
       this.setStatus(
         room,
         normalizedResponse === 'no_quiero'
-          ? `Hand resumes after ${pending.cantoType}.`
-          : `${actorSeat.displayName ?? 'Player'} accepted ${pending.cantoType}.`,
+          ? `La mano continúa tras el ${pending.cantoType}.`
+          : `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}.`,
       );
       this.scheduleTurnTimeout(room.code);
     }
@@ -1201,11 +1204,11 @@ export class RoomStoreService {
     this.scheduleWildcardTimeout(room.code);
     this.setStatus(
       room,
-      `${actorSeat.displayName ?? 'Player'} is selecting a wildcard value.`,
+      `${actorSeat.displayName ?? 'Jugador'} está eligiendo el valor del comodín.`,
     );
     this.pushEvent(
       room,
-      `${actorSeat.displayName ?? 'Player'} opened wildcard selection.`,
+      `${actorSeat.displayName ?? 'Jugador'} está eligiendo valor del comodín.`,
     );
     this.persistAction(
       room,
@@ -1290,11 +1293,11 @@ export class RoomStoreService {
     room.match.turnDeadlineAt = null;
     this.setStatus(
       room,
-      `${actorSeat.displayName ?? 'Player'} selected ${selectedLabel}.`,
+      `${actorSeat.displayName ?? 'Jugador'} eligió ${selectedLabel}.`,
     );
     this.pushEvent(
       room,
-      `${actorSeat.displayName ?? 'Player'} set wildcard to ${selectedLabel}.`,
+      `${actorSeat.displayName ?? 'Jugador'} eligió ${selectedLabel} para el comodín.`,
     );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(
@@ -1392,7 +1395,7 @@ export class RoomStoreService {
     room.match.tableCards.push({ seatId: actorSeat.id, card });
     this.pushEvent(
       room,
-      `${actorSeat.displayName ?? 'Player'} played ${card.label}.`,
+      `${actorSeat.displayName ?? 'Jugador'} jugó ${card.label}.`,
     );
     room.match.reconnectDeadlineAt = null;
     this.clearReconnectTimeout(room.code);
@@ -1422,7 +1425,7 @@ export class RoomStoreService {
       room.match.currentTurnSeatId = nextSeat?.id ?? null;
       this.setStatus(
         room,
-        `${room.seats.find((seat) => seat.id === room.match?.currentTurnSeatId)?.displayName ?? 'Next player'} to act.`,
+        `Le toca a ${room.seats.find((seat) => seat.id === room.match?.currentTurnSeatId)?.displayName ?? 'siguiente jugador'}.`,
       );
       this.scheduleTurnTimeout(room.code);
     }
@@ -1512,7 +1515,7 @@ export class RoomStoreService {
       })),
       score: room.match?.teamScores ?? { A: 0, B: 0 },
       recentEvents: room.match?.recentEvents ?? [],
-      statusText: room.match?.statusText ?? 'Waiting in lobby.',
+      statusText: room.match?.statusText ?? 'Esperando en el lobby.',
       winnerTeamSide: room.match?.summary?.winnerTeamSide ?? null,
       turnDeadlineAt: room.match?.turnDeadlineAt ?? null,
       reconnectDeadlineAt: room.match?.reconnectDeadlineAt ?? null,
@@ -1654,7 +1657,7 @@ export class RoomStoreService {
       pendingCanto: null,
       pendingWildcardSelection: null,
       recentEvents: [],
-      statusText: `${occupiedSeats[0]?.displayName ?? 'First player'} to act.`,
+      statusText: `Le toca a ${occupiedSeats[0]?.displayName ?? 'primer jugador'}.`,
       summary: null,
       lastTrickResolvedAt: null,
       lastHandScoredAt: null,
@@ -1696,8 +1699,8 @@ export class RoomStoreService {
     this.pushEvent(
       room,
       winningSeat
-        ? `${winningSeat.displayName ?? 'Player'} won trick ${trickNumber} with ${winningPlay?.card.label ?? 'a card'}.`
-        : `Trick ${trickNumber} ended in a tie.`,
+        ? `${winningSeat.displayName ?? 'Jugador'} ganó la vuelta ${trickNumber} con ${winningPlay?.card.label ?? 'una carta'}.`
+        : `La vuelta ${trickNumber} fue empate.`,
     );
 
     const handWinner = this.getHandWinner(room, match, trickNumber);
@@ -1708,7 +1711,7 @@ export class RoomStoreService {
       match.lastHandScoredAt = new Date().toISOString();
       this.pushEvent(
         room,
-        `Team ${handWinner} won hand ${match.handNumber} for ${match.currentHandPoints} point${match.currentHandPoints === 1 ? '' : 's'}.`,
+        `El Equipo ${handWinner} ganó la mano ${match.handNumber} por ${match.currentHandPoints} punto${match.currentHandPoints === 1 ? '' : 's'}.`,
       );
 
       if (match.teamScores[handWinner] >= room.targetScore) {
@@ -1723,10 +1726,10 @@ export class RoomStoreService {
         match.reconnectDeadlineAt = null;
         this.clearTurnTimeout(room.code);
         this.clearReconnectTimeout(room.code);
-        this.setStatus(room, `Team ${handWinner} wins the match.`);
+        this.setStatus(room, `El Equipo ${handWinner} ganó la partida.`);
         this.pushEvent(
           room,
-          `Match finished. Team ${handWinner} reached ${room.targetScore}.`,
+          `¡Partida terminada! El Equipo ${handWinner} llegó a ${room.targetScore} puntos.`,
         );
         this.persistMatchFinished(room, handWinner);
         this.persistSnapshot(room);
@@ -1745,7 +1748,7 @@ export class RoomStoreService {
     match.currentTurnSeatId = winningSeat?.id ?? match.currentTurnSeatId;
     this.setStatus(
       room,
-      `${winningSeat?.displayName ?? 'Next player'} leads trick ${match.trickNumber}.`,
+      `Le toca a ${winningSeat?.displayName ?? 'siguiente jugador'} en la vuelta ${match.trickNumber}.`,
     );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(room, 'trick_resolved', {
@@ -1784,10 +1787,10 @@ export class RoomStoreService {
     match.turnDeadlineAt = null;
     match.reconnectDeadlineAt = null;
     room.phase = 'action_turn';
-    this.setStatus(room, `Hand ${match.handNumber} is live.`);
+    this.setStatus(room, `Mano ${match.handNumber} en juego.`);
     this.pushEvent(
       room,
-      `New hand dealt. ${room.seats.find((seat) => seat.id === nextDealerSeatId)?.displayName ?? 'Lead seat'} starts.`,
+      `Nueva mano repartida. Arranca ${room.seats.find((seat) => seat.id === nextDealerSeatId)?.displayName ?? 'el repartidor'}.`,
     );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(room, 'hand_prepared', {
@@ -1882,7 +1885,7 @@ export class RoomStoreService {
     const match = room.match;
 
     if (!match) {
-      return room.phase === 'lobby' ? 'Waiting in lobby.' : null;
+      return room.phase === 'lobby' ? 'Esperando en el lobby.' : null;
     }
 
     if (room.phase === 'response_pending' && match.pendingCanto) {
@@ -2820,7 +2823,7 @@ export class RoomStoreService {
 
       this.pushEvent(
         latestRoom,
-        `Timer expired. Auto-playing for ${latestRoom.seats.find((seat) => seat.id === currentSeatId)?.displayName ?? 'player'}.`,
+        `Tiempo agotado. Jugando automáticamente por ${latestRoom.seats.find((seat) => seat.id === currentSeatId)?.displayName ?? 'el jugador'}.`,
       );
       this.playCard({
         roomCode,
@@ -2858,10 +2861,13 @@ export class RoomStoreService {
 
       latestRoom.phase = 'action_turn';
       latestRoom.match.reconnectDeadlineAt = null;
-      this.pushEvent(latestRoom, 'Reconnect window expired. Resuming match.');
+      this.pushEvent(
+        latestRoom,
+        'Tiempo de reconexión agotado. Reanudando partida.',
+      );
       this.setStatus(
         latestRoom,
-        `${latestRoom.seats.find((seat) => seat.id === latestRoom.match?.currentTurnSeatId)?.displayName ?? 'Current player'} to act.`,
+        `Le toca a ${latestRoom.seats.find((seat) => seat.id === latestRoom.match?.currentTurnSeatId)?.displayName ?? 'jugador actual'}.`,
       );
       this.scheduleTurnTimeout(roomCode);
     }, 10_000);
@@ -2910,7 +2916,7 @@ export class RoomStoreService {
 
       this.pushEvent(
         latestRoom,
-        `Timer expired. ${pending.cantoType} resolved as no quiero.`,
+        `Tiempo agotado. ${pending.cantoType} resuelto como no quiero.`,
       );
       this.resolveCanto(roomCode, token, 'no_quiero');
     }, 12_000);
@@ -2960,7 +2966,7 @@ export class RoomStoreService {
 
       this.pushEvent(
         latestRoom,
-        'Timer expired. Wildcard auto-selected as 4 de copa.',
+        'Tiempo agotado. Comodín seleccionado automáticamente como 4 de copa.',
       );
       this.selectWildcard(roomCode, token, pending.cardId, '4 de copa');
     }, 15_000);
