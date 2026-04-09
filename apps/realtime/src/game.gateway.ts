@@ -81,7 +81,7 @@ type RoomLifecycleState = ReturnType<RoomStoreService['getRoomLifecycleState']>;
 @WebSocketGateway({
   namespace: '/game',
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') ?? ['http://localhost:3000'],
+    origin: process.env.CORS_ORIGIN?.split(',') ?? true,
     credentials: true,
   },
 })
@@ -92,12 +92,12 @@ export class GameGateway implements OnGatewayDisconnect {
   server!: RealtimeServer;
 
   @SubscribeMessage('room:join')
-  handleRoomJoin(
+  async handleRoomJoin(
     @MessageBody() payload: RoomJoinPayload,
     @ConnectedSocket() client: RealtimeSocket,
   ) {
     const roomCode = payload.roomCode.toUpperCase();
-    const result = this.roomStore.connectSession(
+    const result = await this.roomStore.connectSession(
       roomCode,
       payload.roomSessionToken,
       client.id,

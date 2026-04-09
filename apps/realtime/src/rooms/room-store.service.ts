@@ -408,7 +408,12 @@ export class RoomStoreService {
     };
   }
 
-  connectSession(code: string, roomSessionToken: string, socketId: string) {
+  async connectSession(
+    code: string,
+    roomSessionToken: string,
+    socketId: string,
+  ) {
+    await this.restoreRoomIfNeeded(code);
     const room = this.getRequiredRoom(code);
     const seat = room.seats.find(
       (entry) => entry.roomSessionToken === roomSessionToken,
