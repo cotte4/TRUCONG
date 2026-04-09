@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: dimadong-realtime
+    env: node
+    buildCommand: npm install -g pnpm@10.33.0 && pnpm install && pnpm --filter @dimadong/realtime build
+    startCommand: pnpm --filter @dimadong/realtime start:prod
+    envVars:
+      - key: PORT
+        value: 4001
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
