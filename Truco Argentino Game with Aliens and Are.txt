@@ -1,0 +1,57 @@
+Truco Argentino Game with Aliens and Area51 Theme
+Product Requirements Document (PRD)
+Title: Truco Argentino Game with Aliens and Area51 Theme
+
+Description: A web-based Truco Argentino game with an engaging aliens and Area51 theme, featuring comodines and allowing 1v1, 2v2, and 3v3 gameplay.
+
+High-Level Requirements
+User Interface
+Home Page / Manual:
+
+Manual "DIMADONG" displayed at the home page.
+Sections for explaining game rules, comodines' usage, and how to play.
+Game Page:
+
+Table layout with seats for players (rectangular for 2v2, circular for 3v3).
+Players see only their cards.
+Real-time display of board state (cards on the table).
+Scoreboard/Score Page:
+
+Dynamic scoreboard showing players' scores in real-time.
+Game Play Logic
+Game Initialization:
+
+Players join using a unique code per game mode.
+Randomly deal 3 cards to each player each round.
+Turn Management:
+
+Players control the turns manually by selecting and playing their card from their hand.
+A notification system indicating whose turn it is.
+Scoring:
+
+Points are awarded in real-time at the end of each round until a predefined total (15 or 30) is reached.
+Comodines:
+
+Single comodín with two copies.
+Comodín can be used during the envido or normal play phases but not on cards already on the table.
+If two comodines are out, it results in a tie.
+Modos de Juego y Creación de Sala
+Game Modes:
+
+1v1
+2v2
+3v3
+Sala de Juego:
+
+Players join using a unique code per game mode.
+Real-Time Communication
+Use Socket.IO for real-time updates of scores, turns, and board state.
+Technical Requirements
+Frontend: React.js with Socket.IO for real-time communication.
+Backend: Node.js + Express.js + MongoDB (if needed)
+WebSocket: For maintaining real-time data updates without reloading the page
+Timeline:
+Sprint 1: Requirement gathering, wireframing, initial design.
+Sprint 2: Frontend development (UI components).
+Sprint 3: Backend development (APIs and real-time communication).
+Sprint 4: Testing and QA.
