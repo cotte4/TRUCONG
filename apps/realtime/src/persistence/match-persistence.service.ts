@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { MatchStatus, Prisma, TeamSide } from '@prisma/client';
 import { PrismaService } from './prisma.service';
-import type { CreateMatchRecordInput, CreateMatchSnapshotInput } from './persistence.types';
+import type {
+  CreateMatchRecordInput,
+  CreateMatchSnapshotInput,
+} from './persistence.types';
 
 @Injectable()
 export class MatchPersistenceService {
@@ -38,7 +41,14 @@ export class MatchPersistenceService {
     });
   }
 
-  async finishMatch(matchId: string, input: { winnerTeamSide: TeamSide; finalScore: unknown; effectiveBongs?: number }) {
+  async finishMatch(
+    matchId: string,
+    input: {
+      winnerTeamSide: TeamSide;
+      finalScore: unknown;
+      effectiveBongs?: number;
+    },
+  ) {
     return this.prisma.match.update({
       where: { id: matchId },
       data: {
@@ -57,7 +67,7 @@ export class MatchPersistenceService {
         roomId: input.roomId,
         matchId: input.matchId ?? null,
         version: input.version,
-        state: input.state as Prisma.InputJsonValue,
+        state: input.state,
       },
     });
   }

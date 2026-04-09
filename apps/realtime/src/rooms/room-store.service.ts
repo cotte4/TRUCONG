@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
 import type {
   ActionSubmitPayload,
@@ -20,7 +25,10 @@ import type {
   TrickResultView,
   WildcardSelectionState,
 } from '@dimadong/contracts';
-import { RoomStatus as DbRoomStatus, SeatStatus as DbSeatStatus } from '@prisma/client';
+import {
+  RoomStatus as DbRoomStatus,
+  SeatStatus as DbSeatStatus,
+} from '@prisma/client';
 import {
   ActionLogPersistenceService,
   AnalyticsEventService,
@@ -32,30 +40,28 @@ import {
 
 type PersistedSnapshotState = {
   room: RoomSnapshot;
-  match:
-    | {
-        handNumber: number;
-        trickNumber: number;
-        dealerSeatId: string | null;
-        currentTurnSeatId: string | null;
-        handsBySeatId: Record<string, MutableCard[]>;
-        tableCards: MutableTablePlay[];
-        teamScores: TeamScoreView;
-        handTrickWins: TeamScoreView;
-        currentHandPoints?: number;
-        trickResults: MutableTrickResult[];
-        pendingCanto?: MutablePendingCanto | null;
-        pendingWildcardSelection?: MutablePendingWildcardSelection | null;
-        recentEvents: string[];
-        statusText: string;
-        summary: MatchSummaryView | null;
-        lastTrickResolvedAt?: string | null;
-        lastHandScoredAt?: string | null;
-        lastHandWinnerTeamSide?: TeamSide | null;
-        turnDeadlineAt: string | null;
-        reconnectDeadlineAt: string | null;
-      }
-    | null;
+  match: {
+    handNumber: number;
+    trickNumber: number;
+    dealerSeatId: string | null;
+    currentTurnSeatId: string | null;
+    handsBySeatId: Record<string, MutableCard[]>;
+    tableCards: MutableTablePlay[];
+    teamScores: TeamScoreView;
+    handTrickWins: TeamScoreView;
+    currentHandPoints?: number;
+    trickResults: MutableTrickResult[];
+    pendingCanto?: MutablePendingCanto | null;
+    pendingWildcardSelection?: MutablePendingWildcardSelection | null;
+    recentEvents: string[];
+    statusText: string;
+    summary: MatchSummaryView | null;
+    lastTrickResolvedAt?: string | null;
+    lastHandScoredAt?: string | null;
+    lastHandWinnerTeamSide?: TeamSide | null;
+    turnDeadlineAt: string | null;
+    reconnectDeadlineAt: string | null;
+  } | null;
 };
 
 type MutableSeat = {
@@ -102,7 +108,13 @@ type MutableTrickResult = {
 };
 
 type MutablePendingCanto = {
-  cantoType: 'truco' | 'retruco' | 'vale_cuatro' | 'envido' | 'real_envido' | 'falta_envido';
+  cantoType:
+    | 'truco'
+    | 'retruco'
+    | 'vale_cuatro'
+    | 'envido'
+    | 'real_envido'
+    | 'falta_envido';
   actorSeatId: string;
   targetSeatId: string | null;
   openedAt: string;
@@ -261,8 +273,10 @@ export class RoomStoreService {
   constructor(
     @Optional() private readonly roomPersistence?: RoomPersistenceService,
     @Optional() private readonly matchPersistence?: MatchPersistenceService,
-    @Optional() private readonly connectionSessionPersistence?: ConnectionSessionPersistenceService,
-    @Optional() private readonly actionLogPersistence?: ActionLogPersistenceService,
+    @Optional()
+    private readonly connectionSessionPersistence?: ConnectionSessionPersistenceService,
+    @Optional()
+    private readonly actionLogPersistence?: ActionLogPersistenceService,
     @Optional() private readonly analyticsEventService?: AnalyticsEventService,
   ) {}
 
@@ -318,7 +332,11 @@ export class RoomStoreService {
 
     const seat =
       (typeof input.preferredSeatIndex === 'number'
-        ? room.seats.find((entry) => entry.seatIndex === input.preferredSeatIndex && entry.status === 'open')
+        ? room.seats.find(
+            (entry) =>
+              entry.seatIndex === input.preferredSeatIndex &&
+              entry.status === 'open',
+          )
         : undefined) ?? room.seats.find((entry) => entry.status === 'open');
 
     if (!seat) {
@@ -351,9 +369,16 @@ export class RoomStoreService {
       return null;
     }
 
-    const seat = room.seats.find((entry) => entry.roomSessionToken === roomSessionToken);
+    const seat = room.seats.find(
+      (entry) => entry.roomSessionToken === roomSessionToken,
+    );
 
-    if (!seat || !seat.displayName || !seat.roomSessionToken || !seat.seatClaimToken) {
+    if (
+      !seat ||
+      !seat.displayName ||
+      !seat.roomSessionToken ||
+      !seat.seatClaimToken
+    ) {
       return null;
     }
 
@@ -380,7 +405,9 @@ export class RoomStoreService {
 
   connectSession(code: string, roomSessionToken: string, socketId: string) {
     const room = this.getRequiredRoom(code);
-    const seat = room.seats.find((entry) => entry.roomSessionToken === roomSessionToken);
+    const seat = room.seats.find(
+      (entry) => entry.roomSessionToken === roomSessionToken,
+    );
 
     if (!seat) {
       throw new NotFoundException('Session not found.');
@@ -388,11 +415,17 @@ export class RoomStoreService {
 
     seat.socketId = socketId;
     seat.status = 'occupied';
-    if (room.phase === 'reconnect_hold' && room.match?.currentTurnSeatId === seat.id) {
+    if (
+      room.phase === 'reconnect_hold' &&
+      room.match?.currentTurnSeatId === seat.id
+    ) {
       room.phase = 'action_turn';
       room.match.reconnectDeadlineAt = null;
       this.clearReconnectTimeout(room.code);
-      this.setStatus(room, `${seat.displayName ?? 'Player'} reconnected and can act.`);
+      this.setStatus(
+        room,
+        `${seat.displayName ?? 'Player'} reconnected and can act.`,
+      );
       this.scheduleTurnTimeout(room.code);
     }
 
@@ -420,19 +453,33 @@ export class RoomStoreService {
         seat.status = 'disconnected';
         seat.isReady = false;
         this.pushEvent(room, `${seat.displayName ?? 'Player'} disconnected.`);
-        if (room.match && room.phase === 'action_turn' && room.match.currentTurnSeatId === seat.id) {
+        if (
+          room.match &&
+          room.phase === 'action_turn' &&
+          room.match.currentTurnSeatId === seat.id
+        ) {
           room.phase = 'reconnect_hold';
-          room.match.reconnectDeadlineAt = new Date(Date.now() + 10_000).toISOString();
+          room.match.reconnectDeadlineAt = new Date(
+            Date.now() + 10_000,
+          ).toISOString();
           room.match.turnDeadlineAt = null;
           this.clearTurnTimeout(room.code);
-          this.setStatus(room, `Waiting for ${seat.displayName ?? 'player'} to reconnect.`);
+          this.setStatus(
+            room,
+            `Waiting for ${seat.displayName ?? 'player'} to reconnect.`,
+          );
           this.scheduleReconnectTimeout(room.code);
         }
 
-        this.persistAction(room, 'seat_disconnected', {
-          seatId: seat.id,
-          displayName: seat.displayName,
-        }, seat);
+        this.persistAction(
+          room,
+          'seat_disconnected',
+          {
+            seatId: seat.id,
+            displayName: seat.displayName,
+          },
+          seat,
+        );
         this.persistConnectionDisconnected(socketId);
         this.persistSnapshot(room);
       }
@@ -456,23 +503,25 @@ export class RoomStoreService {
       throw new NotFoundException('Seat not found.');
     }
 
-      return {
-        handNumber: room.match.handNumber,
-        trickNumber: room.match.trickNumber,
-        currentTurnSeatId: room.match.currentTurnSeatId,
+    return {
+      handNumber: room.match.handNumber,
+      trickNumber: room.match.trickNumber,
+      currentTurnSeatId: room.match.currentTurnSeatId,
       dealerSeatId: room.match.dealerSeatId,
       yourHand: room.match.handsBySeatId[seatId] ?? [],
       tableCards: room.match.tableCards.map((play) => ({
         seatId: play.seatId,
-        displayName: room.seats.find((seat) => seat.id === play.seatId)?.displayName ?? 'Unknown',
+        displayName:
+          room.seats.find((seat) => seat.id === play.seatId)?.displayName ??
+          'Unknown',
         card: play.card,
       })),
       yourTeamSide: actorSeat.teamSide,
       score: room.match.teamScores,
-        trickResults: room.match.trickResults,
-        recentEvents: room.match.recentEvents,
-        statusText: this.buildStatusText(room),
-        summary: room.match.summary,
+      trickResults: room.match.trickResults,
+      recentEvents: room.match.recentEvents,
+      statusText: this.buildStatusText(room),
+      summary: room.match.summary,
       turnDeadlineAt: room.match.turnDeadlineAt,
       reconnectDeadlineAt: room.match.reconnectDeadlineAt,
     };
@@ -495,7 +544,9 @@ export class RoomStoreService {
       handTrickWins: { ...match.handTrickWins },
       tableCards: match.tableCards.map((play) => ({
         seatId: play.seatId,
-        displayName: room.seats.find((seat) => seat.id === play.seatId)?.displayName ?? 'Player',
+        displayName:
+          room.seats.find((seat) => seat.id === play.seatId)?.displayName ??
+          'Player',
         card: {
           id: play.card.id,
           rank: play.card.rank,
@@ -518,7 +569,9 @@ export class RoomStoreService {
     };
   }
 
-  getPendingWildcardSelectionState(code: string): DetailedWildcardSelectionState | null {
+  getPendingWildcardSelectionState(
+    code: string,
+  ): DetailedWildcardSelectionState | null {
     const room = this.getRequiredRoom(code);
     const pending = room.match?.pendingWildcardSelection;
 
@@ -536,7 +589,9 @@ export class RoomStoreService {
       phase: room.phase,
       isPending: room.phase === 'wildcard_selection',
       ownerSeatId: pending.seatId,
-      selectedChoiceId: pending.selectedLabel ? this.toChoiceId(pending.selectedLabel) : null,
+      selectedChoiceId: pending.selectedLabel
+        ? this.toChoiceId(pending.selectedLabel)
+        : null,
       selectedChoiceLabel: pending.selectedLabel,
       availableChoices: pending.availableLabels.map((label) => ({
         id: this.toChoiceId(label),
@@ -555,11 +610,18 @@ export class RoomStoreService {
       return null;
     }
 
-    const latestTrickResult = match.trickResults[match.trickResults.length - 1] ?? null;
-    const handComplete = room.phase === 'hand_scoring' || room.phase === 'match_end' || room.phase === 'post_match_summary';
-    const matchComplete = room.phase === 'match_end' || room.phase === 'post_match_summary';
+    const latestTrickResult =
+      match.trickResults[match.trickResults.length - 1] ?? null;
+    const handComplete =
+      room.phase === 'hand_scoring' ||
+      room.phase === 'match_end' ||
+      room.phase === 'post_match_summary';
+    const matchComplete =
+      room.phase === 'match_end' || room.phase === 'post_match_summary';
     const handSummaryScore = handComplete ? { ...match.teamScores } : null;
-    const matchSummaryScore = match.summary ? { ...match.summary.finalScore } : handSummaryScore;
+    const matchSummaryScore = match.summary
+      ? { ...match.summary.finalScore }
+      : handSummaryScore;
 
     return {
       phaseDetail: this.getPhaseDetail(room),
@@ -581,7 +643,9 @@ export class RoomStoreService {
         resolvedAt: match.lastHandScoredAt,
         finalScore: handSummaryScore,
         winnerTeamSide: match.lastHandWinnerTeamSide,
-        reason: match.lastHandWinnerTeamSide ? `Team ${match.lastHandWinnerTeamSide} won hand ${match.handNumber}.` : null,
+        reason: match.lastHandWinnerTeamSide
+          ? `Team ${match.lastHandWinnerTeamSide} won hand ${match.handNumber}.`
+          : null,
       },
       matchComplete,
       winnerTeamSide: match.summary?.winnerTeamSide ?? null,
@@ -589,18 +653,21 @@ export class RoomStoreService {
         state: matchComplete ? 'resolved' : 'idle',
         resolvedAt: match.lastHandScoredAt,
         finalScore: matchSummaryScore,
-        winnerTeamSide: match.summary?.winnerTeamSide ?? match.lastHandWinnerTeamSide ?? null,
-        reason:
-          match.summary?.winnerTeamSide
-            ? `Team ${match.summary.winnerTeamSide} won the match.`
-            : matchComplete && match.lastHandWinnerTeamSide
-              ? `Team ${match.lastHandWinnerTeamSide} closed the match sequence.`
-              : null,
+        winnerTeamSide:
+          match.summary?.winnerTeamSide ?? match.lastHandWinnerTeamSide ?? null,
+        reason: match.summary?.winnerTeamSide
+          ? `Team ${match.summary.winnerTeamSide} won the match.`
+          : matchComplete && match.lastHandWinnerTeamSide
+            ? `Team ${match.lastHandWinnerTeamSide} closed the match sequence.`
+            : null,
       },
     };
   }
 
-  getRoomLifecycleState(code: string, seatId?: string | null): RoomLifecycleState {
+  getRoomLifecycleState(
+    code: string,
+    seatId?: string | null,
+  ): RoomLifecycleState {
     return {
       matchView: seatId ? this.getMatchView(code, seatId) : null,
       progressState: this.getMatchProgressState(code),
@@ -624,9 +691,17 @@ export class RoomStoreService {
       }
       case 'canto_open': {
         const cantoType = this.requireCantoType(payload.payload.cantoType);
-        const targetSeatId = this.readOptionalStringField(payload.payload, 'targetSeatId');
+        const targetSeatId = this.readOptionalStringField(
+          payload.payload,
+          'targetSeatId',
+        );
 
-        return this.openCanto(roomCode, payload.roomSessionToken, cantoType, targetSeatId);
+        return this.openCanto(
+          roomCode,
+          payload.roomSessionToken,
+          cantoType,
+          targetSeatId,
+        );
       }
       case 'canto_resolve': {
         const response = this.requireCantoResponse(payload.payload.response);
@@ -636,13 +711,25 @@ export class RoomStoreService {
       case 'wildcard_request': {
         const cardId = this.requireStringField(payload.payload, 'cardId');
 
-        return this.requestWildcardSelection(roomCode, payload.roomSessionToken, cardId);
+        return this.requestWildcardSelection(
+          roomCode,
+          payload.roomSessionToken,
+          cardId,
+        );
       }
       case 'wildcard_select': {
         const cardId = this.requireStringField(payload.payload, 'cardId');
-        const selectedLabel = this.requireStringField(payload.payload, 'selectedLabel');
+        const selectedLabel = this.requireStringField(
+          payload.payload,
+          'selectedLabel',
+        );
 
-        return this.selectWildcard(roomCode, payload.roomSessionToken, cardId, selectedLabel);
+        return this.selectWildcard(
+          roomCode,
+          payload.roomSessionToken,
+          cardId,
+          selectedLabel,
+        );
       }
       case 'summary_start': {
         const source = this.requireSummarySource(payload.payload.source);
@@ -658,12 +745,17 @@ export class RoomStoreService {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
     if (room.phase !== 'lobby') {
-      throw new Error('Ready state can only be changed while the room is in the lobby.');
+      throw new Error(
+        'Ready state can only be changed while the room is in the lobby.',
+      );
     }
 
     actorSeat.isReady = !actorSeat.isReady;
     actorSeat.status = 'occupied';
-    this.pushEvent(room, `${actorSeat.displayName ?? 'Player'} is now ${actorSeat.isReady ? 'ready' : 'not ready'}.`);
+    this.pushEvent(
+      room,
+      `${actorSeat.displayName ?? 'Player'} is now ${actorSeat.isReady ? 'ready' : 'not ready'}.`,
+    );
     this.persistAction(
       room,
       actorSeat.isReady ? 'ready_on' : 'ready_off',
@@ -676,17 +768,24 @@ export class RoomStoreService {
   }
 
   assignTeam(payload: LobbyTeamPayload) {
-    const { room, actorSeat } = this.getAuthorizedSeat(payload.roomCode, payload.roomSessionToken);
+    const { room, actorSeat } = this.getAuthorizedSeat(
+      payload.roomCode,
+      payload.roomSessionToken,
+    );
 
     if (!actorSeat.isHost) {
       throw new Error('Only the host can change team assignments.');
     }
 
     if (room.phase !== 'lobby') {
-      throw new Error('Teams can only be edited while the room is in the lobby.');
+      throw new Error(
+        'Teams can only be edited while the room is in the lobby.',
+      );
     }
 
-    const targetSeat = room.seats.find((entry) => entry.id === payload.targetSeatId);
+    const targetSeat = room.seats.find(
+      (entry) => entry.id === payload.targetSeatId,
+    );
 
     if (!targetSeat) {
       throw new Error('Seat not found.');
@@ -694,7 +793,10 @@ export class RoomStoreService {
 
     targetSeat.teamSide = payload.teamSide;
     this.clearReadyState(room);
-    this.pushEvent(room, `${targetSeat.displayName ?? 'Seat'} moved to Team ${payload.teamSide}.`);
+    this.pushEvent(
+      room,
+      `${targetSeat.displayName ?? 'Seat'} moved to Team ${payload.teamSide}.`,
+    );
     this.persistAction(
       room,
       'team_assigned',
@@ -724,7 +826,9 @@ export class RoomStoreService {
     }
 
     if (!occupiedSeats.every((seat) => seat.isReady)) {
-      throw new Error('Every player must mark ready before the match can start.');
+      throw new Error(
+        'Every player must mark ready before the match can start.',
+      );
     }
 
     if (!this.hasValidTeams(room)) {
@@ -741,7 +845,11 @@ export class RoomStoreService {
     return this.buildSnapshot(room);
   }
 
-  startSummary(code: string, roomSessionToken: string, source: 'manual' | 'match_end' | 'reconnect' = 'manual') {
+  startSummary(
+    code: string,
+    roomSessionToken: string,
+    source: 'manual' | 'match_end' | 'reconnect' = 'manual',
+  ) {
     return this.startSummaryWithResult(code, roomSessionToken, source).snapshot;
   }
 
@@ -763,7 +871,10 @@ export class RoomStoreService {
     this.clearReconnectTimeout(room.code);
     this.clearCantoTimeout(room.code);
     this.clearWildcardTimeout(room.code);
-    this.setStatus(room, `Final summary opened by ${actorSeat.displayName ?? 'player'}.`);
+    this.setStatus(
+      room,
+      `Final summary opened by ${actorSeat.displayName ?? 'player'}.`,
+    );
     this.pushEvent(room, `Summary started (${source}).`);
     this.persistAction(
       room,
@@ -793,7 +904,12 @@ export class RoomStoreService {
     cantoType: MutablePendingCanto['cantoType'],
     targetSeatId?: string | null,
   ) {
-    return this.openCantoWithResult(code, roomSessionToken, cantoType, targetSeatId).snapshot;
+    return this.openCantoWithResult(
+      code,
+      roomSessionToken,
+      cantoType,
+      targetSeatId,
+    ).snapshot;
   }
 
   openCantoWithResult(
@@ -829,8 +945,14 @@ export class RoomStoreService {
     room.match.turnDeadlineAt = null;
     this.clearTurnTimeout(room.code);
     this.scheduleCantoTimeout(room.code);
-    this.setStatus(room, `${actorSeat.displayName ?? 'Player'} called ${cantoType}.`);
-    this.pushEvent(room, `${actorSeat.displayName ?? 'Player'} called ${cantoType}.`);
+    this.setStatus(
+      room,
+      `${actorSeat.displayName ?? 'Player'} called ${cantoType}.`,
+    );
+    this.pushEvent(
+      room,
+      `${actorSeat.displayName ?? 'Player'} called ${cantoType}.`,
+    );
     this.persistAction(
       room,
       'canto_opened',
@@ -858,7 +980,8 @@ export class RoomStoreService {
     roomSessionToken: string,
     response: 'quiero' | 'no_quiero' | 'accepted' | 'rejected',
   ) {
-    return this.resolveCantoWithResult(code, roomSessionToken, response).snapshot;
+    return this.resolveCantoWithResult(code, roomSessionToken, response)
+      .snapshot;
   }
 
   resolveCantoWithResult(
@@ -876,7 +999,9 @@ export class RoomStoreService {
 
     const pending = room.match.pendingCanto;
     const actorTeamSide = actorSeat.teamSide;
-    const callerTeamSide = room.seats.find((seat) => seat.id === pending.actorSeatId)?.teamSide ?? null;
+    const callerTeamSide =
+      room.seats.find((seat) => seat.id === pending.actorSeatId)?.teamSide ??
+      null;
 
     if (pending.targetSeatId && pending.targetSeatId !== actorSeat.id) {
       throw new Error('This canto must be resolved by the targeted seat.');
@@ -886,12 +1011,19 @@ export class RoomStoreService {
     room.match.reconnectDeadlineAt = null;
     this.clearCantoTimeout(room.code);
 
-    const normalizedResponse = response === 'quiero' || response === 'accepted' ? 'quiero' : 'no_quiero';
+    const normalizedResponse =
+      response === 'quiero' || response === 'accepted' ? 'quiero' : 'no_quiero';
     let scoreDelta =
       normalizedResponse === 'no_quiero' && callerTeamSide
         ? {
-            A: callerTeamSide === 'A' ? this.getDeclinedCantoPoints(pending.cantoType) : 0,
-            B: callerTeamSide === 'B' ? this.getDeclinedCantoPoints(pending.cantoType) : 0,
+            A:
+              callerTeamSide === 'A'
+                ? this.getDeclinedCantoPoints(pending.cantoType)
+                : 0,
+            B:
+              callerTeamSide === 'B'
+                ? this.getDeclinedCantoPoints(pending.cantoType)
+                : 0,
           }
         : { A: 0, B: 0 };
 
@@ -900,10 +1032,16 @@ export class RoomStoreService {
         A: room.match.teamScores.A + scoreDelta.A,
         B: room.match.teamScores.B + scoreDelta.B,
       };
-      this.pushEvent(room, `${actorSeat.displayName ?? 'Player'} declined ${pending.cantoType}.`);
+      this.pushEvent(
+        room,
+        `${actorSeat.displayName ?? 'Player'} declined ${pending.cantoType}.`,
+      );
     } else {
       if (this.isTrucoCanto(pending.cantoType)) {
-        room.match.currentHandPoints = Math.max(room.match.currentHandPoints, this.getAcceptedTrucoPoints(pending.cantoType));
+        room.match.currentHandPoints = Math.max(
+          room.match.currentHandPoints,
+          this.getAcceptedTrucoPoints(pending.cantoType),
+        );
       } else {
         scoreDelta = this.getAcceptedEnvidoScoreDelta(room, pending.cantoType);
         room.match.teamScores = {
@@ -919,7 +1057,10 @@ export class RoomStoreService {
       );
     }
 
-    const winningTeam = this.getWinningTeamForScore(room.match.teamScores, room.targetScore);
+    const winningTeam = this.getWinningTeamForScore(
+      room.match.teamScores,
+      room.targetScore,
+    );
 
     if (winningTeam) {
       room.phase = 'match_end';
@@ -935,7 +1076,10 @@ export class RoomStoreService {
       this.clearTurnTimeout(room.code);
       this.clearReconnectTimeout(room.code);
       this.setStatus(room, `Team ${winningTeam} wins the match.`);
-      this.pushEvent(room, `Match finished. Team ${winningTeam} reached ${room.targetScore}.`);
+      this.pushEvent(
+        room,
+        `Match finished. Team ${winningTeam} reached ${room.targetScore}.`,
+      );
       this.persistMatchFinished(room, winningTeam);
     } else {
       room.phase = 'action_turn';
@@ -970,33 +1114,55 @@ export class RoomStoreService {
       snapshot,
       lifecycle,
       scoreDelta,
-      matchEnded: Boolean(afterTransition?.matchComplete && !beforeTransition?.matchComplete),
-      handValueChanged: (room.match?.currentHandPoints ?? beforeHandPoints) !== beforeHandPoints,
+      matchEnded: Boolean(
+        afterTransition?.matchComplete && !beforeTransition?.matchComplete,
+      ),
+      handValueChanged:
+        (room.match?.currentHandPoints ?? beforeHandPoints) !==
+        beforeHandPoints,
     };
   }
 
-  requestWildcardSelection(code: string, roomSessionToken: string, cardId: string) {
-    return this.requestWildcardSelectionWithResult(code, roomSessionToken, cardId).snapshot;
+  requestWildcardSelection(
+    code: string,
+    roomSessionToken: string,
+    cardId: string,
+  ) {
+    return this.requestWildcardSelectionWithResult(
+      code,
+      roomSessionToken,
+      cardId,
+    ).snapshot;
   }
 
-  requestWildcardSelectionWithResult(code: string, roomSessionToken: string, cardId: string): WildcardSelectionResult {
+  requestWildcardSelectionWithResult(
+    code: string,
+    roomSessionToken: string,
+    cardId: string,
+  ): WildcardSelectionResult {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
     if (room.phase !== 'action_turn' || !room.match) {
-      throw new Error('Wildcard selection is only available during an active hand.');
+      throw new Error(
+        'Wildcard selection is only available during an active hand.',
+      );
     }
 
     if (room.match.currentTurnSeatId !== actorSeat.id) {
       throw new Error('Only the active player can select a wildcard.');
     }
 
-    const card = (room.match.handsBySeatId[actorSeat.id] ?? []).find((entry) => entry.id === cardId);
+    const card = (room.match.handsBySeatId[actorSeat.id] ?? []).find(
+      (entry) => entry.id === cardId,
+    );
 
     if (!card?.isWildcard) {
       throw new Error('Selected card is not a wildcard.');
     }
 
-    const availableLabels = this.getLegalWildcardChoices(room, cardId).map((choice) => choice.label);
+    const availableLabels = this.getLegalWildcardChoices(room, cardId).map(
+      (choice) => choice.label,
+    );
 
     room.phase = 'wildcard_selection';
     room.match.pendingWildcardSelection = {
@@ -1010,8 +1176,14 @@ export class RoomStoreService {
     room.match.turnDeadlineAt = null;
     this.clearTurnTimeout(room.code);
     this.scheduleWildcardTimeout(room.code);
-    this.setStatus(room, `${actorSeat.displayName ?? 'Player'} is selecting a wildcard value.`);
-    this.pushEvent(room, `${actorSeat.displayName ?? 'Player'} opened wildcard selection.`);
+    this.setStatus(
+      room,
+      `${actorSeat.displayName ?? 'Player'} is selecting a wildcard value.`,
+    );
+    this.pushEvent(
+      room,
+      `${actorSeat.displayName ?? 'Player'} opened wildcard selection.`,
+    );
     this.persistAction(
       room,
       'wildcard_selection_requested',
@@ -1035,8 +1207,18 @@ export class RoomStoreService {
     };
   }
 
-  selectWildcard(code: string, roomSessionToken: string, cardId: string, selectedLabel: string) {
-    return this.selectWildcardWithResult(code, roomSessionToken, cardId, selectedLabel).snapshot;
+  selectWildcard(
+    code: string,
+    roomSessionToken: string,
+    cardId: string,
+    selectedLabel: string,
+  ) {
+    return this.selectWildcardWithResult(
+      code,
+      roomSessionToken,
+      cardId,
+      selectedLabel,
+    ).snapshot;
   }
 
   selectWildcardWithResult(
@@ -1047,17 +1229,24 @@ export class RoomStoreService {
   ): WildcardSelectionResult {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
-    if (room.phase !== 'wildcard_selection' || !room.match?.pendingWildcardSelection) {
+    if (
+      room.phase !== 'wildcard_selection' ||
+      !room.match?.pendingWildcardSelection
+    ) {
       throw new Error('There is no pending wildcard selection.');
     }
 
     const pending = room.match.pendingWildcardSelection;
 
     if (pending.seatId !== actorSeat.id || pending.cardId !== cardId) {
-      throw new Error('This wildcard selection does not belong to the current player.');
+      throw new Error(
+        'This wildcard selection does not belong to the current player.',
+      );
     }
 
-    const card = (room.match.handsBySeatId[actorSeat.id] ?? []).find((entry) => entry.id === cardId);
+    const card = (room.match.handsBySeatId[actorSeat.id] ?? []).find(
+      (entry) => entry.id === cardId,
+    );
 
     if (!card) {
       throw new Error('Wildcard card not found in hand.');
@@ -1076,8 +1265,14 @@ export class RoomStoreService {
     this.clearWildcardTimeout(room.code);
     room.phase = 'action_turn';
     room.match.turnDeadlineAt = null;
-    this.setStatus(room, `${actorSeat.displayName ?? 'Player'} selected ${selectedLabel}.`);
-    this.pushEvent(room, `${actorSeat.displayName ?? 'Player'} set wildcard to ${selectedLabel}.`);
+    this.setStatus(
+      room,
+      `${actorSeat.displayName ?? 'Player'} selected ${selectedLabel}.`,
+    );
+    this.pushEvent(
+      room,
+      `${actorSeat.displayName ?? 'Player'} set wildcard to ${selectedLabel}.`,
+    );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(
       room,
@@ -1141,7 +1336,10 @@ export class RoomStoreService {
   }
 
   playCardWithResult(payload: PlayCardPayload): PlayCardResult {
-    const { room, actorSeat } = this.getAuthorizedSeat(payload.roomCode, payload.roomSessionToken);
+    const { room, actorSeat } = this.getAuthorizedSeat(
+      payload.roomCode,
+      payload.roomSessionToken,
+    );
     const beforeTransition = this.getMatchTransitionState(room.code);
 
     if (room.phase !== 'action_turn' || !room.match) {
@@ -1153,7 +1351,9 @@ export class RoomStoreService {
     }
 
     if (room.match.pendingCanto) {
-      throw new Error('Card play is blocked while a canto response is pending.');
+      throw new Error(
+        'Card play is blocked while a canto response is pending.',
+      );
     }
 
     const hand = room.match.handsBySeatId[actorSeat.id] ?? [];
@@ -1165,7 +1365,10 @@ export class RoomStoreService {
 
     const [card] = hand.splice(cardIndex, 1);
     room.match.tableCards.push({ seatId: actorSeat.id, card });
-    this.pushEvent(room, `${actorSeat.displayName ?? 'Player'} played ${card.label}.`);
+    this.pushEvent(
+      room,
+      `${actorSeat.displayName ?? 'Player'} played ${card.label}.`,
+    );
     room.match.reconnectDeadlineAt = null;
     this.clearReconnectTimeout(room.code);
     this.persistAction(
@@ -1182,8 +1385,11 @@ export class RoomStoreService {
     );
 
     const occupiedSeats = this.getOccupiedSeats(room);
-    const currentSeatIndex = occupiedSeats.findIndex((seat) => seat.id === actorSeat.id);
-    const nextSeat = occupiedSeats[(currentSeatIndex + 1) % occupiedSeats.length] ?? null;
+    const currentSeatIndex = occupiedSeats.findIndex(
+      (seat) => seat.id === actorSeat.id,
+    );
+    const nextSeat =
+      occupiedSeats[(currentSeatIndex + 1) % occupiedSeats.length] ?? null;
 
     if (room.match.tableCards.length >= occupiedSeats.length) {
       this.resolveCurrentTrick(room);
@@ -1207,11 +1413,15 @@ export class RoomStoreService {
       lifecycle,
       trickResolved:
         Boolean(afterTransition?.latestTrickResolvedAt) &&
-        afterTransition?.latestTrickResolvedAt !== beforeTransition?.latestTrickResolvedAt,
+        afterTransition?.latestTrickResolvedAt !==
+          beforeTransition?.latestTrickResolvedAt,
       handScored:
         Boolean(afterTransition?.lastHandScoredAt) &&
-        afterTransition?.lastHandScoredAt !== beforeTransition?.lastHandScoredAt,
-      summaryStarted: Boolean(afterTransition?.matchComplete && !beforeTransition?.matchComplete),
+        afterTransition?.lastHandScoredAt !==
+          beforeTransition?.lastHandScoredAt,
+      summaryStarted: Boolean(
+        afterTransition?.matchComplete && !beforeTransition?.matchComplete,
+      ),
     };
   }
 
@@ -1232,14 +1442,20 @@ export class RoomStoreService {
       return;
     }
 
-    const persistedRoom = await this.roomPersistence.findRoomByCode(normalizedCode);
+    const persistedRoom =
+      await this.roomPersistence.findRoomByCode(normalizedCode);
 
     if (!persistedRoom?.snapshots[0]?.state) {
       return;
     }
 
-    const state = persistedRoom.snapshots[0].state as unknown as PersistedSnapshotState;
-    const restoredRoom = this.hydrateRoomFromPersistence(persistedRoom, state, persistedRoom.snapshots[0].version);
+    const state = persistedRoom.snapshots[0]
+      .state as unknown as PersistedSnapshotState;
+    const restoredRoom = this.hydrateRoomFromPersistence(
+      persistedRoom,
+      state,
+      persistedRoom.snapshots[0].version,
+    );
     this.roomsByCode.set(normalizedCode, restoredRoom);
   }
 
@@ -1273,31 +1489,38 @@ export class RoomStoreService {
   }
 
   private createSeats(maxPlayers: number): MutableSeat[] {
-    return Array.from({ length: maxPlayers }, (_, seatIndex): MutableSeat => ({
-      id: randomUUID(),
-      persistedSeatId: null,
-      persistedOccupancyId: null,
-      persistedConnectionId: null,
-      reconnectToken: null,
-      seatIndex,
-      teamSide: seatIndex % 2 === 0 ? 'A' : 'B',
-      status: 'open',
-      displayName: null,
-      isHost: false,
-      isReady: false,
-      roomSessionToken: null,
-      seatClaimToken: null,
-      socketId: null,
-    }));
+    return Array.from(
+      { length: maxPlayers },
+      (_, seatIndex): MutableSeat => ({
+        id: randomUUID(),
+        persistedSeatId: null,
+        persistedOccupancyId: null,
+        persistedConnectionId: null,
+        reconnectToken: null,
+        seatIndex,
+        teamSide: seatIndex % 2 === 0 ? 'A' : 'B',
+        status: 'open',
+        displayName: null,
+        isHost: false,
+        isReady: false,
+        roomSessionToken: null,
+        seatClaimToken: null,
+        socketId: null,
+      }),
+    );
   }
 
   private hydrateRoomFromPersistence(
-    persistedRoom: Awaited<ReturnType<RoomPersistenceService['findRoomByCode']>>,
+    persistedRoom: Awaited<
+      ReturnType<RoomPersistenceService['findRoomByCode']>
+    >,
     state: PersistedSnapshotState,
     snapshotVersion: number,
   ): MutableRoom {
     const roomState = state.room;
-    const persistedSeatsByIndex = new Map(persistedRoom!.seats.map((seat) => [seat.seatIndex, seat]));
+    const persistedSeatsByIndex = new Map(
+      persistedRoom!.seats.map((seat) => [seat.seatIndex, seat]),
+    );
     const seats = roomState.seats.map<MutableSeat>((seatSnapshot) => {
       const persistedSeat = persistedSeatsByIndex.get(seatSnapshot.seatIndex);
       const occupancy = persistedSeat?.occupancies[0];
@@ -1340,7 +1563,8 @@ export class RoomStoreService {
           currentHandPoints: state.match.currentHandPoints ?? 1,
           trickResults: state.match.trickResults,
           pendingCanto: state.match.pendingCanto ?? null,
-          pendingWildcardSelection: state.match.pendingWildcardSelection ?? null,
+          pendingWildcardSelection:
+            state.match.pendingWildcardSelection ?? null,
           recentEvents: state.match.recentEvents,
           statusText: state.match.statusText,
           summary: state.match.summary,
@@ -1412,7 +1636,9 @@ export class RoomStoreService {
     }
 
     const winningPlay = this.getWinningPlay(match.tableCards);
-    const winningSeat = winningPlay ? room.seats.find((seat) => seat.id === winningPlay.seatId) ?? null : null;
+    const winningSeat = winningPlay
+      ? (room.seats.find((seat) => seat.id === winningPlay.seatId) ?? null)
+      : null;
     const winningTeamSide = winningSeat?.teamSide ?? null;
     const trickNumber = match.trickNumber;
 
@@ -1444,7 +1670,10 @@ export class RoomStoreService {
       match.teamScores[handWinner] += match.currentHandPoints;
       match.lastHandWinnerTeamSide = handWinner;
       match.lastHandScoredAt = new Date().toISOString();
-      this.pushEvent(room, `Team ${handWinner} won hand ${match.handNumber} for ${match.currentHandPoints} point${match.currentHandPoints === 1 ? '' : 's'}.`);
+      this.pushEvent(
+        room,
+        `Team ${handWinner} won hand ${match.handNumber} for ${match.currentHandPoints} point${match.currentHandPoints === 1 ? '' : 's'}.`,
+      );
 
       if (match.teamScores[handWinner] >= room.targetScore) {
         room.phase = 'match_end';
@@ -1459,20 +1688,29 @@ export class RoomStoreService {
         this.clearTurnTimeout(room.code);
         this.clearReconnectTimeout(room.code);
         this.setStatus(room, `Team ${handWinner} wins the match.`);
-        this.pushEvent(room, `Match finished. Team ${handWinner} reached ${room.targetScore}.`);
+        this.pushEvent(
+          room,
+          `Match finished. Team ${handWinner} reached ${room.targetScore}.`,
+        );
         this.persistMatchFinished(room, handWinner);
         this.persistSnapshot(room);
         return;
       }
 
-      this.prepareNextHand(room, winningSeat?.id ?? this.getOccupiedSeats(room)[0]?.id ?? null);
+      this.prepareNextHand(
+        room,
+        winningSeat?.id ?? this.getOccupiedSeats(room)[0]?.id ?? null,
+      );
       return;
     }
 
     match.tableCards = [];
     match.trickNumber += 1;
     match.currentTurnSeatId = winningSeat?.id ?? match.currentTurnSeatId;
-    this.setStatus(room, `${winningSeat?.displayName ?? 'Next player'} leads trick ${match.trickNumber}.`);
+    this.setStatus(
+      room,
+      `${winningSeat?.displayName ?? 'Next player'} leads trick ${match.trickNumber}.`,
+    );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(room, 'trick_resolved', {
       trickNumber,
@@ -1511,7 +1749,10 @@ export class RoomStoreService {
     match.reconnectDeadlineAt = null;
     room.phase = 'action_turn';
     this.setStatus(room, `Hand ${match.handNumber} is live.`);
-    this.pushEvent(room, `New hand dealt. ${room.seats.find((seat) => seat.id === nextDealerSeatId)?.displayName ?? 'Lead seat'} starts.`);
+    this.pushEvent(
+      room,
+      `New hand dealt. ${room.seats.find((seat) => seat.id === nextDealerSeatId)?.displayName ?? 'Lead seat'} starts.`,
+    );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(room, 'hand_prepared', {
       handNumber: match.handNumber,
@@ -1519,7 +1760,11 @@ export class RoomStoreService {
     });
   }
 
-  private getLegalWildcardChoices(room: MutableRoom, wildcardId: string): WildcardChoice[] {
+  private getLegalWildcardChoices(
+    room: MutableRoom,
+    wildcardId: string,
+  ): WildcardChoice[] {
+    void wildcardId;
     const candidateChoices = this.createDeck()
       .filter((entry) => !entry.isWildcard)
       .map<WildcardChoice>((entry) => ({
@@ -1528,13 +1773,21 @@ export class RoomStoreService {
         label: entry.label,
       }));
     const playedSignatures = new Set(
-      (room.match?.tableCards ?? []).map((play) => this.getCardSignature(play.card.rank, play.card.suit)),
+      (room.match?.tableCards ?? []).map((play) =>
+        this.getCardSignature(play.card.rank, play.card.suit),
+      ),
     );
 
-    return candidateChoices.filter((choice) => !playedSignatures.has(this.getCardSignature(choice.rank, choice.suit)));
+    return candidateChoices.filter(
+      (choice) =>
+        !playedSignatures.has(this.getCardSignature(choice.rank, choice.suit)),
+    );
   }
 
-  private getWinningTeamForScore(scoreByTeam: TeamScoreView, targetScore: number): TeamSide | null {
+  private getWinningTeamForScore(
+    scoreByTeam: TeamScoreView,
+    targetScore: number,
+  ): TeamSide | null {
     if (scoreByTeam.A < targetScore && scoreByTeam.B < targetScore) {
       return null;
     }
@@ -1546,11 +1799,20 @@ export class RoomStoreService {
     return scoreByTeam.A > scoreByTeam.B ? 'A' : 'B';
   }
 
-  private isTrucoCanto(cantoType: MutablePendingCanto['cantoType']): cantoType is 'truco' | 'retruco' | 'vale_cuatro' {
-    return cantoType === 'truco' || cantoType === 'retruco' || cantoType === 'vale_cuatro';
+  private isTrucoCanto(
+    cantoType: MutablePendingCanto['cantoType'],
+  ): cantoType is 'truco' | 'retruco' | 'vale_cuatro' {
+    return (
+      cantoType === 'truco' ||
+      cantoType === 'retruco' ||
+      cantoType === 'vale_cuatro'
+    );
   }
 
-  private validateCantoOpen(room: MutableRoom, cantoType: MutablePendingCanto['cantoType']) {
+  private validateCantoOpen(
+    room: MutableRoom,
+    cantoType: MutablePendingCanto['cantoType'],
+  ) {
     if (!room.match || !this.isTrucoCanto(cantoType)) {
       return;
     }
@@ -1558,7 +1820,9 @@ export class RoomStoreService {
     const targetPoints = this.getAcceptedTrucoPoints(cantoType);
 
     if (room.match.currentHandPoints >= targetPoints) {
-      throw new Error(`${cantoType} is already active or surpassed for this hand.`);
+      throw new Error(
+        `${cantoType} is already active or surpassed for this hand.`,
+      );
     }
 
     if (cantoType === 'retruco' && room.match.currentHandPoints < 2) {
@@ -1566,7 +1830,9 @@ export class RoomStoreService {
     }
 
     if (cantoType === 'vale_cuatro' && room.match.currentHandPoints < 3) {
-      throw new Error('vale cuatro can only be called after retruco is accepted.');
+      throw new Error(
+        'vale cuatro can only be called after retruco is accepted.',
+      );
     }
   }
 
@@ -1618,7 +1884,10 @@ export class RoomStoreService {
     return match.currentTurnSeatId;
   }
 
-  private requireStringField(payload: Record<string, unknown>, fieldName: string) {
+  private requireStringField(
+    payload: Record<string, unknown>,
+    fieldName: string,
+  ) {
     const value = payload[fieldName];
 
     if (typeof value !== 'string' || !value.trim()) {
@@ -1628,7 +1897,10 @@ export class RoomStoreService {
     return value;
   }
 
-  private readOptionalStringField(payload: Record<string, unknown>, fieldName: string) {
+  private readOptionalStringField(
+    payload: Record<string, unknown>,
+    fieldName: string,
+  ) {
     const value = payload[fieldName];
 
     if (typeof value === 'undefined' || value === null || value === '') {
@@ -1660,14 +1932,21 @@ export class RoomStoreService {
   private requireCantoResponse(
     value: unknown,
   ): 'quiero' | 'no_quiero' | 'accepted' | 'rejected' {
-    if (value === 'quiero' || value === 'no_quiero' || value === 'accepted' || value === 'rejected') {
+    if (
+      value === 'quiero' ||
+      value === 'no_quiero' ||
+      value === 'accepted' ||
+      value === 'rejected'
+    ) {
       return value;
     }
 
     throw new Error('Missing or invalid response.');
   }
 
-  private requireSummarySource(value: unknown): 'manual' | 'match_end' | 'reconnect' {
+  private requireSummarySource(
+    value: unknown,
+  ): 'manual' | 'match_end' | 'reconnect' {
     if (value === 'match_end' || value === 'reconnect') {
       return value;
     }
@@ -1690,7 +1969,12 @@ export class RoomStoreService {
     }
   }
 
-  private getAcceptedTrucoPoints(cantoType: Extract<MutablePendingCanto['cantoType'], 'truco' | 'retruco' | 'vale_cuatro'>) {
+  private getAcceptedTrucoPoints(
+    cantoType: Extract<
+      MutablePendingCanto['cantoType'],
+      'truco' | 'retruco' | 'vale_cuatro'
+    >,
+  ) {
     switch (cantoType) {
       case 'retruco':
         return 3;
@@ -1704,10 +1988,16 @@ export class RoomStoreService {
 
   private getAcceptedEnvidoPoints(
     room: MutableRoom,
-    cantoType: Extract<MutablePendingCanto['cantoType'], 'envido' | 'real_envido' | 'falta_envido'>,
+    cantoType: Extract<
+      MutablePendingCanto['cantoType'],
+      'envido' | 'real_envido' | 'falta_envido'
+    >,
   ) {
     if (cantoType === 'falta_envido') {
-      const leadingScore = Math.max(room.match?.teamScores.A ?? 0, room.match?.teamScores.B ?? 0);
+      const leadingScore = Math.max(
+        room.match?.teamScores.A ?? 0,
+        room.match?.teamScores.B ?? 0,
+      );
       return Math.max(1, room.targetScore - leadingScore);
     }
 
@@ -1716,7 +2006,10 @@ export class RoomStoreService {
 
   private getAcceptedEnvidoScoreDelta(
     room: MutableRoom,
-    cantoType: Extract<MutablePendingCanto['cantoType'], 'envido' | 'real_envido' | 'falta_envido'>,
+    cantoType: Extract<
+      MutablePendingCanto['cantoType'],
+      'envido' | 'real_envido' | 'falta_envido'
+    >,
   ): TeamScoreView {
     const awardedTeam = this.getEnvidoWinningTeam(room);
     const points = this.getAcceptedEnvidoPoints(room, cantoType);
@@ -1737,11 +2030,16 @@ export class RoomStoreService {
       }
 
       const hand = room.match.handsBySeatId[seat.id] ?? [];
-      bestByTeam[seat.teamSide] = Math.max(bestByTeam[seat.teamSide], this.getSeatEnvidoScore(hand));
+      bestByTeam[seat.teamSide] = Math.max(
+        bestByTeam[seat.teamSide],
+        this.getSeatEnvidoScore(hand),
+      );
     }
 
     if (bestByTeam.A === bestByTeam.B) {
-      const dealerTeam = occupiedSeats.find((seat) => seat.id === room.match?.dealerSeatId)?.teamSide;
+      const dealerTeam = occupiedSeats.find(
+        (seat) => seat.id === room.match?.dealerSeatId,
+      )?.teamSide;
       return dealerTeam ?? 'A';
     }
 
@@ -1786,8 +2084,12 @@ export class RoomStoreService {
     return 'no points were awarded';
   }
 
-  private requireLegalWildcardSelectionByLabel(selectedLabel: string, legalChoices: WildcardChoice[]) {
-    const selectedChoice = legalChoices.find((choice) => choice.label === selectedLabel) ?? null;
+  private requireLegalWildcardSelectionByLabel(
+    selectedLabel: string,
+    legalChoices: WildcardChoice[],
+  ) {
+    const selectedChoice =
+      legalChoices.find((choice) => choice.label === selectedLabel) ?? null;
 
     if (!selectedChoice) {
       throw new Error('Selected wildcard value is not legal.');
@@ -1827,7 +2129,11 @@ export class RoomStoreService {
     return isTie ? null : bestPlay;
   }
 
-  private getHandWinner(room: MutableRoom, match: MutableMatchState, trickNumber: number): TeamSide | null {
+  private getHandWinner(
+    room: MutableRoom,
+    match: MutableMatchState,
+    trickNumber: number,
+  ): TeamSide | null {
     if (match.handTrickWins.A >= 2) {
       return 'A';
     }
@@ -1845,7 +2151,9 @@ export class RoomStoreService {
         return 'B';
       }
 
-      const dealerSeat = room.seats.find((seat) => seat.id === match.dealerSeatId);
+      const dealerSeat = room.seats.find(
+        (seat) => seat.id === match.dealerSeatId,
+      );
       return dealerSeat?.teamSide ?? 'A';
     }
 
@@ -1854,7 +2162,9 @@ export class RoomStoreService {
 
   private getAuthorizedSeat(code: string, roomSessionToken: string) {
     const room = this.getRequiredRoom(code);
-    const actorSeat = room.seats.find((entry) => entry.roomSessionToken === roomSessionToken);
+    const actorSeat = room.seats.find(
+      (entry) => entry.roomSessionToken === roomSessionToken,
+    );
 
     if (!actorSeat) {
       throw new NotFoundException('Session not found.');
@@ -1917,7 +2227,11 @@ export class RoomStoreService {
     };
   }
 
-  private persistRoomCreated(room: MutableRoom, hostSeat: MutableSeat, session: RoomSession) {
+  private persistRoomCreated(
+    room: MutableRoom,
+    hostSeat: MutableSeat,
+    session: RoomSession,
+  ) {
     void this.runPersist('persist room create', async () => {
       if (!this.roomPersistence) {
         return;
@@ -1934,15 +2248,24 @@ export class RoomStoreService {
       room.persistedRoomId = persistedRoom.id;
 
       for (const seat of room.seats) {
-        const persistedSeat = persistedRoom.seats.find((entry) => entry.seatIndex === seat.seatIndex);
+        const persistedSeat = persistedRoom.seats.find(
+          (entry) => entry.seatIndex === seat.seatIndex,
+        );
         seat.persistedSeatId = persistedSeat?.id ?? null;
       }
 
       const persistedHostSeatId =
-        persistedRoom.seats.find((entry) => entry.seatIndex === hostSeat.seatIndex)?.id ?? persistedRoom.hostSeatId ?? null;
+        persistedRoom.seats.find(
+          (entry) => entry.seatIndex === hostSeat.seatIndex,
+        )?.id ??
+        persistedRoom.hostSeatId ??
+        null;
 
       if (persistedHostSeatId) {
-        await this.roomPersistence.setHostSeat(persistedRoom.id, persistedHostSeatId);
+        await this.roomPersistence.setHostSeat(
+          persistedRoom.id,
+          persistedHostSeatId,
+        );
       }
 
       await this.claimSeatPersistence(room, hostSeat, session);
@@ -1966,7 +2289,12 @@ export class RoomStoreService {
     });
   }
 
-  private persistSeatClaim(room: MutableRoom, seat: MutableSeat, session: RoomSession, actionType: string) {
+  private persistSeatClaim(
+    room: MutableRoom,
+    seat: MutableSeat,
+    session: RoomSession,
+    actionType: string,
+  ) {
     void this.runPersist(`persist ${actionType}`, async () => {
       const persistedRoomId = this.getPersistedRoomId(room);
 
@@ -2018,7 +2346,11 @@ export class RoomStoreService {
   private persistReconnect(room: MutableRoom, seat: MutableSeat) {
     void this.runPersist('persist reconnect', async () => {
       if (seat.persistedSeatId) {
-        await this.roomPersistence?.updateSeatStatus(seat.persistedSeatId, DbSeatStatus.OCCUPIED, seat.displayName);
+        await this.roomPersistence?.updateSeatStatus(
+          seat.persistedSeatId,
+          DbSeatStatus.OCCUPIED,
+          seat.displayName,
+        );
       }
       const persistedRoomId = this.getPersistedRoomId(room);
 
@@ -2067,7 +2399,10 @@ export class RoomStoreService {
         await this.matchPersistence?.startMatch(persistedMatch.id);
       }
 
-      await this.roomPersistence?.setRoomStatus(persistedRoomId, DbRoomStatus.ACTIVE);
+      await this.roomPersistence?.setRoomStatus(
+        persistedRoomId,
+        DbRoomStatus.ACTIVE,
+      );
       await this.analyticsEventService?.matchStarted(persistedRoomId, {
         roomCode: room.code,
         handNumber: room.match.handNumber,
@@ -2103,7 +2438,10 @@ export class RoomStoreService {
         winnerTeamSide,
         finalScore: room.match.teamScores,
       });
-      await this.roomPersistence?.setRoomStatus(persistedRoomId, DbRoomStatus.SUMMARY);
+      await this.roomPersistence?.setRoomStatus(
+        persistedRoomId,
+        DbRoomStatus.SUMMARY,
+      );
       await this.analyticsEventService?.matchFinished(persistedRoomId, {
         winnerTeamSide,
         finalScore: this.toJson(room.match.teamScores),
@@ -2120,14 +2458,23 @@ export class RoomStoreService {
     });
   }
 
-  private persistAction(room: MutableRoom, actionType: string, payload: Record<string, unknown>, seat?: MutableSeat) {
+  private persistAction(
+    room: MutableRoom,
+    actionType: string,
+    payload: Record<string, unknown>,
+    seat?: MutableSeat,
+  ) {
     void this.runPersist(`persist ${actionType}`, async () => {
       if (actionType === 'seat_disconnected' && seat?.persistedSeatId) {
         await this.roomPersistence?.releaseSeat(seat.persistedSeatId);
       }
 
       if (actionType === 'seat_reconnected' && seat?.persistedSeatId) {
-        await this.roomPersistence?.updateSeatStatus(seat.persistedSeatId, DbSeatStatus.OCCUPIED, seat.displayName);
+        await this.roomPersistence?.updateSeatStatus(
+          seat.persistedSeatId,
+          DbSeatStatus.OCCUPIED,
+          seat.displayName,
+        );
       }
 
       const persistedRoomId = this.getPersistedRoomId(room);
@@ -2186,12 +2533,20 @@ export class RoomStoreService {
     });
   }
 
-  private async claimSeatPersistence(room: MutableRoom, seat: MutableSeat, session: RoomSession) {
+  private async claimSeatPersistence(
+    room: MutableRoom,
+    seat: MutableSeat,
+    session: RoomSession,
+  ) {
     if (!this.roomPersistence || !seat.persistedSeatId) {
       return;
     }
 
-    await this.roomPersistence.updateSeatStatus(seat.persistedSeatId, DbSeatStatus.OCCUPIED, seat.displayName);
+    await this.roomPersistence.updateSeatStatus(
+      seat.persistedSeatId,
+      DbSeatStatus.OCCUPIED,
+      seat.displayName,
+    );
     const occupancy = await this.roomPersistence.claimSeat({
       roomSeatId: seat.persistedSeatId,
       guestPlayerId: seat.id,
@@ -2212,10 +2567,10 @@ export class RoomStoreService {
             currentTurnSeatId: room.match.currentTurnSeatId,
             handsBySeatId: room.match.handsBySeatId,
             tableCards: room.match.tableCards,
-              teamScores: room.match.teamScores,
-              handTrickWins: room.match.handTrickWins,
-              currentHandPoints: room.match.currentHandPoints,
-              trickResults: room.match.trickResults,
+            teamScores: room.match.teamScores,
+            handTrickWins: room.match.handTrickWins,
+            currentHandPoints: room.match.currentHandPoints,
+            trickResults: room.match.trickResults,
             recentEvents: room.match.recentEvents,
             statusText: room.match.statusText,
             summary: room.match.summary,
@@ -2255,7 +2610,11 @@ export class RoomStoreService {
     let code = '';
 
     do {
-      code = randomBytes(4).toString('base64url').replace(/[^A-Z0-9]/gi, '').slice(0, 6).toUpperCase();
+      code = randomBytes(4)
+        .toString('base64url')
+        .replace(/[^A-Z0-9]/gi, '')
+        .slice(0, 6)
+        .toUpperCase();
     } while (code.length < 6 || this.roomsByCode.has(code));
 
     return code;
@@ -2365,13 +2724,19 @@ export class RoomStoreService {
     }
 
     const base = room.match.statusText;
-    return room.match.currentHandPoints > 1 ? `${base} Hand value: ${room.match.currentHandPoints}.` : base;
+    return room.match.currentHandPoints > 1
+      ? `${base} Hand value: ${room.match.currentHandPoints}.`
+      : base;
   }
 
   private shuffle<T>(items: T[]) {
     const clone = [...items];
 
-    for (let currentIndex = clone.length - 1; currentIndex > 0; currentIndex -= 1) {
+    for (
+      let currentIndex = clone.length - 1;
+      currentIndex > 0;
+      currentIndex -= 1
+    ) {
       const randomIndex = Math.floor(Math.random() * (currentIndex + 1));
       const current = clone[currentIndex];
       clone[currentIndex] = clone[randomIndex];
@@ -2385,36 +2750,46 @@ export class RoomStoreService {
     this.clearTurnTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
 
-    if (!room?.match || room.phase !== 'action_turn' || !room.match.currentTurnSeatId) {
+    if (
+      !room?.match ||
+      room.phase !== 'action_turn' ||
+      !room.match.currentTurnSeatId
+    ) {
       return;
     }
 
     room.match.turnDeadlineAt = new Date(Date.now() + 10_000).toISOString();
     const timeout = setTimeout(() => {
-        const latestRoom = this.roomsByCode.get(roomCode);
+      const latestRoom = this.roomsByCode.get(roomCode);
 
-        if (!latestRoom?.match || latestRoom.phase !== 'action_turn' || !latestRoom.match.currentTurnSeatId) {
-          return;
-        }
+      if (
+        !latestRoom?.match ||
+        latestRoom.phase !== 'action_turn' ||
+        !latestRoom.match.currentTurnSeatId
+      ) {
+        return;
+      }
 
-        const currentSeatId = latestRoom.match.currentTurnSeatId;
-        const token = latestRoom.seats.find((seat) => seat.id === currentSeatId)?.roomSessionToken;
-        const cardId = latestRoom.match.handsBySeatId[currentSeatId]?.[0]?.id;
+      const currentSeatId = latestRoom.match.currentTurnSeatId;
+      const token = latestRoom.seats.find(
+        (seat) => seat.id === currentSeatId,
+      )?.roomSessionToken;
+      const cardId = latestRoom.match.handsBySeatId[currentSeatId]?.[0]?.id;
 
-        if (!token || !cardId) {
-          return;
-        }
+      if (!token || !cardId) {
+        return;
+      }
 
-        this.pushEvent(
-          latestRoom,
-          `Timer expired. Auto-playing for ${latestRoom.seats.find((seat) => seat.id === currentSeatId)?.displayName ?? 'player'}.`,
-        );
-        this.playCard({
-          roomCode,
-          roomSessionToken: token,
-          cardId,
-        });
-      }, 10_000);
+      this.pushEvent(
+        latestRoom,
+        `Timer expired. Auto-playing for ${latestRoom.seats.find((seat) => seat.id === currentSeatId)?.displayName ?? 'player'}.`,
+      );
+      this.playCard({
+        roomCode,
+        roomSessionToken: token,
+        cardId,
+      });
+    }, 10_000);
     timeout.unref?.();
     this.turnTimeouts.set(roomCode, timeout);
   }
@@ -2437,21 +2812,21 @@ export class RoomStoreService {
     }
 
     const timeout = setTimeout(() => {
-        const latestRoom = this.roomsByCode.get(roomCode);
+      const latestRoom = this.roomsByCode.get(roomCode);
 
-        if (!latestRoom?.match || latestRoom.phase !== 'reconnect_hold') {
-          return;
-        }
+      if (!latestRoom?.match || latestRoom.phase !== 'reconnect_hold') {
+        return;
+      }
 
-        latestRoom.phase = 'action_turn';
-        latestRoom.match.reconnectDeadlineAt = null;
-        this.pushEvent(latestRoom, 'Reconnect window expired. Resuming match.');
-        this.setStatus(
-          latestRoom,
-          `${latestRoom.seats.find((seat) => seat.id === latestRoom.match?.currentTurnSeatId)?.displayName ?? 'Current player'} to act.`,
-        );
-        this.scheduleTurnTimeout(roomCode);
-      }, 10_000);
+      latestRoom.phase = 'action_turn';
+      latestRoom.match.reconnectDeadlineAt = null;
+      this.pushEvent(latestRoom, 'Reconnect window expired. Resuming match.');
+      this.setStatus(
+        latestRoom,
+        `${latestRoom.seats.find((seat) => seat.id === latestRoom.match?.currentTurnSeatId)?.displayName ?? 'Current player'} to act.`,
+      );
+      this.scheduleTurnTimeout(roomCode);
+    }, 10_000);
     timeout.unref?.();
     this.reconnectTimeouts.set(roomCode, timeout);
   }
@@ -2476,20 +2851,29 @@ export class RoomStoreService {
     const timeout = setTimeout(() => {
       const latestRoom = this.roomsByCode.get(roomCode);
 
-      if (!latestRoom?.match?.pendingCanto || latestRoom.phase !== 'response_pending') {
+      if (
+        !latestRoom?.match?.pendingCanto ||
+        latestRoom.phase !== 'response_pending'
+      ) {
         return;
       }
 
       const pending = latestRoom.match.pendingCanto;
       const targetSeatId = pending.targetSeatId;
-      const token =
-        (targetSeatId ? latestRoom.seats.find((seat) => seat.id === targetSeatId) : latestRoom.seats[0])?.roomSessionToken;
+      const token = (
+        targetSeatId
+          ? latestRoom.seats.find((seat) => seat.id === targetSeatId)
+          : latestRoom.seats[0]
+      )?.roomSessionToken;
 
       if (!token) {
         return;
       }
 
-      this.pushEvent(latestRoom, `Timer expired. ${pending.cantoType} resolved as no quiero.`);
+      this.pushEvent(
+        latestRoom,
+        `Timer expired. ${pending.cantoType} resolved as no quiero.`,
+      );
       this.resolveCanto(roomCode, token, 'no_quiero');
     }, 12_000);
 
@@ -2510,25 +2894,36 @@ export class RoomStoreService {
     this.clearWildcardTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
 
-    if (!room?.match?.pendingWildcardSelection || room.phase !== 'wildcard_selection') {
+    if (
+      !room?.match?.pendingWildcardSelection ||
+      room.phase !== 'wildcard_selection'
+    ) {
       return;
     }
 
     const timeout = setTimeout(() => {
       const latestRoom = this.roomsByCode.get(roomCode);
 
-      if (!latestRoom?.match?.pendingWildcardSelection || latestRoom.phase !== 'wildcard_selection') {
+      if (
+        !latestRoom?.match?.pendingWildcardSelection ||
+        latestRoom.phase !== 'wildcard_selection'
+      ) {
         return;
       }
 
       const pending = latestRoom.match.pendingWildcardSelection;
-      const token = latestRoom.seats.find((seat) => seat.id === pending.seatId)?.roomSessionToken;
+      const token = latestRoom.seats.find(
+        (seat) => seat.id === pending.seatId,
+      )?.roomSessionToken;
 
       if (!token) {
         return;
       }
 
-      this.pushEvent(latestRoom, 'Timer expired. Wildcard auto-selected as 4 de copa.');
+      this.pushEvent(
+        latestRoom,
+        'Timer expired. Wildcard auto-selected as 4 de copa.',
+      );
       this.selectWildcard(roomCode, token, pending.cardId, '4 de copa');
     }, 15_000);
 

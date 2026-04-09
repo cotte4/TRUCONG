@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 import type { CreateActionLogInput } from './persistence.types';
 
@@ -15,7 +14,7 @@ export class ActionLogPersistenceService {
         seatId: input.seatId ?? null,
         occupancyId: input.occupancyId ?? null,
         actionType: input.actionType,
-        payload: input.payload as Prisma.InputJsonValue,
+        payload: input.payload,
         effectiveBongAward: input.effectiveBongAward ?? false,
       },
     });
@@ -29,7 +28,7 @@ export class ActionLogPersistenceService {
         seatId: entry.seatId ?? null,
         occupancyId: entry.occupancyId ?? null,
         actionType: entry.actionType,
-        payload: entry.payload as Prisma.InputJsonValue,
+        payload: entry.payload,
         effectiveBongAward: entry.effectiveBongAward ?? false,
       })),
     });

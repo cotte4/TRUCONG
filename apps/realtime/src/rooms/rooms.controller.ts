@@ -19,12 +19,18 @@ export class RoomsController {
   }
 
   @Post(':code/join')
-  joinRoom(@Param('code') code: string, @Body() body: JoinRoomRequest): RoomEntryResponse {
+  joinRoom(
+    @Param('code') code: string,
+    @Body() body: JoinRoomRequest,
+  ): RoomEntryResponse {
     return this.buildRoomEntryResponse(this.roomStore.joinRoom(code, body));
   }
 
   @Post(':code/resume')
-  resumeRoom(@Param('code') code: string, @Body() body: SessionResumePayload): Promise<ResumeRoomResponse> {
+  resumeRoom(
+    @Param('code') code: string,
+    @Body() body: SessionResumePayload,
+  ): Promise<ResumeRoomResponse> {
     return this.buildResumeResponse(code, body.roomSessionToken);
   }
 
@@ -40,24 +46,38 @@ export class RoomsController {
     code: string,
     roomSessionToken?: string | null,
   ): Promise<ResumeRoomResponse> {
-    const result = (await this.roomStore.resumeRoom(code, roomSessionToken)) as ResumeRoomResponse & {
+    const result = (await this.roomStore.resumeRoom(
+      code,
+      roomSessionToken,
+    )) as ResumeRoomResponse & {
       state?: MatchProgressState | null;
     };
-    const lifecycle = this.roomStore.getRoomLifecycleState(code, result.session?.seatId ?? null);
+    const lifecycle = this.roomStore.getRoomLifecycleState(
+      code,
+      result.session?.seatId ?? null,
+    );
     const progressState = lifecycle.progressState;
     const transition = lifecycle.transitionState;
     const wildcardSelection = lifecycle.wildcardSelectionState;
     return {
       ...result,
       matchView: result.matchView ?? lifecycle.matchView,
-      state: result.state ?? progressState ?? this.buildMatchProgressState(result.snapshot, result.matchView),
+      state:
+        result.state ??
+        progressState ??
+        this.buildMatchProgressState(result.snapshot, result.matchView),
       transition,
       wildcardSelection,
     };
   }
 
-  private buildRoomEntryResponse(response: RoomEntryResponse): RoomEntryResponse {
-    const lifecycle = this.roomStore.getRoomLifecycleState(response.session.roomCode, response.session.seatId);
+  private buildRoomEntryResponse(
+    response: RoomEntryResponse,
+  ): RoomEntryResponse {
+    const lifecycle = this.roomStore.getRoomLifecycleState(
+      response.session.roomCode,
+      response.session.seatId,
+    );
     const matchView = response.matchView ?? lifecycle.matchView;
     const progressState = lifecycle.progressState;
     const transition = lifecycle.transitionState;
@@ -65,7 +85,10 @@ export class RoomsController {
     return {
       ...response,
       matchView,
-      state: response.state ?? progressState ?? this.buildMatchProgressState(response.snapshot, matchView),
+      state:
+        response.state ??
+        progressState ??
+        this.buildMatchProgressState(response.snapshot, matchView),
       transition,
       wildcardSelection,
     };

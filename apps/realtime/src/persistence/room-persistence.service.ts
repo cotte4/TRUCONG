@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { RoomStatus, SeatStatus, TeamSide } from '@prisma/client';
 import { PrismaService } from './prisma.service';
-import type { CreateRoomRecordInput, CreateSeatOccupancyInput, JsonInput } from './persistence.types';
+import type {
+  CreateRoomRecordInput,
+  CreateSeatOccupancyInput,
+  JsonInput,
+} from './persistence.types';
 
 @Injectable()
 export class RoomPersistenceService {
@@ -85,7 +89,11 @@ export class RoomPersistenceService {
     });
   }
 
-  async updateSeatStatus(roomSeatId: string, status: SeatStatus, displayName?: string | null) {
+  async updateSeatStatus(
+    roomSeatId: string,
+    status: SeatStatus,
+    displayName?: string | null,
+  ) {
     return this.prisma.roomSeat.update({
       where: { id: roomSeatId },
       data: {
@@ -135,7 +143,12 @@ export class RoomPersistenceService {
     });
   }
 
-  async storeRoomSnapshot(roomId: string, version: number, state: JsonInput, matchId?: string | null) {
+  async storeRoomSnapshot(
+    roomId: string,
+    version: number,
+    state: JsonInput,
+    matchId?: string | null,
+  ) {
     return this.prisma.matchSnapshot.create({
       data: {
         roomId,

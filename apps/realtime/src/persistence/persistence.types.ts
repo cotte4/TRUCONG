@@ -1,4 +1,10 @@
-import type { AnalyticsEventType, MatchStatus, Prisma, RoomStatus, TeamSide } from '@prisma/client';
+import type {
+  AnalyticsEventType,
+  MatchStatus,
+  Prisma,
+  RoomStatus,
+  TeamSide,
+} from '@prisma/client';
 
 export type JsonInput = Prisma.InputJsonValue;
 
