@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
@@ -284,7 +285,7 @@ export class RoomStoreService {
     const displayName = input.displayName.trim();
 
     if (!displayName) {
-      throw new Error('Display name is required.');
+      throw new BadRequestException('Display name is required.');
     }
 
     const maxPlayers = input.maxPlayers ?? 4;
@@ -331,7 +332,7 @@ export class RoomStoreService {
     const displayName = input.displayName.trim();
 
     if (!displayName) {
-      throw new Error('Display name is required.');
+      throw new BadRequestException('Display name is required.');
     }
 
     const seat =
@@ -344,7 +345,7 @@ export class RoomStoreService {
         : undefined) ?? room.seats.find((entry) => entry.status === 'open');
 
     if (!seat) {
-      throw new Error('Room is full.');
+      throw new BadRequestException('Room is full.');
     }
 
     const session = this.attachSeat(seat, room.code, room.id, displayName);
@@ -741,7 +742,9 @@ export class RoomStoreService {
         return this.startSummary(roomCode, payload.roomSessionToken, source);
       }
       default:
-        throw new Error(`Unsupported action type: ${payload.actionType}`);
+        throw new BadRequestException(
+          `Unsupported action type: ${payload.actionType}`,
+        );
     }
   }
 
@@ -749,7 +752,7 @@ export class RoomStoreService {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
     if (room.phase !== 'lobby') {
-      throw new Error(
+      throw new BadRequestException(
         'Ready state can only be changed while the room is in the lobby.',
       );
     }
@@ -778,11 +781,13 @@ export class RoomStoreService {
     );
 
     if (!actorSeat.isHost) {
-      throw new Error('Only the host can change team assignments.');
+      throw new BadRequestException(
+        'Only the host can change team assignments.',
+      );
     }
 
     if (room.phase !== 'lobby') {
-      throw new Error(
+      throw new BadRequestException(
         'Teams can only be edited while the room is in the lobby.',
       );
     }
@@ -792,7 +797,7 @@ export class RoomStoreService {
     );
 
     if (!targetSeat) {
-      throw new Error('Seat not found.');
+      throw new BadRequestException('Seat not found.');
     }
 
     targetSeat.teamSide = payload.teamSide;
@@ -816,27 +821,31 @@ export class RoomStoreService {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
     if (!actorSeat.isHost) {
-      throw new Error('Only the host can start the match.');
+      throw new BadRequestException('Only the host can start the match.');
     }
 
     if (room.phase !== 'lobby') {
-      throw new Error('Match has already started.');
+      throw new BadRequestException('Match has already started.');
     }
 
     const occupiedSeats = this.getOccupiedSeats(room);
 
     if (occupiedSeats.length !== room.maxPlayers) {
-      throw new Error('All seats must be filled before the match can start.');
+      throw new BadRequestException(
+        'All seats must be filled before the match can start.',
+      );
     }
 
     if (!occupiedSeats.every((seat) => seat.isReady)) {
-      throw new Error(
+      throw new BadRequestException(
         'Every player must mark ready before the match can start.',
       );
     }
 
     if (!this.hasValidTeams(room)) {
-      throw new Error('Teams must be balanced before starting the match.');
+      throw new BadRequestException(
+        'Teams must be balanced before starting the match.',
+      );
     }
 
     room.match = this.createInitialMatch(room);
@@ -865,7 +874,9 @@ export class RoomStoreService {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
     if (!room.match?.summary) {
-      throw new Error('Summary is only available after the match ends.');
+      throw new BadRequestException(
+        'Summary is only available after the match ends.',
+      );
     }
 
     room.phase = 'post_match_summary';
@@ -925,15 +936,19 @@ export class RoomStoreService {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
     if (room.phase !== 'action_turn' || !room.match) {
-      throw new Error('Cantos can only be opened during an active turn.');
+      throw new BadRequestException(
+        'Cantos can only be opened during an active turn.',
+      );
     }
 
     if (room.match.currentTurnSeatId !== actorSeat.id) {
-      throw new Error('Only the active player can open a canto.');
+      throw new BadRequestException('Only the active player can open a canto.');
     }
 
     if (room.match.pendingCanto) {
-      throw new Error('There is already a pending canto response.');
+      throw new BadRequestException(
+        'There is already a pending canto response.',
+      );
     }
 
     this.validateCantoOpen(room, cantoType);
@@ -998,7 +1013,7 @@ export class RoomStoreService {
     const beforeHandPoints = room.match?.currentHandPoints ?? 1;
 
     if (room.phase !== 'response_pending' || !room.match?.pendingCanto) {
-      throw new Error('There is no pending canto to resolve.');
+      throw new BadRequestException('There is no pending canto to resolve.');
     }
 
     const pending = room.match.pendingCanto;
@@ -1008,7 +1023,9 @@ export class RoomStoreService {
       null;
 
     if (pending.targetSeatId && pending.targetSeatId !== actorSeat.id) {
-      throw new Error('This canto must be resolved by the targeted seat.');
+      throw new BadRequestException(
+        'This canto must be resolved by the targeted seat.',
+      );
     }
 
     room.match.pendingCanto = null;
@@ -1147,13 +1164,15 @@ export class RoomStoreService {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
     if (room.phase !== 'action_turn' || !room.match) {
-      throw new Error(
+      throw new BadRequestException(
         'Wildcard selection is only available during an active hand.',
       );
     }
 
     if (room.match.currentTurnSeatId !== actorSeat.id) {
-      throw new Error('Only the active player can select a wildcard.');
+      throw new BadRequestException(
+        'Only the active player can select a wildcard.',
+      );
     }
 
     const card = (room.match.handsBySeatId[actorSeat.id] ?? []).find(
@@ -1161,7 +1180,7 @@ export class RoomStoreService {
     );
 
     if (!card?.isWildcard) {
-      throw new Error('Selected card is not a wildcard.');
+      throw new BadRequestException('Selected card is not a wildcard.');
     }
 
     const availableLabels = this.getLegalWildcardChoices(room, cardId).map(
@@ -1237,13 +1256,13 @@ export class RoomStoreService {
       room.phase !== 'wildcard_selection' ||
       !room.match?.pendingWildcardSelection
     ) {
-      throw new Error('There is no pending wildcard selection.');
+      throw new BadRequestException('There is no pending wildcard selection.');
     }
 
     const pending = room.match.pendingWildcardSelection;
 
     if (pending.seatId !== actorSeat.id || pending.cardId !== cardId) {
-      throw new Error(
+      throw new BadRequestException(
         'This wildcard selection does not belong to the current player.',
       );
     }
@@ -1253,7 +1272,7 @@ export class RoomStoreService {
     );
 
     if (!card) {
-      throw new Error('Wildcard card not found in hand.');
+      throw new BadRequestException('Wildcard card not found in hand.');
     }
 
     const selectedChoice = this.requireLegalWildcardSelectionByLabel(
@@ -1305,7 +1324,7 @@ export class RoomStoreService {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
 
     if (!actorSeat.isHost) {
-      throw new Error('Only the host can destroy the room.');
+      throw new BadRequestException('Only the host can destroy the room.');
     }
 
     this.clearTurnTimeout(room.code);
@@ -1347,15 +1366,17 @@ export class RoomStoreService {
     const beforeTransition = this.getMatchTransitionState(room.code);
 
     if (room.phase !== 'action_turn' || !room.match) {
-      throw new Error('Cards can only be played during an active turn.');
+      throw new BadRequestException(
+        'Cards can only be played during an active turn.',
+      );
     }
 
     if (room.match.currentTurnSeatId !== actorSeat.id) {
-      throw new Error('It is not your turn.');
+      throw new BadRequestException('It is not your turn.');
     }
 
     if (room.match.pendingCanto) {
-      throw new Error(
+      throw new BadRequestException(
         'Card play is blocked while a canto response is pending.',
       );
     }
@@ -1364,7 +1385,7 @@ export class RoomStoreService {
     const cardIndex = hand.findIndex((card) => card.id === payload.cardId);
 
     if (cardIndex === -1) {
-      throw new Error('Card not found in hand.');
+      throw new BadRequestException('Card not found in hand.');
     }
 
     const [card] = hand.splice(cardIndex, 1);
@@ -1824,17 +1845,19 @@ export class RoomStoreService {
     const targetPoints = this.getAcceptedTrucoPoints(cantoType);
 
     if (room.match.currentHandPoints >= targetPoints) {
-      throw new Error(
+      throw new BadRequestException(
         `${cantoType} is already active or surpassed for this hand.`,
       );
     }
 
     if (cantoType === 'retruco' && room.match.currentHandPoints < 2) {
-      throw new Error('retruco can only be called after truco is accepted.');
+      throw new BadRequestException(
+        'retruco can only be called after truco is accepted.',
+      );
     }
 
     if (cantoType === 'vale_cuatro' && room.match.currentHandPoints < 3) {
-      throw new Error(
+      throw new BadRequestException(
         'vale cuatro can only be called after retruco is accepted.',
       );
     }
@@ -1895,7 +1918,7 @@ export class RoomStoreService {
     const value = payload[fieldName];
 
     if (typeof value !== 'string' || !value.trim()) {
-      throw new Error(`Missing or invalid ${fieldName}.`);
+      throw new BadRequestException(`Missing or invalid ${fieldName}.`);
     }
 
     return value;
@@ -1912,7 +1935,7 @@ export class RoomStoreService {
     }
 
     if (typeof value !== 'string') {
-      throw new Error(`Invalid ${fieldName}.`);
+      throw new BadRequestException(`Invalid ${fieldName}.`);
     }
 
     return value;
@@ -1930,7 +1953,7 @@ export class RoomStoreService {
       return value;
     }
 
-    throw new Error('Missing or invalid cantoType.');
+    throw new BadRequestException('Missing or invalid cantoType.');
   }
 
   private requireCantoResponse(
@@ -1945,7 +1968,7 @@ export class RoomStoreService {
       return value;
     }
 
-    throw new Error('Missing or invalid response.');
+    throw new BadRequestException('Missing or invalid response.');
   }
 
   private requireSummarySource(
@@ -2096,7 +2119,7 @@ export class RoomStoreService {
       legalChoices.find((choice) => choice.label === selectedLabel) ?? null;
 
     if (!selectedChoice) {
-      throw new Error('Selected wildcard value is not legal.');
+      throw new BadRequestException('Selected wildcard value is not legal.');
     }
 
     return selectedChoice;
