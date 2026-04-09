@@ -1487,12 +1487,12 @@ describe('RoomStoreService', () => {
       if (wildcard) {
         service.requestWildcardSelection(
           created.snapshot.code,
-          tokenBySeatId.get(actingSeatId)!,
+          tokenBySeatId.get(actingSeatId),
           wildcard.id,
         );
         service.selectWildcard(
           created.snapshot.code,
-          tokenBySeatId.get(actingSeatId)!,
+          tokenBySeatId.get(actingSeatId),
           wildcard.id,
           '4 de copa',
         );

@@ -19,11 +19,13 @@ export class RoomsController {
   }
 
   @Post(':code/join')
-  joinRoom(
+  async joinRoom(
     @Param('code') code: string,
     @Body() body: JoinRoomRequest,
-  ): RoomEntryResponse {
-    return this.buildRoomEntryResponse(this.roomStore.joinRoom(code, body));
+  ): Promise<RoomEntryResponse> {
+    return this.buildRoomEntryResponse(
+      await this.roomStore.joinRoom(code, body),
+    );
   }
 
   @Post(':code/resume')

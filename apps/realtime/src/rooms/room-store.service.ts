@@ -322,7 +322,11 @@ export class RoomStoreService {
     };
   }
 
-  joinRoom(code: string, input: JoinRoomRequest): RoomEntryResponse {
+  async joinRoom(
+    code: string,
+    input: JoinRoomRequest,
+  ): Promise<RoomEntryResponse> {
+    await this.restoreRoomIfNeeded(code);
     const room = this.getRequiredRoom(code);
     const displayName = input.displayName.trim();
 
