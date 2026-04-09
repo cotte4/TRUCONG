@@ -290,7 +290,6 @@ export class GameGateway implements OnGatewayDisconnect {
       if (seatUpdated) {
         this.server.to(snapshot.code).emit('seat:updated', seatUpdated);
       }
-      this.server.to(snapshot.code).emit('room:snapshot', snapshot);
     }
   }
 
@@ -1441,7 +1440,6 @@ export class GameGateway implements OnGatewayDisconnect {
     roomUpdated: RoomUpdatedEvent,
     seatUpdated: SeatUpdatedEvent | null,
   ) {
-    this.server.to(roomCode).emit('room:snapshot', snapshot);
     this.server.to(roomCode).emit('room:updated', roomUpdated);
 
     if (seatUpdated) {

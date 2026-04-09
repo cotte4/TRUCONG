@@ -755,7 +755,6 @@ export interface RealtimeServerToClientEvents {
   'hand:scored': (payload: HandScoredEvent) => void;
   'summary:started': (payload: SummaryStartedEvent) => void;
   'room:destroyed': (payload: RoomDestroyedEvent) => void;
-  'room:snapshot': (payload: RoomSnapshot) => void;
   pong: (payload: { ok: boolean; timestamp: string }) => void;
 }
 

@@ -338,11 +338,6 @@ export function LobbyClient({ code }: { code: string }) {
         activeSocket.on("trick:resolved", handleRealtimePayload);
         activeSocket.on("hand:scored", handleRealtimePayload);
         activeSocket.on("summary:started", handleRealtimePayload);
-        activeSocket.on("room:snapshot", () => {
-          void refreshRoomState().then(() => {
-            setConnectionLabel("En vivo");
-          });
-        });
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "No se pudo cargar la sala.");
         setLoading(false);
