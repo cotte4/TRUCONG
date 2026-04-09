@@ -277,7 +277,13 @@ export function LobbyClient({ code }: { code: string }) {
       );
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        const text = await response.text();
+        let message = text;
+        try {
+          const json = JSON.parse(text) as { message?: string };
+          if (typeof json?.message === 'string') message = json.message;
+        } catch { /* not JSON, use raw text */ }
+        throw new Error(message || "Error al sincronizar la sala.");
       }
 
       const result = (await response.json()) as ResumeRoomResponse;

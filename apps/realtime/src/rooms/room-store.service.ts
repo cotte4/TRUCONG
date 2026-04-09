@@ -1479,7 +1479,27 @@ export class RoomStoreService {
       const persistedRoom =
         await this.roomPersistence.findRoomByCode(normalizedCode);
 
-      if (!persistedRoom?.snapshots[0]?.state) {
+      if (!persistedRoom) {
+        this.logger.warn(
+          `restoreRoomIfNeeded: room ${normalizedCode} not found in DB`,
+        );
+        return;
+      }
+
+      if (!persistedRoom.snapshots[0]?.state) {
+        // No snapshot saved yet — possible race condition on first persist.
+        // For lobby rooms we can reconstruct a joinable state from the DB record.
+        if (persistedRoom.status === DbRoomStatus.LOBBY) {
+          this.logger.warn(
+            `restoreRoomIfNeeded: room ${normalizedCode} has no snapshot — reconstructing from DB record`,
+          );
+          const restoredRoom = this.hydrateRoomFromDbRecord(persistedRoom);
+          this.roomsByCode.set(normalizedCode, restoredRoom);
+        } else {
+          this.logger.warn(
+            `restoreRoomIfNeeded: room ${normalizedCode} has no snapshot (status: ${persistedRoom.status}) — cannot restore`,
+          );
+        }
         return;
       }
 
@@ -1633,6 +1653,76 @@ export class RoomStoreService {
       allow3v3: roomState.allow3v3,
       seats,
       match,
+    };
+  }
+
+  private hydrateRoomFromDbRecord(
+    persistedRoom: NonNullable<
+      Awaited<ReturnType<RoomPersistenceService['findRoomByCode']>>
+    >,
+  ): MutableRoom {
+    const seats = [...persistedRoom.seats]
+      .sort((a, b) => a.seatIndex - b.seatIndex)
+      .map<MutableSeat>((persistedSeat) => {
+        const occupancy = persistedSeat.occupancies[0];
+        const latestConnection = occupancy?.connections[0];
+        const seatId = randomUUID();
+
+        if (occupancy?.roomSessionToken) {
+          this.roomCodeByToken.set(
+            occupancy.roomSessionToken,
+            persistedRoom.code,
+          );
+        }
+
+        const hasActiveOccupancy = !!occupancy;
+        // DbSeatStatus values are uppercase; contracts SeatStatus values are lowercase
+        const contractStatus = (
+          hasActiveOccupancy ? persistedSeat.status.toLowerCase() : 'open'
+        ) as SeatStatus;
+
+        return {
+          id: seatId,
+          persistedSeatId: persistedSeat.id,
+          persistedOccupancyId: occupancy?.id ?? null,
+          persistedConnectionId: latestConnection?.id ?? null,
+          reconnectToken: latestConnection?.reconnectToken ?? null,
+          seatIndex: persistedSeat.seatIndex,
+          teamSide: persistedSeat.teamSide as TeamSide | null,
+          status: contractStatus,
+          displayName: hasActiveOccupancy
+            ? (persistedSeat.displayName ?? null)
+            : null,
+          isHost: false,
+          isReady: false,
+          roomSessionToken: occupancy?.roomSessionToken ?? null,
+          seatClaimToken: occupancy?.seatClaimToken ?? null,
+          socketId: null,
+        };
+      });
+
+    // Match host by persisted seat ID since we just generated new in-memory IDs
+    const hostSeat = persistedRoom.hostSeatId
+      ? seats.find((s) => s.persistedSeatId === persistedRoom.hostSeatId)
+      : seats[0];
+
+    if (hostSeat) {
+      hostSeat.isHost = true;
+    }
+
+    return {
+      id: randomUUID(),
+      persistedRoomId: persistedRoom.id,
+      snapshotVersion: 0,
+      code: persistedRoom.code,
+      phase: 'lobby',
+      hostSeatId: hostSeat?.id ?? null,
+      maxPlayers: persistedRoom.maxPlayers,
+      targetScore: persistedRoom.targetScore,
+      allowBongs: persistedRoom.allowBongs,
+      allow3v3: persistedRoom.allow3v3,
+      seats,
+      match: null,
     };
   }
 

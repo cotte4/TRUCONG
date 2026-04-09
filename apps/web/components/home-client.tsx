@@ -1,7 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+
+function usePersistentInput(key: string, initial = "") {
+  const [value, setValue] = useState(initial);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem(key);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved) setValue(saved);
+  }, [key]);
+
+  const set = (next: string) => {
+    setValue(next);
+    if (next) sessionStorage.setItem(key, next);
+    else sessionStorage.removeItem(key);
+  };
+
+  return [value, set] as const;
+}
 import type { CreateRoomRequest, JoinRoomRequest, RoomEntryResponse } from "@dimadong/contracts";
 import { apiBaseUrl } from "@/lib/config";
 
@@ -18,7 +36,12 @@ async function postJson<TBody, TResult>(url: string, body: TBody, timeoutMs = 15
     });
 
     if (!response.ok) {
-      const message = await response.text();
+      const text = await response.text();
+      let message = text;
+      try {
+        const json = JSON.parse(text) as { message?: string };
+        if (typeof json?.message === 'string') message = json.message;
+      } catch { /* not JSON, use raw text */ }
       throw new Error(message || "La solicitud falló.");
     }
 
@@ -35,9 +58,9 @@ async function postJson<TBody, TResult>(url: string, body: TBody, timeoutMs = 15
 
 export function HomeClient() {
   const router = useRouter();
-  const [createName, setCreateName] = useState("");
-  const [joinName, setJoinName] = useState("");
-  const [roomCode, setRoomCode] = useState("");
+  const [createName, setCreateName] = usePersistentInput("home:createName");
+  const [joinName, setJoinName] = usePersistentInput("home:joinName");
+  const [roomCode, setRoomCode] = usePersistentInput("home:roomCode");
   const [maxPlayers, setMaxPlayers] = useState<2 | 4>(4);
   const [targetScore, setTargetScore] = useState<15 | 30>(30);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +70,9 @@ export function HomeClient() {
   const enterRoom = (result: RoomEntryResponse) => {
     window.localStorage.setItem(`dimadong:${result.snapshot.code}:session`, result.session.roomSessionToken);
     window.localStorage.setItem(`dimadong:${result.snapshot.code}:seat`, result.session.seatId);
+    sessionStorage.removeItem("home:createName");
+    sessionStorage.removeItem("home:joinName");
+    sessionStorage.removeItem("home:roomCode");
     router.push(`/rooms/${result.snapshot.code}`);
   };
 
