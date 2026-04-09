@@ -81,12 +81,12 @@ describe('RoomStoreService', () => {
     expect(result.session.roomCode).toBe(result.snapshot.code);
   });
 
-  it('joins the next open seat in an existing room', () => {
+  it('joins the next open seat in an existing room', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -98,12 +98,12 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('requires all players to be ready before the host can start the match', () => {
+  it('requires all players to be ready before the host can start the match', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -128,12 +128,12 @@ describe('RoomStoreService', () => {
     expect(started.phase).toBe('action_turn');
   });
 
-  it('only allows the host to change team assignments', () => {
+  it('only allows the host to change team assignments', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -147,12 +147,12 @@ describe('RoomStoreService', () => {
     ).toThrow('Only the host can change team assignments.');
   });
 
-  it('deals cards on start and allows the active player to play one', () => {
+  it('deals cards on start and allows the active player to play one', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -183,13 +183,13 @@ describe('RoomStoreService', () => {
     expect(updatedHostView?.currentTurnSeatId).toBe(joined.session.seatId);
   });
 
-  it('resolves a hand into score progression', () => {
+  it('resolves a hand into score progression', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 30,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -234,13 +234,13 @@ describe('RoomStoreService', () => {
     expect(snapshot.recentEvents.length).toBeGreaterThan(0);
   });
 
-  it('finishes the match when a team reaches the target score', () => {
+  it('finishes the match when a team reaches the target score', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 1,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -282,13 +282,13 @@ describe('RoomStoreService', () => {
     expect(snapshot.score.A + snapshot.score.B).toBe(1);
   });
 
-  it('can move a finished match into post-match summary', () => {
+  it('can move a finished match into post-match summary', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 1,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -334,13 +334,13 @@ describe('RoomStoreService', () => {
     expect(summarySnapshot.winnerTeamSide).toMatch(/A|B/);
   });
 
-  it('returns explicit result data when starting summary', () => {
+  it('returns explicit result data when starting summary', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 1,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -374,12 +374,12 @@ describe('RoomStoreService', () => {
     expect(result.lifecycle.transitionState?.matchComplete).toBe(true);
   });
 
-  it('only allows the host to destroy the room', () => {
+  it('only allows the host to destroy the room', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -401,12 +401,12 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('blocks card play while a canto response is pending', () => {
+  it('blocks card play while a canto response is pending', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -437,13 +437,13 @@ describe('RoomStoreService', () => {
     ).toThrow('Cards can only be played during an active turn.');
   });
 
-  it('resolves a declined canto and resumes the room', () => {
+  it('resolves a declined canto and resumes the room', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 30,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -470,13 +470,13 @@ describe('RoomStoreService', () => {
     expect(snapshot.score.A + snapshot.score.B).toBe(1);
   });
 
-  it('finishes the match when truco is declined at the target score', () => {
+  it('finishes the match when truco is declined at the target score', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 1,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -504,12 +504,12 @@ describe('RoomStoreService', () => {
     expect(snapshot.score.A).toBe(1);
   });
 
-  it('supports requesting and resolving wildcard selection', () => {
+  it('supports requesting and resolving wildcard selection', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -563,12 +563,12 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('returns explicit result data when opening canto', () => {
+  it('returns explicit result data when opening canto', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -591,12 +591,12 @@ describe('RoomStoreService', () => {
     expect(result.lifecycle.progressState?.phase).toBe('response_pending');
   });
 
-  it('returns explicit result data when requesting and selecting wildcard', () => {
+  it('returns explicit result data when requesting and selecting wildcard', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -641,12 +641,12 @@ describe('RoomStoreService', () => {
     expect(selected.snapshot.phase).toBe('action_turn');
   });
 
-  it('exposes match progress state after a match starts', () => {
+  it('exposes match progress state after a match starts', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -670,12 +670,12 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('exposes pending wildcard selection state while selection is open', () => {
+  it('exposes pending wildcard selection state while selection is open', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -726,13 +726,13 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('exposes transition state after a trick resolves', () => {
+  it('exposes transition state after a trick resolves', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 30,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -786,12 +786,12 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('exposes a combined lifecycle bundle for realtime consumers', () => {
+  it('exposes a combined lifecycle bundle for realtime consumers', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -846,13 +846,13 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('marks hand and match summaries as resolved after match end', () => {
+  it('marks hand and match summaries as resolved after match end', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 1,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -905,12 +905,12 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('routes generic action submit to card play', () => {
+  it('routes generic action submit to card play', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -942,12 +942,12 @@ describe('RoomStoreService', () => {
     ).toHaveLength(2);
   });
 
-  it('returns explicit post-play result flags for trick and hand transitions', () => {
+  it('returns explicit post-play result flags for trick and hand transitions', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1016,12 +1016,12 @@ describe('RoomStoreService', () => {
     ).toThrow('Unsupported action type: dance');
   });
 
-  it('routes generic action submit to canto open', () => {
+  it('routes generic action submit to canto open', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1049,13 +1049,13 @@ describe('RoomStoreService', () => {
     ).toContain('truco');
   });
 
-  it('routes generic action submit to canto resolve', () => {
+  it('routes generic action submit to canto resolve', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 30,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1090,13 +1090,13 @@ describe('RoomStoreService', () => {
     expect(updatedSnapshot.score.A + updatedSnapshot.score.B).toBe(1);
   });
 
-  it('returns explicit result data when resolving canto', () => {
+  it('returns explicit result data when resolving canto', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 30,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1139,13 +1139,13 @@ describe('RoomStoreService', () => {
     expect(declined.scoreDelta).toEqual({ A: 2, B: 0 });
   });
 
-  it('raises the live hand value when truco is accepted', () => {
+  it('raises the live hand value when truco is accepted', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1205,12 +1205,12 @@ describe('RoomStoreService', () => {
     expect(lifecycle.transitionState?.matchComplete).toBe(true);
   });
 
-  it('only allows retruco after truco is accepted', () => {
+  it('only allows retruco after truco is accepted', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1252,13 +1252,13 @@ describe('RoomStoreService', () => {
     ).not.toThrow();
   });
 
-  it('raises the live hand value through retruco and vale cuatro', () => {
+  it('raises the live hand value through retruco and vale cuatro', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 4,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1312,13 +1312,13 @@ describe('RoomStoreService', () => {
     );
   });
 
-  it('awards accepted envido to the team with the better hand and can finish the match', () => {
+  it('awards accepted envido to the team with the better hand and can finish the match', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1363,7 +1363,7 @@ describe('RoomStoreService', () => {
       maxPlayers: 2,
       targetScore: 30,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1395,7 +1395,7 @@ describe('RoomStoreService', () => {
       displayName: 'Host',
       maxPlayers: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
@@ -1436,13 +1436,13 @@ describe('RoomStoreService', () => {
     ).toBe(true);
   });
 
-  it('supports a full 1v1 MVP happy path from room creation to summary', () => {
+  it('supports a full 1v1 MVP happy path from room creation to summary', async () => {
     const created = service.createRoom({
       displayName: 'Host',
       maxPlayers: 2,
       targetScore: 2,
     });
-    const joined = service.joinRoom(created.snapshot.code, {
+    const joined = await service.joinRoom(created.snapshot.code, {
       displayName: 'Guest',
     });
 
