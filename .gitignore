@@ -7,7 +7,6 @@ coverage/
 .env
 .env.local
 .env.*.local
-pnpm-lock.yaml
 prisma/dev.db
 apps/web/.next/
 apps/realtime/dist/
