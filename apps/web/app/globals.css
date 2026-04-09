@@ -14,17 +14,61 @@
 
 html {
   background:
-    radial-gradient(circle at top, rgba(52, 211, 153, 0.16), transparent 28%),
-    radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.18), transparent 24%),
-    linear-gradient(180deg, #020617 0%, #07111f 55%, #020617 100%);
+    radial-gradient(circle at 15% 18%, rgba(105, 255, 61, 0.18), transparent 16%),
+    radial-gradient(circle at 82% 14%, rgba(255, 68, 93, 0.18), transparent 16%),
+    radial-gradient(circle at 50% 0%, rgba(83, 234, 253, 0.18), transparent 22%),
+    linear-gradient(180deg, #060914 0%, #09101d 48%, #050813 100%);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
 }
 
 * {
   box-sizing: border-box;
+}
+
+.ufo-pulse {
+  animation: ufo-pulse 4.2s ease-in-out infinite;
+}
+
+.alien-bob {
+  animation: alien-bob 2.8s ease-in-out infinite;
+}
+
+.alien-beam {
+  animation: alien-beam 1.8s ease-in-out infinite;
+}
+
+@keyframes ufo-pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.02);
+  }
+}
+
+@keyframes alien-bob {
+  0%, 100% {
+    transform: scale(1.1) translateY(0);
+  }
+  50% {
+    transform: scale(1.1) translateY(-4px);
+  }
+}
+
+@keyframes alien-beam {
+  0%, 100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "DIMADONG",
-  description: "Private multiplayer Truco with aliens, wildcards, and BONGS.",
+  description: "Truco multijugador por salas privadas, con aliens, comodines y BONGS.",
 };
 
 export default function RootLayout({

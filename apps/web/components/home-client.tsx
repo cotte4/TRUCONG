@@ -16,7 +16,7 @@ async function postJson<TBody, TResult>(url: string, body: TBody): Promise<TResu
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || "Request failed.");
+    throw new Error(message || "La solicitud falló.");
   }
 
   return response.json() as Promise<TResult>;
@@ -53,7 +53,7 @@ export function HomeClient() {
         const result = await postJson<CreateRoomRequest, RoomEntryResponse>(`${apiBaseUrl}/rooms`, payload);
         enterRoom(result);
       } catch (caughtError) {
-        setError(caughtError instanceof Error ? caughtError.message : "Could not create room.");
+        setError(caughtError instanceof Error ? caughtError.message : "No se pudo crear la sala.");
       }
     });
   };
@@ -73,7 +73,7 @@ export function HomeClient() {
         );
         enterRoom(result);
       } catch (caughtError) {
-        setError(caughtError instanceof Error ? caughtError.message : "Could not join room.");
+        setError(caughtError instanceof Error ? caughtError.message : "No se pudo entrar a la sala.");
       }
     });
   };
@@ -82,11 +82,11 @@ export function HomeClient() {
     <section className="grid gap-6 lg:grid-cols-2">
       <form
         onSubmit={handleCreate}
-        className="rounded-[2rem] border border-white/12 bg-slate-950/72 p-6 shadow-2xl shadow-cyan-950/20 backdrop-blur"
+        className="rounded-[1.75rem] border border-white/10 bg-slate-950/72 p-6 backdrop-blur"
       >
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-200/70">Create room</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Crear sala</p>
         <label className="mt-6 block text-sm text-slate-200/78">
-          Host name
+          Tu nombre
           <input
             className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-400"
             value={createName}
@@ -97,7 +97,7 @@ export function HomeClient() {
         </label>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-sm text-slate-200/78">Mode</p>
+            <p className="text-sm text-slate-200/78">Modo</p>
             <div className="mt-2 flex gap-2">
               {[2, 4].map((value) => (
                 <button
@@ -110,13 +110,13 @@ export function HomeClient() {
                       : "border border-white/10 bg-slate-900/90 text-slate-200"
                   }`}
                 >
-                  {value === 2 ? "1v1" : "2v2"}
+                  {value === 2 ? "1 vs 1" : "2 vs 2"}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <p className="text-sm text-slate-200/78">Target score</p>
+            <p className="text-sm text-slate-200/78">Puntaje objetivo</p>
             <div className="mt-2 flex gap-2">
               {[15, 30].map((value) => (
                 <button
@@ -129,7 +129,7 @@ export function HomeClient() {
                       : "border border-white/10 bg-slate-900/90 text-slate-200"
                   }`}
                 >
-                  {value} points
+                  {value} puntos
                 </button>
               ))}
             </div>
@@ -138,19 +138,19 @@ export function HomeClient() {
         <button
           type="submit"
           disabled={isPending}
-          className="mt-6 w-full rounded-2xl bg-cyan-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-70"
+          className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isPending ? "Creating..." : "Create private lobby"}
+          {isPending ? "Creando..." : "Crear sala"}
         </button>
       </form>
 
       <form
         onSubmit={handleJoin}
-        className="rounded-[2rem] border border-white/12 bg-slate-950/72 p-6 shadow-2xl shadow-emerald-950/20 backdrop-blur"
+        className="rounded-[1.75rem] border border-white/10 bg-slate-950/72 p-6 backdrop-blur"
       >
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-emerald-200/70">Join room</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Unirse a sala</p>
         <label className="mt-6 block text-sm text-slate-200/78">
-          Room code
+          Código de sala
           <input
             className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 uppercase text-white outline-none ring-0 placeholder:text-slate-400"
             value={roomCode}
@@ -160,7 +160,7 @@ export function HomeClient() {
           />
         </label>
         <label className="mt-4 block text-sm text-slate-200/78">
-          Player name
+          Tu nombre
           <input
             className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-400"
             value={joinName}
@@ -172,9 +172,9 @@ export function HomeClient() {
         <button
           type="submit"
           disabled={isPending}
-          className="mt-6 w-full rounded-2xl bg-emerald-300 px-4 py-3 font-semibold text-slate-950 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-70"
+          className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isPending ? "Joining..." : "Join lobby"}
+          {isPending ? "Entrando..." : "Entrar a la sala"}
         </button>
       </form>
 
