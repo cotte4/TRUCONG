@@ -339,7 +339,9 @@ export function LobbyClient({ code }: { code: string }) {
         activeSocket.on("hand:scored", handleRealtimePayload);
         activeSocket.on("summary:started", handleRealtimePayload);
         activeSocket.on("room:snapshot", () => {
-          void refreshRoomState();
+          void refreshRoomState().then(() => {
+            setConnectionLabel("En vivo");
+          });
         });
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "No se pudo cargar la sala.");
@@ -547,7 +549,8 @@ export function LobbyClient({ code }: { code: string }) {
     matchState?.currentTurnSeatId ??
     null;
   const isLobby = phase === "lobby" || phase === "ready_check";
-  const isMyTurn = phase === "action_turn" && activeSeatId === currentSeat?.id;
+  const isLive = connectionLabel === "En vivo";
+  const isMyTurn = phase === "action_turn" && activeSeatId === currentSeat?.id && isLive;
   const needsWildcardSelection =
     wildcardSelection?.isPending === true && wildcardSelection.ownerSeatId === currentSeat?.id;
   const finalSummary =
@@ -759,18 +762,20 @@ export function LobbyClient({ code }: { code: string }) {
               <div className="relative mt-8 min-h-[560px] overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(83,234,253,0.14),transparent_22%),linear-gradient(180deg,#0b1020_0%,#09101d_100%)]">
                 <div className="ufo-pulse absolute left-1/2 top-1/2 h-[310px] w-[310px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(83,234,253,0.22),rgba(12,18,38,0.96)_55%,rgba(8,13,29,1)_100%)] shadow-[0_0_90px_rgba(83,234,253,0.2)]" />
                 <div className="absolute left-1/2 top-1/2 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/20 bg-[radial-gradient(circle_at_center,rgba(255,210,54,0.12),rgba(8,13,29,0.1)_70%,transparent_100%)]" />
-                <div className="absolute left-1/2 top-1/2 flex w-[240px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100/70">Centro de mando</p>
-                  <p className="mt-3 text-3xl font-semibold text-white">{snapshot.code}</p>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Mano {matchView?.handNumber ?? "-"} · Baza {matchView?.trickNumber ?? "-"}
-                  </p>
-                  {formatClock(matchView?.turnDeadlineAt ?? snapshot.turnDeadlineAt) ? (
-                    <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-                      Límite {formatClock(matchView?.turnDeadlineAt ?? snapshot.turnDeadlineAt)}
+                {!(matchView?.tableCards?.length) ? (
+                  <div className="absolute left-1/2 top-1/2 flex w-[240px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100/70">Centro de mando</p>
+                    <p className="mt-3 text-3xl font-semibold text-white">{snapshot.code}</p>
+                    <p className="mt-2 text-sm text-slate-300">
+                      Mano {matchView?.handNumber ?? "-"} · Baza {matchView?.trickNumber ?? "-"}
                     </p>
-                  ) : null}
-                </div>
+                    {formatClock(matchView?.turnDeadlineAt ?? snapshot.turnDeadlineAt) ? (
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">
+                        Límite {formatClock(matchView?.turnDeadlineAt ?? snapshot.turnDeadlineAt)}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {snapshot.seats.map((seat) => {
                   const tone = getAlienTone(seat, seat.seatIndex);
