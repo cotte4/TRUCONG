@@ -11,6 +11,9 @@ import type {
   AvatarId,
   CardSuit,
   CreateRoomRequest,
+  EnvidoSeatDeclaration,
+  EnvidoSingingState,
+  EnvidoWildcardCommitView,
   JoinRoomRequest,
   LobbyTeamPayload,
   MatchProgressState,
@@ -26,6 +29,7 @@ import type {
   TeamSide,
   TrickResultView,
   WildcardSelectionState,
+  WildcardSelectionChoiceView,
 } from '@dimadong/contracts';
 import {
   RoomStatus as DbRoomStatus,
@@ -52,9 +56,12 @@ type PersistedSnapshotState = {
     teamScores: TeamScoreView;
     handTrickWins: TeamScoreView;
     currentHandPoints?: number;
+    envidoResolved?: boolean;
+    trucoOpened?: boolean;
     trickResults: MutableTrickResult[];
     pendingCanto?: MutablePendingCanto | null;
     pendingWildcardSelection?: MutablePendingWildcardSelection | null;
+    pendingEnvidoSinging?: MutableEnvidoSinging | null;
     recentEvents: string[];
     statusText: string;
     summary: MatchSummaryView | null;
@@ -133,6 +140,35 @@ type MutablePendingWildcardSelection = {
   selectionDeadlineAt: string | null;
 };
 
+type MutableEnvidoWildcardCommit = {
+  seatId: string;
+  wildcardCardId: string;
+  requestedAt: string;
+  commitDeadlineAt: string | null;
+};
+
+type MutableEnvidoDeclaration = {
+  seatId: string;
+  teamSide: TeamSide;
+  score: number;
+  action: 'declared' | 'son_buenas';
+  hasDimadong: boolean;
+};
+
+type MutableEnvidoSinging = {
+  callerSeatId: string;
+  callerTeamSide: TeamSide;
+  quieroSeatId: string;
+  cantoType: 'envido' | 'real_envido' | 'falta_envido';
+  singingOrder: string[];
+  declarations: MutableEnvidoDeclaration[];
+  pendingWildcardCommits: MutableEnvidoWildcardCommit[];
+  wildcardOverridesBySeatId: Record<
+    string,
+    { cardId: string; rank: number; suit: CardSuit }
+  >;
+};
+
 type MutableMatchState = {
   persistedMatchId: string | null;
   snapshotVersion: number;
@@ -145,9 +181,12 @@ type MutableMatchState = {
   teamScores: TeamScoreView;
   handTrickWins: TeamScoreView;
   currentHandPoints: number;
+  envidoResolved: boolean;
+  trucoOpened: boolean;
   trickResults: MutableTrickResult[];
   pendingCanto: MutablePendingCanto | null;
   pendingWildcardSelection: MutablePendingWildcardSelection | null;
+  pendingEnvidoSinging: MutableEnvidoSinging | null;
   recentEvents: string[];
   statusText: string;
   summary: MatchSummaryView | null;
@@ -225,6 +264,7 @@ type RoomLifecycleState = {
   progressState: MatchProgressState | null;
   transitionState: MatchTransitionState | null;
   wildcardSelectionState: DetailedWildcardSelectionState | null;
+  envidoSingingState: EnvidoSingingState | null;
 };
 
 type PlayCardResult = {
@@ -251,6 +291,7 @@ type ResolveCantoResult = {
   scoreDelta: TeamScoreView;
   matchEnded: boolean;
   handValueChanged: boolean;
+  envidoSinging: MutableEnvidoSinging | null;
 };
 
 type StartSummaryResult = {
@@ -403,6 +444,34 @@ export class RoomStoreService {
 
   getSnapshot(code: string): RoomSnapshot {
     return this.buildSnapshot(this.getRequiredRoom(code));
+  }
+
+  getSeatHand(
+    code: string,
+    seatId: string,
+  ): Array<{ id: string; isWildcard: boolean }> | null {
+    const room = this.roomsByCode.get(code);
+    return room?.match?.handsBySeatId[seatId] ?? null;
+  }
+
+  getWildcardAvailableChoices(
+    code: string,
+    seatId: string,
+    wildcardCardId: string,
+  ): WildcardSelectionChoiceView[] {
+    const room = this.roomsByCode.get(code);
+    if (!room?.match) return [];
+
+    const hand = room.match.handsBySeatId[seatId] ?? [];
+    const wildcardCard = hand.find(
+      (c) => c.id === wildcardCardId && c.isWildcard,
+    );
+    if (!wildcardCard) return [];
+
+    return this.getLegalWildcardChoices(room, wildcardCardId).map((c) => ({
+      id: `${c.rank}-${c.suit}`,
+      label: c.label,
+    }));
   }
 
   getSession(roomSessionToken: string): RoomSession | null {
@@ -572,6 +641,9 @@ export class RoomStoreService {
     return {
       handNumber: room.match.handNumber,
       trickNumber: room.match.trickNumber,
+      currentHandPoints: room.match.currentHandPoints,
+      envidoResolved: room.match.envidoResolved,
+      trucoOpened: room.match.trucoOpened,
       currentTurnSeatId: room.match.currentTurnSeatId,
       dealerSeatId: room.match.dealerSeatId,
       yourHand: room.match.handsBySeatId[seatId] ?? [],
@@ -734,11 +806,13 @@ export class RoomStoreService {
     code: string,
     seatId?: string | null,
   ): RoomLifecycleState {
+    const room = this.roomsByCode.get(code) ?? null;
     return {
       matchView: seatId ? this.getMatchView(code, seatId) : null,
       progressState: this.getMatchProgressState(code),
       transitionState: this.getMatchTransitionState(code),
       wildcardSelectionState: this.getPendingWildcardSelectionState(code),
+      envidoSingingState: room ? this.buildEnvidoSingingState(room) : null,
     };
   }
 
@@ -801,6 +875,22 @@ export class RoomStoreService {
         const source = this.requireSummarySource(payload.payload.source);
 
         return this.startSummary(roomCode, payload.roomSessionToken, source);
+      }
+      case 'wildcard_commit_envido': {
+        const wildcardCardId = this.requireStringField(
+          payload.payload,
+          'wildcardCardId',
+        );
+        const rank = this.requireNumberField(payload.payload, 'rank');
+        const suit = this.requireCardSuit(payload.payload.suit);
+
+        return this.commitWildcardForEnvido(
+          roomCode,
+          payload.roomSessionToken,
+          wildcardCardId,
+          rank,
+          suit,
+        ).snapshot;
       }
       default:
         throw new BadRequestException(
@@ -1014,6 +1104,10 @@ export class RoomStoreService {
 
     this.validateCantoOpen(room, cantoType);
 
+    if (this.isTrucoCanto(cantoType)) {
+      room.match.trucoOpened = true;
+    }
+
     room.phase = 'response_pending';
     room.match.pendingCanto = {
       cantoType,
@@ -1104,6 +1198,10 @@ export class RoomStoreService {
     room.match.reconnectDeadlineAt = null;
     this.clearCantoTimeout(room.code);
 
+    if (!this.isTrucoCanto(pending.cantoType)) {
+      room.match.envidoResolved = true;
+    }
+
     const normalizedResponse =
       response === 'quiero' || response === 'accepted' ? 'quiero' : 'no_quiero';
     let scoreDelta =
@@ -1120,7 +1218,10 @@ export class RoomStoreService {
           }
         : { A: 0, B: 0 };
 
+    let envidoSinging: MutableEnvidoSinging | null = null;
+
     if (scoreDelta.A > 0 || scoreDelta.B > 0) {
+      // no_quiero — caller earns declined points immediately
       room.match.teamScores = {
         A: room.match.teamScores.A + scoreDelta.A,
         B: room.match.teamScores.B + scoreDelta.B,
@@ -1135,55 +1236,82 @@ export class RoomStoreService {
           room.match.currentHandPoints,
           this.getAcceptedTrucoPoints(pending.cantoType),
         );
+        this.pushEvent(
+          room,
+          `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}.`,
+        );
       } else {
-        scoreDelta = this.getAcceptedEnvidoScoreDelta(room, pending.cantoType);
-        room.match.teamScores = {
-          A: room.match.teamScores.A + scoreDelta.A,
-          B: room.match.teamScores.B + scoreDelta.B,
-        };
+        // Envido accepted — enter the singing phase instead of scoring immediately
+        this.pushEvent(
+          room,
+          `${actorSeat.displayName ?? 'Jugador'} quiso el ${pending.cantoType}. Comienza el canto.`,
+        );
+        envidoSinging = this.buildEnvidoSinging(room, pending, actorSeat);
+        room.match.pendingEnvidoSinging = envidoSinging;
+
+        if (envidoSinging.pendingWildcardCommits.length > 0) {
+          // Pause for dimadong commits before singing
+          room.phase = 'envido_wildcard_commit';
+          room.match.currentTurnSeatId = null;
+          room.match.turnDeadlineAt = null;
+          this.clearTurnTimeout(room.code);
+          this.setStatus(
+            room,
+            'Esperando que los jugadores definan sus dimadong para el envido.',
+          );
+        } else {
+          // No wildcards — compute declarations immediately and score
+          const declarations = this.computeEnvidoDeclarations(
+            room,
+            envidoSinging,
+          );
+          scoreDelta = this.applyEnvidoDeclarations(
+            room,
+            envidoSinging,
+            declarations,
+          );
+          room.match.pendingEnvidoSinging = null;
+        }
       }
-      this.pushEvent(
-        room,
-        this.isTrucoCanto(pending.cantoType)
-          ? `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}.`
-          : `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}; ${this.describeAwardedTeam(scoreDelta)}.`,
-      );
     }
 
-    const winningTeam = this.getWinningTeamForScore(
-      room.match.teamScores,
-      room.targetScore,
-    );
+    // Only handle win/continue logic if we're not waiting for wildcard commits
+    if (room.phase !== 'envido_wildcard_commit') {
+      const winningTeam = this.getWinningTeamForScore(
+        room.match.teamScores,
+        room.targetScore,
+      );
 
-    if (winningTeam) {
-      room.phase = 'match_end';
-      room.match.currentTurnSeatId = null;
-      room.match.turnDeadlineAt = null;
-      room.match.reconnectDeadlineAt = null;
-      room.match.lastHandScoredAt = new Date().toISOString();
-      room.match.lastHandWinnerTeamSide = winningTeam;
-      room.match.summary = {
-        winnerTeamSide: winningTeam,
-        finalScore: { ...room.match.teamScores },
-      };
-      this.clearTurnTimeout(room.code);
-      this.clearReconnectTimeout(room.code);
-      this.setStatus(room, `El Equipo ${winningTeam} ganó la partida.`);
-      this.pushEvent(
-        room,
-        `¡Partida terminada! El Equipo ${winningTeam} llegó a ${room.targetScore} puntos.`,
-      );
-      this.persistMatchFinished(room, winningTeam);
-    } else {
-      room.phase = 'action_turn';
-      room.match.turnDeadlineAt = null;
-      this.setStatus(
-        room,
-        normalizedResponse === 'no_quiero'
-          ? `La mano continúa tras el ${pending.cantoType}.`
-          : `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}.`,
-      );
-      this.scheduleTurnTimeout(room.code);
+      if (winningTeam) {
+        room.phase = 'match_end';
+        room.match.currentTurnSeatId = null;
+        room.match.turnDeadlineAt = null;
+        room.match.reconnectDeadlineAt = null;
+        room.match.lastHandScoredAt = new Date().toISOString();
+        room.match.lastHandWinnerTeamSide = winningTeam;
+        room.match.summary = {
+          winnerTeamSide: winningTeam,
+          finalScore: { ...room.match.teamScores },
+        };
+        this.clearTurnTimeout(room.code);
+        this.clearReconnectTimeout(room.code);
+        this.setStatus(room, `El Equipo ${winningTeam} ganó la partida.`);
+        this.pushEvent(
+          room,
+          `¡Partida terminada! El Equipo ${winningTeam} llegó a ${room.targetScore} puntos.`,
+        );
+        this.persistMatchFinished(room, winningTeam);
+      } else {
+        room.phase = 'action_turn';
+        room.match.turnDeadlineAt = null;
+        this.setStatus(
+          room,
+          normalizedResponse === 'no_quiero'
+            ? `La mano continúa tras el ${pending.cantoType}.`
+            : `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}.`,
+        );
+        this.scheduleTurnTimeout(room.code);
+      }
     }
 
     this.persistAction(
@@ -1207,6 +1335,7 @@ export class RoomStoreService {
       snapshot,
       lifecycle,
       scoreDelta,
+      envidoSinging,
       matchEnded: Boolean(
         afterTransition?.matchComplete && !beforeTransition?.matchComplete,
       ),
@@ -1707,10 +1836,13 @@ export class RoomStoreService {
           teamScores: state.match.teamScores,
           handTrickWins: state.match.handTrickWins,
           currentHandPoints: state.match.currentHandPoints ?? 1,
+          envidoResolved: state.match.envidoResolved ?? false,
+          trucoOpened: state.match.trucoOpened ?? false,
           trickResults: state.match.trickResults,
           pendingCanto: state.match.pendingCanto ?? null,
           pendingWildcardSelection:
             state.match.pendingWildcardSelection ?? null,
+          pendingEnvidoSinging: state.match.pendingEnvidoSinging ?? null,
           recentEvents: state.match.recentEvents,
           statusText: state.match.statusText,
           summary: state.match.summary,
@@ -1831,9 +1963,12 @@ export class RoomStoreService {
       teamScores: { A: 0, B: 0 },
       handTrickWins: { A: 0, B: 0 },
       currentHandPoints: 1,
+      envidoResolved: false,
+      trucoOpened: false,
       trickResults: [],
       pendingCanto: null,
       pendingWildcardSelection: null,
+      pendingEnvidoSinging: null,
       recentEvents: [],
       statusText: `Le toca a ${occupiedSeats[0]?.displayName ?? 'primer jugador'}.`,
       summary: null,
@@ -1960,6 +2095,9 @@ export class RoomStoreService {
     match.tableCards = [];
     match.handTrickWins = { A: 0, B: 0 };
     match.currentHandPoints = 1;
+    match.envidoResolved = false;
+    match.trucoOpened = false;
+    match.pendingEnvidoSinging = null;
     match.lastHandScoredAt = null;
     match.lastHandWinnerTeamSide = null;
     match.turnDeadlineAt = null;
@@ -2030,7 +2168,28 @@ export class RoomStoreService {
     room: MutableRoom,
     cantoType: MutablePendingCanto['cantoType'],
   ) {
-    if (!room.match || !this.isTrucoCanto(cantoType)) {
+    if (!room.match) {
+      return;
+    }
+
+    if (!this.isTrucoCanto(cantoType)) {
+      // Envido rules: only callable in the first trick, before truco is called/accepted, and only once per hand.
+      if (room.match.trickNumber > 1) {
+        throw new BadRequestException(
+          'El envido solo se puede cantar en la primera vuelta.',
+        );
+      }
+
+      if (room.match.trucoOpened) {
+        throw new BadRequestException(
+          'No se puede cantar envido después de que se cantó el truco.',
+        );
+      }
+
+      if (room.match.envidoResolved) {
+        throw new BadRequestException('El envido ya fue cantado en esta mano.');
+      }
+
       return;
     }
 
@@ -2186,6 +2345,32 @@ export class RoomStoreService {
     return 'manual';
   }
 
+  private requireNumberField(
+    payload: Record<string, unknown>,
+    fieldName: string,
+  ): number {
+    const value = payload[fieldName];
+
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new BadRequestException(`Missing or invalid ${fieldName}.`);
+    }
+
+    return value;
+  }
+
+  private requireCardSuit(value: unknown): CardSuit {
+    if (
+      value === 'espada' ||
+      value === 'basto' ||
+      value === 'oro' ||
+      value === 'copa'
+    ) {
+      return value;
+    }
+
+    throw new BadRequestException('Missing or invalid suit.');
+  }
+
   private getDeclinedCantoPoints(cantoType: MutablePendingCanto['cantoType']) {
     switch (cantoType) {
       case 'retruco':
@@ -2302,6 +2487,315 @@ export class RoomStoreService {
 
   private getEnvidoCardValue(rank: number) {
     return rank >= 10 ? 0 : Math.min(rank, 7);
+  }
+
+  private getSeatEnvidoScoreWithOverride(
+    hand: MutableCard[],
+    override?: { cardId: string; rank: number; suit: CardSuit } | null,
+  ) {
+    const effectiveHand = hand.map((card) => {
+      if (override && card.isWildcard && card.id === override.cardId) {
+        return { ...card, rank: override.rank, suit: override.suit };
+      }
+      return card;
+    });
+    return this.getSeatEnvidoScore(effectiveHand);
+  }
+
+  private buildSingingOrder(
+    room: MutableRoom,
+    callerSeatId: string,
+    quieroSeatId: string,
+  ): string[] {
+    const callerTeam =
+      room.seats.find((s) => s.id === callerSeatId)?.teamSide ?? null;
+    const quieroTeam =
+      room.seats.find((s) => s.id === quieroSeatId)?.teamSide ?? null;
+
+    const occupied = this.getOccupiedSeats(room);
+
+    const callingTeam = occupied.filter(
+      (s) => s.teamSide === callerTeam && s.id !== callerSeatId,
+    );
+    const acceptingTeam = occupied.filter(
+      (s) => s.teamSide === quieroTeam && s.id !== quieroSeatId,
+    );
+
+    // Caller's team sings first (caller first, then partner).
+    // Accepting team sings last (quiero seat last — they have the advantage).
+    return [
+      callerSeatId,
+      ...callingTeam.map((s) => s.id),
+      ...acceptingTeam.map((s) => s.id),
+      quieroSeatId,
+    ];
+  }
+
+  private buildEnvidoSinging(
+    room: MutableRoom,
+    pending: MutablePendingCanto,
+    quieroSeat: MutableSeat,
+  ): MutableEnvidoSinging {
+    const callerSeatId = pending.actorSeatId;
+    const callerTeamSide =
+      room.seats.find((s) => s.id === callerSeatId)?.teamSide ?? 'A';
+    const cantoType = pending.cantoType as MutableEnvidoSinging['cantoType'];
+
+    const singingOrder = this.buildSingingOrder(
+      room,
+      callerSeatId,
+      quieroSeat.id,
+    );
+
+    // Find seats with uncommitted dimadong cards
+    const pendingWildcardCommits: MutableEnvidoWildcardCommit[] = [];
+    for (const seatId of singingOrder) {
+      const hand = room.match?.handsBySeatId[seatId] ?? [];
+      const wildcardCard = hand.find((c) => c.isWildcard);
+      if (wildcardCard) {
+        pendingWildcardCommits.push({
+          seatId,
+          wildcardCardId: wildcardCard.id,
+          requestedAt: new Date().toISOString(),
+          commitDeadlineAt: null,
+        });
+      }
+    }
+
+    return {
+      callerSeatId,
+      callerTeamSide,
+      quieroSeatId: quieroSeat.id,
+      cantoType,
+      singingOrder,
+      declarations: [],
+      pendingWildcardCommits,
+      wildcardOverridesBySeatId: {},
+    };
+  }
+
+  computeEnvidoDeclarations(
+    room: MutableRoom,
+    singing: MutableEnvidoSinging,
+  ): MutableEnvidoDeclaration[] {
+    const declarations: MutableEnvidoDeclaration[] = [];
+    let callingTeamBest = 0;
+
+    for (const seatId of singing.singingOrder) {
+      const seat = room.seats.find((s) => s.id === seatId);
+      if (!seat?.teamSide || !room.match) continue;
+
+      const hand = room.match.handsBySeatId[seatId] ?? [];
+      const override = singing.wildcardOverridesBySeatId[seatId] ?? null;
+      const score = this.getSeatEnvidoScoreWithOverride(hand, override);
+      const hasDimadong = hand.some((c) => c.isWildcard);
+      const isCallingTeam = seat.teamSide === singing.callerTeamSide;
+
+      let action: 'declared' | 'son_buenas';
+      if (isCallingTeam) {
+        action = 'declared';
+        callingTeamBest = Math.max(callingTeamBest, score);
+      } else {
+        // Accepting team: declare only if they can beat the calling team best.
+        // On tie: the mano team (caller's team) wins, so accepting team needs
+        // strictly greater score to take the points.
+        action = score > callingTeamBest ? 'declared' : 'son_buenas';
+      }
+
+      declarations.push({
+        seatId,
+        teamSide: seat.teamSide,
+        score,
+        action,
+        hasDimadong,
+      });
+    }
+
+    return declarations;
+  }
+
+  applyEnvidoDeclarations(
+    room: MutableRoom,
+    singing: MutableEnvidoSinging,
+    declarations: MutableEnvidoDeclaration[],
+  ): TeamScoreView {
+    singing.declarations = declarations;
+
+    // Winner = seat with highest declared score; on tie, calling team wins (mano advantage)
+    let winnerTeam: TeamSide = singing.callerTeamSide;
+    let best = -1;
+
+    for (const d of declarations) {
+      if (d.action === 'declared' && d.score > best) {
+        best = d.score;
+        winnerTeam = d.teamSide;
+      } else if (d.action === 'declared' && d.score === best) {
+        // tie → mano (caller) wins
+        winnerTeam = singing.callerTeamSide;
+      }
+    }
+
+    const points = this.getAcceptedEnvidoPoints(room, singing.cantoType);
+
+    const scoreDelta: TeamScoreView = {
+      A: winnerTeam === 'A' ? points : 0,
+      B: winnerTeam === 'B' ? points : 0,
+    };
+
+    room.match!.teamScores = {
+      A: room.match!.teamScores.A + scoreDelta.A,
+      B: room.match!.teamScores.B + scoreDelta.B,
+    };
+
+    // Add per-player events in singing order
+    for (const d of declarations) {
+      const seat = room.seats.find((s) => s.id === d.seatId);
+      const name = seat?.displayName ?? 'Jugador';
+      if (d.action === 'son_buenas') {
+        this.pushEvent(room, `${name}: son buenas.`);
+      } else {
+        this.pushEvent(room, `${name}: ${d.score} puntos de envido.`);
+      }
+    }
+
+    return scoreDelta;
+  }
+
+  buildEnvidoSingingState(room: MutableRoom): EnvidoSingingState | null {
+    const singing = room.match?.pendingEnvidoSinging ?? null;
+    if (!singing) return null;
+
+    return {
+      cantoType: singing.cantoType,
+      callerSeatId: singing.callerSeatId,
+      quieroSeatId: singing.quieroSeatId,
+      callerTeamSide: singing.callerTeamSide,
+      singingOrder: singing.singingOrder,
+      declarations: singing.declarations.map(
+        (d): EnvidoSeatDeclaration => ({
+          seatId: d.seatId,
+          teamSide: d.teamSide,
+          score: d.score,
+          action: d.action,
+          hasDimadong: d.hasDimadong,
+        }),
+      ),
+      pendingWildcardCommits: singing.pendingWildcardCommits.map(
+        (c): EnvidoWildcardCommitView => ({
+          seatId: c.seatId,
+          wildcardCardId: c.wildcardCardId,
+          requestedAt: c.requestedAt,
+          commitDeadlineAt: c.commitDeadlineAt,
+        }),
+      ),
+    };
+  }
+
+  commitWildcardForEnvido(
+    code: string,
+    roomSessionToken: string,
+    wildcardCardId: string,
+    rank: number,
+    suit: CardSuit,
+  ): {
+    snapshot: RoomSnapshot;
+    lifecycle: RoomLifecycleState;
+    declarations: MutableEnvidoDeclaration[] | null;
+    scoreDelta: TeamScoreView;
+    matchEnded: boolean;
+    envidoSinging: MutableEnvidoSinging;
+  } {
+    const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
+
+    if (!room.match?.pendingEnvidoSinging) {
+      throw new BadRequestException(
+        'No hay una fase de canto de envido activa.',
+      );
+    }
+
+    const singing = room.match.pendingEnvidoSinging;
+    const pending = singing.pendingWildcardCommits.find(
+      (c) => c.seatId === actorSeat.id,
+    );
+
+    if (!pending) {
+      throw new BadRequestException(
+        'Este asiento no tiene un dimadong pendiente de comprometer.',
+      );
+    }
+
+    // Validate the wildcard card is in the seat's hand
+    const hand = room.match.handsBySeatId[actorSeat.id] ?? [];
+    const wildcardCard = hand.find(
+      (c) => c.id === wildcardCardId && c.isWildcard,
+    );
+
+    if (!wildcardCard) {
+      throw new BadRequestException('Carta dimadong no encontrada en la mano.');
+    }
+
+    // Store the override
+    singing.wildcardOverridesBySeatId[actorSeat.id] = {
+      cardId: wildcardCardId,
+      rank,
+      suit,
+    };
+
+    // Remove from pending
+    singing.pendingWildcardCommits = singing.pendingWildcardCommits.filter(
+      (c) => c.seatId !== actorSeat.id,
+    );
+
+    let declarations: MutableEnvidoDeclaration[] | null = null;
+    let scoreDelta: TeamScoreView = { A: 0, B: 0 };
+    let matchEnded = false;
+
+    if (singing.pendingWildcardCommits.length === 0) {
+      // All committed — compute and apply declarations
+      declarations = this.computeEnvidoDeclarations(room, singing);
+      scoreDelta = this.applyEnvidoDeclarations(room, singing, declarations);
+      room.match.pendingEnvidoSinging = null;
+
+      const winningTeam = this.getWinningTeamForScore(
+        room.match.teamScores,
+        room.targetScore,
+      );
+
+      if (winningTeam) {
+        matchEnded = true;
+        room.phase = 'match_end';
+        room.match.currentTurnSeatId = null;
+        room.match.turnDeadlineAt = null;
+        room.match.summary = {
+          winnerTeamSide: winningTeam,
+          finalScore: { ...room.match.teamScores },
+        };
+        this.clearTurnTimeout(room.code);
+        this.setStatus(room, `El Equipo ${winningTeam} ganó la partida.`);
+        this.persistMatchFinished(room, winningTeam);
+      } else {
+        room.phase = 'action_turn';
+        room.match.turnDeadlineAt = null;
+        this.setStatus(room, 'Envido cantado. La mano continúa.');
+        this.scheduleTurnTimeout(room.code);
+      }
+    } else {
+      // Still waiting for more commits — stay in envido_wildcard_commit
+      room.phase = 'envido_wildcard_commit';
+    }
+
+    this.persistSnapshot(room);
+    const snapshot = this.buildSnapshot(room);
+    const lifecycle = this.getRoomLifecycleState(room.code, actorSeat.id);
+
+    return {
+      snapshot,
+      lifecycle,
+      declarations,
+      scoreDelta,
+      matchEnded,
+      envidoSinging: singing,
+    };
   }
 
   private describeAwardedTeam(scoreDelta: TeamScoreView) {
@@ -3056,7 +3550,7 @@ export class RoomStoreService {
 
     const timeoutMs = this.resolveTimeoutDelay(
       options?.preserveDeadline ? room.match.turnDeadlineAt : null,
-      10_000,
+      25_000,
     );
     if (!options?.preserveDeadline || !room.match.turnDeadlineAt) {
       room.match.turnDeadlineAt = new Date(

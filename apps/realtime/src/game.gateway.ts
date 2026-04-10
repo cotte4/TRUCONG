@@ -23,6 +23,9 @@ import type {
   ChatReceivedEvent,
   ChatSendAck,
   ChatSendPayload,
+  EnvidoSeatDeclaredEvent,
+  EnvidoSingingState,
+  EnvidoWildcardCommitRequestedEvent,
   HandScoredEvent,
   DetailedWildcardSelectionState,
   LobbyActionPayload,
@@ -134,6 +137,7 @@ export class GameGateway implements OnGatewayDisconnect {
       state,
       transition,
       wildcardSelection,
+      envidoSinging: lifecycle.envidoSingingState,
     };
 
     client.data.roomCode = roomCode;
@@ -248,6 +252,7 @@ export class GameGateway implements OnGatewayDisconnect {
           state,
           transition,
           wildcardSelection: lifecycle.wildcardSelectionState,
+          envidoSinging: lifecycle.envidoSingingState,
           recoveredAt,
         },
       });
@@ -964,6 +969,51 @@ export class GameGateway implements OnGatewayDisconnect {
 
       this.server.to(roomCode).emit('canto:resolved', event);
 
+      // If envido was accepted, handle the singing phase
+      if (result.envidoSinging) {
+        const singing = result.envidoSinging;
+        if (singing.pendingWildcardCommits.length > 0) {
+          // One or more players need to commit their dimadong for envido first
+          for (const commit of singing.pendingWildcardCommits) {
+            const hand =
+              this.roomStore.getSeatHand(roomCode, commit.seatId) ?? [];
+            const wildcardCard = hand.find((c) => c.isWildcard) ?? null;
+            const availableChoices = wildcardCard
+              ? this.roomStore.getWildcardAvailableChoices(
+                  roomCode,
+                  commit.seatId,
+                  wildcardCard.id,
+                )
+              : [];
+            const commitEvent: EnvidoWildcardCommitRequestedEvent = {
+              roomCode,
+              seatId: commit.seatId,
+              wildcardCardId: commit.wildcardCardId,
+              availableChoices,
+              requestedAt: commit.requestedAt,
+              commitDeadlineAt: commit.commitDeadlineAt,
+              singingState: lifecycle.envidoSingingState!,
+              state,
+              snapshot,
+              matchView,
+            };
+            this.server
+              .to(roomCode)
+              .emit('envido:wildcard-commit-required', commitEvent);
+          }
+        } else {
+          // No wildcards pending — emit all declarations sequentially with short delays
+          this.emitEnvidoDeclarations(
+            roomCode,
+            singing.declarations,
+            lifecycle.envidoSingingState!,
+            state,
+            snapshot,
+            matchView,
+          );
+        }
+      }
+
       if (result.matchEnded && matchView?.summary) {
         this.server.to(roomCode).emit('summary:started', {
           roomCode,
@@ -1265,6 +1315,7 @@ export class GameGateway implements OnGatewayDisconnect {
           state,
           transition,
           wildcardSelection,
+          envidoSinging: lifecycle.envidoSingingState,
           snapshot,
           matchView,
         },
@@ -1312,6 +1363,7 @@ export class GameGateway implements OnGatewayDisconnect {
           state,
           transition,
           wildcardSelection,
+          envidoSinging: lifecycle.envidoSingingState,
           snapshot,
           matchView,
           reason,
@@ -1661,6 +1713,7 @@ export class GameGateway implements OnGatewayDisconnect {
       state: this.getRoomProgressStateOrFallback(roomCode, lifecycle, snapshot),
       transition,
       wildcardSelection: lifecycle.wildcardSelectionState,
+      envidoSinging: lifecycle.envidoSingingState,
       reason,
     };
   }
@@ -2016,5 +2069,47 @@ export class GameGateway implements OnGatewayDisconnect {
       },
       { A: 0, B: 0 },
     );
+  }
+
+  private emitEnvidoDeclarations(
+    roomCode: string,
+    declarations: Array<{
+      seatId: string;
+      teamSide: import('@dimadong/contracts').TeamSide;
+      score: number;
+      action: 'declared' | 'son_buenas';
+      hasDimadong: boolean;
+    }>,
+    singingState: EnvidoSingingState,
+    state: MatchProgressState,
+    snapshot: RoomSnapshot,
+    matchView: MatchView | null,
+  ) {
+    let callingTeamBest = 0;
+    const callerTeamSide = singingState.callerTeamSide;
+
+    declarations.forEach((decl, index) => {
+      setTimeout(() => {
+        if (decl.action === 'declared' && decl.teamSide === callerTeamSide) {
+          callingTeamBest = Math.max(callingTeamBest, decl.score);
+        }
+
+        const event: EnvidoSeatDeclaredEvent = {
+          roomCode,
+          seatId: decl.seatId,
+          teamSide: decl.teamSide,
+          score: decl.score,
+          action: decl.action,
+          hasDimadong: decl.hasDimadong,
+          callingTeamBest,
+          singingState,
+          state,
+          snapshot,
+          matchView,
+        };
+
+        this.server.to(roomCode).emit('envido:seat-declared', event);
+      }, index * 600);
+    });
   }
 }

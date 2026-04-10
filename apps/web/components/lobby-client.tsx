@@ -407,7 +407,7 @@ export function LobbyClient({ code }: { code: string }) {
         setSocket(activeSocket);
 
         activeSocket.on("connect", () => {
-          setConnectionLabel("En vivo");
+          setConnectionLabel("Uniéndose...");
           activeSocket?.emit("room:join", {
             roomCode: normalizedCode,
             roomSessionToken: token,
@@ -415,7 +415,7 @@ export function LobbyClient({ code }: { code: string }) {
         });
 
         activeSocket.on("disconnect", () => {
-          setConnectionLabel("Reconectando...");
+          setConnectionLabel("Desconectado...");
         });
 
         activeSocket.on("connect_error", () => {
@@ -426,9 +426,15 @@ export function LobbyClient({ code }: { code: string }) {
           syncRoomState(payload);
         };
 
-        activeSocket.on("room:joined", handleRealtimePayload);
+        activeSocket.on("room:joined", (payload: RealtimePayload) => {
+          setConnectionLabel("En vivo");
+          syncRoomState(payload);
+        });
         activeSocket.on("room:updated", handleRealtimePayload);
-        activeSocket.on("session:recovered", handleRealtimePayload);
+        activeSocket.on("session:recovered", (payload: RealtimePayload) => {
+          setConnectionLabel("En vivo");
+          syncRoomState(payload);
+        });
         activeSocket.on("action:submitted", handleRealtimePayload);
         activeSocket.on("action:rejected", handleRealtimePayload);
         activeSocket.on("canto:opened", handleRealtimePayload);
@@ -733,6 +739,10 @@ export function LobbyClient({ code }: { code: string }) {
     phase === "response_pending" && transition?.phaseDetail
       ? (transition.phaseDetail.split(" ")[0] as CantoType)
       : null;
+  const trickNumber = matchView?.trickNumber ?? matchState?.trickNumber ?? 1;
+  const envidoResolved = matchView?.envidoResolved ?? false;
+  const trucoOpened = matchView?.trucoOpened ?? false;
+  const canCallEnvido = trickNumber === 1 && !trucoOpened && !envidoResolved;
   const needsWildcardSelection =
     wildcardSelection?.isPending === true && wildcardSelection.ownerSeatId === currentSeat?.id;
 
@@ -1071,38 +1081,40 @@ export function LobbyClient({ code }: { code: string }) {
                   );
                 })}
 
-                {(matchView?.tableCards ?? []).map((play, index) => {
-                  const seat = snapshot.seats.find((item) => item.id === play.seatId);
-                  const tone = seat ? getAlienTone(seat, seat.seatIndex) : "cyan";
-                  const positions =
-                    snapshot.maxPlayers === 2
-                      ? [
-                          "left-1/2 top-[170px] -translate-x-1/2 -rotate-3",
-                          "left-1/2 bottom-[170px] -translate-x-1/2 rotate-3",
-                        ]
-                      : [
-                          "left-1/2 top-[150px] -translate-x-1/2 -rotate-3",
-                          "right-[170px] top-1/2 -translate-y-1/2 rotate-6",
-                          "left-1/2 bottom-[150px] -translate-x-1/2 rotate-3",
-                          "left-[170px] top-1/2 -translate-y-1/2 -rotate-6",
-                        ];
+                {(matchView?.tableCards ?? []).length > 0 ? (
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center gap-4">
+                    {(matchView?.tableCards ?? []).map((play, index) => {
+                      const seat = snapshot.seats.find((item) => item.id === play.seatId);
+                      const tone = seat ? getAlienTone(seat, seat.seatIndex) : "cyan";
+                      const total = (matchView?.tableCards ?? []).length;
+                      const center = (total - 1) / 2;
+                      const offset = index - center;
+                      const rot = offset * 5;
+                      const ty = Math.abs(offset) * 8;
 
-                  return (
-                    <div key={`${play.seatId}-${play.card.id}-${index}`} className={`absolute ${positions[seat?.seatIndex ?? index] ?? ""}`}>
-                      <div className="relative">
-                        <div className="absolute inset-x-5 bottom-0 h-6 rounded-full bg-black/45 blur-xl" />
-                        <AlienCardSprite
-                          label={play.card.label}
-                          subtitle={play.displayName ?? "Mesa"}
-                          avatarId={seat?.avatarId ?? null}
-                          tone={tone}
-                          active
-                          disabled
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                      return (
+                        <div
+                          key={`${play.seatId}-${play.card.id}-${index}`}
+                          className="relative shrink-0"
+                          style={{
+                            transform: `rotate(${rot}deg) translateY(${ty}px)`,
+                            width: "clamp(120px, 22vw, 160px)",
+                          }}
+                        >
+                          <div className="absolute inset-x-5 bottom-0 h-6 rounded-full bg-black/45 blur-xl" />
+                          <AlienCardSprite
+                            label={play.card.label}
+                            subtitle={play.displayName ?? "Mesa"}
+                            avatarId={seat?.avatarId ?? null}
+                            tone={tone}
+                            active
+                            disabled
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             </div>
           </section>
@@ -1158,17 +1170,24 @@ export function LobbyClient({ code }: { code: string }) {
 
               {phase === "action_turn" && isMyTurn ? (
                 <div className="mt-5 flex flex-wrap gap-2">
-                  {(["truco", "envido"] as CantoType[]).map((cantoType) => (
+                  <button
+                    type="button"
+                    disabled={actionPending}
+                    onClick={() => handleOpenCanto("truco")}
+                    className="canto-action-btn canto-action-btn-truco"
+                  >
+                    Cantar truco
+                  </button>
+                  {canCallEnvido ? (
                     <button
-                      key={cantoType}
                       type="button"
                       disabled={actionPending}
-                      onClick={() => handleOpenCanto(cantoType)}
-                      className={`canto-action-btn ${cantoType === "truco" ? "canto-action-btn-truco" : "canto-action-btn-envido"}`}
+                      onClick={() => handleOpenCanto("envido")}
+                      className="canto-action-btn canto-action-btn-envido"
                     >
-                      {cantoType === "truco" ? "Cantar truco" : "Cantar envido"}
+                      Cantar envido
                     </button>
-                  ))}
+                  ) : null}
                 </div>
               ) : null}
             </div>

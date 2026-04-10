@@ -5,6 +5,8 @@ export type MatchPhase =
   | 'action_turn'
   | 'canto_pending'
   | 'response_pending'
+  | 'envido_wildcard_commit'
+  | 'envido_singing'
   | 'wildcard_selection'
   | 'trick_resolution'
   | 'hand_scoring'
@@ -88,6 +90,9 @@ export interface MatchTransitionState {
 export interface MatchView {
   handNumber: number;
   trickNumber: number;
+  currentHandPoints: number;
+  envidoResolved: boolean;
+  trucoOpened: boolean;
   currentTurnSeatId: string | null;
   dealerSeatId: string | null;
   yourHand: CardView[];
@@ -175,6 +180,7 @@ export interface RoomEntryResponse {
   state?: MatchProgressState | null;
   transition?: MatchTransitionState | null;
   wildcardSelection?: DetailedWildcardSelectionState | null;
+  envidoSinging?: EnvidoSingingState | null;
 }
 
 export interface ResumeRoomResponse {
@@ -184,6 +190,7 @@ export interface ResumeRoomResponse {
   state: MatchProgressState | null;
   transition: MatchTransitionState | null;
   wildcardSelection: DetailedWildcardSelectionState | null;
+  envidoSinging: EnvidoSingingState | null;
 }
 
 export interface LobbyActionPayload {
@@ -211,6 +218,7 @@ export interface SessionResumeResult {
   state: MatchProgressState | null;
   transition: MatchTransitionState | null;
   wildcardSelection: DetailedWildcardSelectionState | null;
+  envidoSinging: EnvidoSingingState | null;
   recoveredAt: string;
 }
 
@@ -226,6 +234,7 @@ export interface ActionSubmitResult {
   state: MatchProgressState | null;
   transition: MatchTransitionState | null;
   wildcardSelection: DetailedWildcardSelectionState | null;
+  envidoSinging: EnvidoSingingState | null;
   snapshot: RoomSnapshot | null;
   matchView: MatchView | null;
   reason?: string;
@@ -465,6 +474,31 @@ export interface DetailedWildcardSelectionState extends WildcardSelectionState {
   fixedForEnvido: boolean;
 }
 
+export interface EnvidoSeatDeclaration {
+  seatId: string;
+  teamSide: TeamSide;
+  score: number;
+  action: 'declared' | 'son_buenas';
+  hasDimadong: boolean;
+}
+
+export interface EnvidoWildcardCommitView {
+  seatId: string;
+  wildcardCardId: string;
+  requestedAt: string;
+  commitDeadlineAt: string | null;
+}
+
+export interface EnvidoSingingState {
+  cantoType: string;
+  callerSeatId: string;
+  quieroSeatId: string;
+  callerTeamSide: TeamSide;
+  singingOrder: string[];
+  declarations: EnvidoSeatDeclaration[];
+  pendingWildcardCommits: EnvidoWildcardCommitView[];
+}
+
 export interface MatchProgressState {
   phase: MatchPhase;
   handNumber: number;
@@ -488,6 +522,7 @@ export interface RoomUpdatedEvent {
   state: MatchProgressState | null;
   transition: MatchTransitionState | null;
   wildcardSelection: DetailedWildcardSelectionState | null;
+  envidoSinging: EnvidoSingingState | null;
   reason?: string;
 }
 
@@ -500,6 +535,34 @@ export interface RoomJoinedEvent {
   state: MatchProgressState | null;
   transition: MatchTransitionState | null;
   wildcardSelection: DetailedWildcardSelectionState | null;
+  envidoSinging: EnvidoSingingState | null;
+}
+
+export interface EnvidoWildcardCommitRequestedEvent {
+  roomCode: string;
+  seatId: string;
+  wildcardCardId: string;
+  availableChoices: WildcardSelectionChoiceView[];
+  requestedAt: string;
+  commitDeadlineAt: string | null;
+  singingState: EnvidoSingingState;
+  state: MatchProgressState;
+  snapshot: RoomSnapshot;
+  matchView: MatchView | null;
+}
+
+export interface EnvidoSeatDeclaredEvent {
+  roomCode: string;
+  seatId: string;
+  teamSide: TeamSide;
+  score: number;
+  action: 'declared' | 'son_buenas';
+  hasDimadong: boolean;
+  callingTeamBest: number;
+  singingState: EnvidoSingingState;
+  state: MatchProgressState;
+  snapshot: RoomSnapshot;
+  matchView: MatchView | null;
 }
 
 export interface SeatUpdatedEvent {
@@ -763,6 +826,8 @@ export interface RealtimeServerToClientEvents {
   'canto:resolved': (payload: CantoResolvedEvent) => void;
   'wildcard:selection-required': (payload: WildcardSelectionRequiredEvent) => void;
   'wildcard:selected': (payload: WildcardSelectedEvent) => void;
+  'envido:wildcard-commit-required': (payload: EnvidoWildcardCommitRequestedEvent) => void;
+  'envido:seat-declared': (payload: EnvidoSeatDeclaredEvent) => void;
   'trick:resolved': (payload: TrickResolvedEvent) => void;
   'hand:scored': (payload: HandScoredEvent) => void;
   'summary:started': (payload: SummaryStartedEvent) => void;
