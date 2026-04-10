@@ -735,6 +735,7 @@ export interface RealtimeClientToServerEvents {
   'chat:send': (payload: ChatSendPayload) => void;
   'reaction:send': (payload: ReactionSendPayload) => void;
   'room:destroy': (payload: RoomDestroyPayload) => void;
+  'seat:free': (payload: SeatFreePayload) => void;
   ping: () => void;
 }
 
@@ -771,4 +772,19 @@ export interface GameplayIntent<TPayload = Record<string, unknown>> {
   actorSeatId: string;
   payload: TPayload;
   clientActionId: string;
+}
+
+export interface SeatFreePayload extends LobbyActionPayload {
+  targetSeatId: string;
+}
+
+export interface SeatFreeResult {
+  roomCode: string;
+  targetSeatId: string;
+  freedAt: string;
+  snapshot: RoomSnapshot;
+}
+
+export interface SeatFreeAck extends SocketAckResult<SeatFreeResult> {
+  targetSeatId: string;
 }

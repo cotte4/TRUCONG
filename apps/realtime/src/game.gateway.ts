@@ -27,6 +27,9 @@ import type {
   LobbyActionPayload,
   LobbyTeamPayload,
   PlayCardPayload,
+  SeatFreeAck,
+  SeatFreePayload,
+  SeatFreeResult,
   SummaryStartAck,
   SummaryStartPayload,
   RoomDestroyAck,
@@ -1243,43 +1246,52 @@ export class GameGateway implements OnGatewayDisconnect {
   ) {
     const roomCode = payload.roomCode.toUpperCase();
     const session = this.roomStore.getSession(payload.roomSessionToken);
+
+    if (!session) {
+      ack({
+        ok: false,
+        roomCode,
+        clientMessageId: payload.clientMessageId,
+        accepted: false,
+        queued: false,
+        message: 'Session not found.',
+      });
+      return;
+    }
+
     const snapshot = this.safeSnapshot(roomCode);
     const lifecycle = this.roomStore.getRoomLifecycleState(
       roomCode,
-      session?.seatId ?? null,
+      session.seatId,
     );
     const matchView = lifecycle.matchView;
     const state = this.getRoomProgressState(roomCode, lifecycle, snapshot);
-    const reason = 'Chat transport is declared but not yet persisted.';
     const event: ChatReceivedEvent = {
       roomCode,
       clientMessageId: payload.clientMessageId,
-      seatId: session?.seatId ?? null,
-      message: payload.message,
-      accepted: false,
+      seatId: session.seatId,
+      message: payload.message.slice(0, 200),
+      accepted: true,
       state,
       snapshot,
       matchView,
-      reason,
     };
 
     this.server.to(roomCode).emit('chat:received', event);
 
     ack({
-      ok: false,
+      ok: true,
       roomCode,
       clientMessageId: payload.clientMessageId,
-      accepted: false,
+      accepted: true,
       queued: false,
-      message: reason,
       data: {
         clientMessageId: payload.clientMessageId,
-        accepted: false,
+        accepted: true,
         queued: false,
         state,
         snapshot,
         matchView,
-        reason,
       },
     });
   }
@@ -1291,48 +1303,111 @@ export class GameGateway implements OnGatewayDisconnect {
   ) {
     const roomCode = payload.roomCode.toUpperCase();
     const session = this.roomStore.getSession(payload.roomSessionToken);
+
+    if (!session) {
+      ack({
+        ok: false,
+        roomCode,
+        clientReactionId: payload.clientReactionId,
+        targetSeatId: payload.targetSeatId ?? null,
+        accepted: false,
+        queued: false,
+        message: 'Session not found.',
+      });
+      return;
+    }
+
     const snapshot = this.safeSnapshot(roomCode);
     const lifecycle = this.roomStore.getRoomLifecycleState(
       roomCode,
-      session?.seatId ?? null,
+      session.seatId,
     );
     const matchView = lifecycle.matchView;
     const state = this.getRoomProgressState(roomCode, lifecycle, snapshot);
-    const reason = 'Reaction transport is declared but not yet persisted.';
     const event: ReactionReceivedEvent = {
       roomCode,
       clientReactionId: payload.clientReactionId,
-      seatId: session?.seatId ?? null,
+      seatId: session.seatId,
       targetSeatId: payload.targetSeatId ?? null,
       reaction: payload.reaction,
-      accepted: false,
+      accepted: true,
       state,
       snapshot,
       matchView,
-      reason,
     };
 
     this.server.to(roomCode).emit('reaction:received', event);
 
     ack({
-      ok: false,
+      ok: true,
       roomCode,
       clientReactionId: payload.clientReactionId,
       targetSeatId: payload.targetSeatId ?? null,
-      accepted: false,
+      accepted: true,
       queued: false,
-      message: reason,
       data: {
         clientReactionId: payload.clientReactionId,
         targetSeatId: payload.targetSeatId ?? null,
-        accepted: false,
+        accepted: true,
         queued: false,
         state,
         snapshot,
         matchView,
-        reason,
       },
     });
+  }
+
+  @SubscribeMessage('seat:free')
+  handleSeatFree(
+    @MessageBody() payload: SeatFreePayload,
+    @Ack() ack: (response: SeatFreeAck) => void,
+  ) {
+    const roomCode = payload.roomCode.toUpperCase();
+    const freedAt = new Date().toISOString();
+
+    try {
+      const snapshot = this.roomStore.freeSeat(
+        roomCode,
+        payload.roomSessionToken,
+        payload.targetSeatId,
+      );
+      const lifecycle = this.roomStore.getRoomLifecycleState(roomCode, null);
+      const result: SeatFreeResult = {
+        roomCode,
+        targetSeatId: payload.targetSeatId,
+        freedAt,
+        snapshot,
+      };
+
+      this.emitRoomState(
+        roomCode,
+        snapshot,
+        this.buildRoomUpdatedEvent(
+          roomCode,
+          payload.roomSessionToken,
+          'seat freed',
+          lifecycle,
+          snapshot,
+          null,
+        ),
+        null,
+      );
+
+      ack({
+        ok: true,
+        roomCode,
+        targetSeatId: payload.targetSeatId,
+        data: result,
+      });
+    } catch (error) {
+      ack({
+        ok: false,
+        roomCode,
+        targetSeatId: payload.targetSeatId,
+        message:
+          error instanceof Error ? error.message : 'Could not free the seat.',
+      });
+    }
   }
 
   @SubscribeMessage('room:destroy')

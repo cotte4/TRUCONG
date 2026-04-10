@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
   CantoOpenPayload,
+  CantoResolvePayload,
   CantoType,
+  ChatReceivedEvent,
+  ChatSendPayload,
   DetailedWildcardSelectionState,
   LobbyActionPayload,
   LobbyTeamPayload,
@@ -13,9 +16,12 @@ import type {
   MatchTransitionState,
   MatchView,
   PlayCardPayload,
+  ReactionReceivedEvent,
+  ReactionSendPayload,
   ResumeRoomResponse,
   RoomSession,
   RoomSnapshot,
+  SeatFreePayload,
   SummaryStartPayload,
   TeamSide,
   WildcardSelectPayload,
@@ -198,7 +204,7 @@ function AlienCardSprite({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`group relative overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#0d1326] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:bg-[#111936] disabled:cursor-not-allowed disabled:opacity-60 ${palette.glow} ${active ? "border-cyan-200/40 ring-2 ring-cyan-300/20" : ""}`}
+      className={`group relative overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#0d1326] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:bg-[#111936] disabled:cursor-not-allowed disabled:opacity-60 ${active ? `border-cyan-200/40 ring-2 ring-cyan-300/20 ${palette.glow}` : ""}`}
     >
       <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/10 to-transparent" />
       <div className={`absolute inset-x-3 bottom-2 h-8 rounded-full blur-xl ${tone === "red" ? "bg-rose-300/15" : tone === "green" ? "bg-lime-300/15" : tone === "white" ? "bg-white/10" : "bg-cyan-300/15"}`} />
@@ -221,6 +227,44 @@ function AlienCardSprite({
   );
 }
 
+type ChatMessage = {
+  id: string;
+  seatId: string | null;
+  message: string;
+  sentAt: number;
+};
+
+type ActiveReaction = {
+  id: string;
+  seatId: string | null;
+  reaction: string;
+  sentAt: number;
+};
+
+const REACTIONS = ["👽", "🛸", "🔥", "💀", "⚡", "🌟"];
+const REACTION_TTL_MS = 4_000;
+
+function useCountdown(deadlineAt: string | null): number | null {
+  const [seconds, setSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!deadlineAt) {
+      return;
+    }
+
+    const tick = () => {
+      const ms = new Date(deadlineAt).getTime() - Date.now();
+      setSeconds(Math.max(0, Math.ceil(ms / 1000)));
+    };
+
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [deadlineAt]);
+
+  return deadlineAt === null ? null : seconds;
+}
+
 export function LobbyClient({ code }: { code: string }) {
   const normalizedCode = useMemo(() => code.toUpperCase(), [code]);
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
@@ -236,6 +280,34 @@ export function LobbyClient({ code }: { code: string }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [actionPending, setActionPending] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [recentReactions, setRecentReactions] = useState<ActiveReaction[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const turnCountdown = useCountdown(
+    (matchState?.phase ?? snapshot?.phase) === "action_turn"
+      ? (matchView?.turnDeadlineAt ?? matchState?.turnDeadlineAt ?? snapshot?.turnDeadlineAt ?? null)
+      : null
+  );
+  const reconnectCountdown = useCountdown(
+    (matchState?.phase ?? snapshot?.phase) === "reconnect_hold"
+      ? (matchView?.reconnectDeadlineAt ?? matchState?.reconnectDeadlineAt ?? snapshot?.reconnectDeadlineAt ?? null)
+      : null
+  );
+  const cantoCountdown = useCountdown(
+    (matchState?.phase ?? snapshot?.phase) === "response_pending"
+      ? (wildcardSelection?.responseDeadlineAt ?? null)
+      : null
+  );
+
+  useEffect(() => {
+    if (recentReactions.length === 0) return;
+    const id = setInterval(() => {
+      setRecentReactions((prev) => prev.filter((r) => Date.now() - r.sentAt < REACTION_TTL_MS));
+    }, 1_000);
+    return () => clearInterval(id);
+  }, [recentReactions.length]);
 
   useEffect(() => {
     const token = window.localStorage.getItem(getSessionStorageKey(normalizedCode));
@@ -261,6 +333,7 @@ export function LobbyClient({ code }: { code: string }) {
       setMatchView(nextMatchView);
       setMatchState(nextState);
       setTransition(nextTransition ?? null);
+      setActionPending(false);
       setWildcardSelection(nextWildcardSelection ?? null);
       if (typeof nextSession !== "undefined") {
         setSession(nextSession);
@@ -338,6 +411,23 @@ export function LobbyClient({ code }: { code: string }) {
         activeSocket.on("trick:resolved", handleRealtimePayload);
         activeSocket.on("hand:scored", handleRealtimePayload);
         activeSocket.on("summary:started", handleRealtimePayload);
+
+        activeSocket.on("chat:received", (event: ChatReceivedEvent) => {
+          if (!event.accepted) return;
+          setChatMessages((prev) => [
+            ...prev.slice(-99),
+            { id: event.clientMessageId, seatId: event.seatId, message: event.message, sentAt: Date.now() },
+          ]);
+          setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        });
+
+        activeSocket.on("reaction:received", (event: ReactionReceivedEvent) => {
+          if (!event.accepted) return;
+          setRecentReactions((prev) => [
+            ...prev.slice(-9),
+            { id: event.clientReactionId, seatId: event.seatId, reaction: event.reaction, sentAt: Date.now() },
+          ]);
+        });
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "No se pudo cargar la sala.");
         setLoading(false);
@@ -373,9 +463,9 @@ export function LobbyClient({ code }: { code: string }) {
       if (!response.ok) {
         throw new Error(response.message ?? "La acción falló.");
       }
+      // actionPending stays true until the server state update arrives via syncRoomState
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "La acción falló.");
-    } finally {
       setActionPending(false);
     }
   };
@@ -502,6 +592,21 @@ export function LobbyClient({ code }: { code: string }) {
     await runSocketAction("canto:open", payload);
   };
 
+  const handleResolveCanto = async (
+    cantoType: CantoType,
+    response: "quiero" | "no_quiero",
+  ) => {
+    if (!session) return;
+    const payload: CantoResolvePayload = {
+      roomCode: normalizedCode,
+      roomSessionToken: session.roomSessionToken,
+      clientActionId: crypto.randomUUID(),
+      cantoType,
+      response,
+    };
+    await runSocketAction("canto:resolve", payload);
+  };
+
   const handleSelectWildcard = async (selectedLabel: string) => {
     if (!session || !wildcardSelection) {
       return;
@@ -529,6 +634,39 @@ export function LobbyClient({ code }: { code: string }) {
     await runSocketAction("summary:start", payload);
   };
 
+  const handleSendChat = async () => {
+    if (!session || !chatInput.trim()) return;
+    const payload: ChatSendPayload = {
+      roomCode: normalizedCode,
+      roomSessionToken: session.roomSessionToken,
+      clientMessageId: crypto.randomUUID(),
+      message: chatInput.trim(),
+    };
+    setChatInput("");
+    await runSocketAction("chat:send", payload);
+  };
+
+  const handleSendReaction = async (reaction: string) => {
+    if (!session) return;
+    const payload: ReactionSendPayload = {
+      roomCode: normalizedCode,
+      roomSessionToken: session.roomSessionToken,
+      clientReactionId: crypto.randomUUID(),
+      reaction,
+    };
+    await runSocketAction("reaction:send", payload);
+  };
+
+  const handleFreeSeat = async (targetSeatId: string) => {
+    if (!session) return;
+    const payload: SeatFreePayload = {
+      roomCode: normalizedCode,
+      roomSessionToken: session.roomSessionToken,
+      targetSeatId,
+    };
+    await runSocketAction("seat:free", payload);
+  };
+
   const phase = matchState?.phase ?? snapshot.phase;
   const phaseLabel = formatPhase(phase);
   const score = matchView?.score ?? matchState?.score ?? snapshot.score;
@@ -546,8 +684,17 @@ export function LobbyClient({ code }: { code: string }) {
   const isLobby = phase === "lobby" || phase === "ready_check";
   const isLive = connectionLabel === "En vivo";
   const isMyTurn = phase === "action_turn" && activeSeatId === currentSeat?.id && isLive;
+  const isMyCantoResponse = phase === "response_pending" && activeSeatId === currentSeat?.id && isLive;
+  const pendingCantoType: CantoType | null =
+    phase === "response_pending" && transition?.phaseDetail
+      ? (transition.phaseDetail.split(" ")[0] as CantoType)
+      : null;
   const needsWildcardSelection =
     wildcardSelection?.isPending === true && wildcardSelection.ownerSeatId === currentSeat?.id;
+
+  const now = Date.now();
+  const visibleReactions = recentReactions.filter((r) => now - r.sentAt < REACTION_TTL_MS);
+
   const finalSummary =
     matchView?.summary ??
     (transition?.matchSummary.finalScore && transition?.matchSummary.winnerTeamSide
@@ -656,7 +803,7 @@ export function LobbyClient({ code }: { code: string }) {
                         </div>
                       </div>
 
-                      {isHost && seat.displayName ? (
+                      {isHost && seat.displayName && seat.status !== "disconnected" ? (
                         <div className="mt-4 flex gap-2">
                           {(["A", "B"] as TeamSide[]).map((teamSide) => (
                             <button
@@ -674,6 +821,16 @@ export function LobbyClient({ code }: { code: string }) {
                             </button>
                           ))}
                         </div>
+                      ) : null}
+                      {isHost && seat.status === "disconnected" && seat.id !== currentSeat?.id ? (
+                        <button
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() => handleFreeSeat(seat.id)}
+                          className="mt-4 w-full rounded-full border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-100 transition hover:bg-rose-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Liberar asiento
+                        </button>
                       ) : null}
                     </div>
                   </div>
@@ -730,6 +887,49 @@ export function LobbyClient({ code }: { code: string }) {
                 Despegar partida
               </button>
             ) : null}
+
+            <div className="flex flex-col gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Chat</p>
+              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                {chatMessages.length === 0 ? (
+                  <p className="text-sm text-slate-400">Sin mensajes aún.</p>
+                ) : (
+                  chatMessages.map((msg) => {
+                    const seatName = snapshot.seats.find((s) => s.id === msg.seatId)?.displayName ?? "Anon";
+                    const isMe = msg.seatId === currentSeat?.id;
+                    return (
+                      <div key={msg.id} className={`rounded-2xl px-4 py-2.5 text-sm ${isMe ? "border border-cyan-300/20 bg-cyan-300/10 text-cyan-50" : "border border-white/10 bg-white/[0.03] text-slate-200"}`}>
+                        <span className="font-semibold">{seatName}: </span>
+                        {msg.message}
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              {session ? (
+                <form
+                  className="flex gap-2"
+                  onSubmit={(e) => { e.preventDefault(); void handleSendChat(); }}
+                >
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    maxLength={200}
+                    placeholder="Escribí un mensaje…"
+                    className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-white/20"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim() || actionPending}
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Enviar
+                  </button>
+                </form>
+              ) : null}
+            </div>
           </aside>
         </div>
       ) : (
@@ -746,9 +946,19 @@ export function LobbyClient({ code }: { code: string }) {
                   <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white">
                     {score.A} - {score.B}
                   </div>
+                  {isMyTurn && turnCountdown !== null ? (
+                    <div className={`rounded-full border px-4 py-2 text-sm font-semibold tabular-nums ${turnCountdown <= 3 ? "border-rose-300/40 bg-rose-300/12 text-rose-50" : "border-cyan-300/40 bg-cyan-300/12 text-cyan-50"}`}>
+                      {turnCountdown}s
+                    </div>
+                  ) : null}
                   {isMyTurn ? (
                     <div className="rounded-full border border-cyan-300/40 bg-cyan-300/12 px-4 py-2 text-sm font-semibold text-cyan-50">
                       Te toca
+                    </div>
+                  ) : null}
+                  {phase === "reconnect_hold" && reconnectCountdown !== null ? (
+                    <div className="rounded-full border border-amber-300/40 bg-amber-300/12 px-4 py-2 text-sm font-semibold text-amber-50">
+                      Reconectando… {reconnectCountdown}s
                     </div>
                   ) : null}
                 </div>
@@ -942,6 +1152,46 @@ export function LobbyClient({ code }: { code: string }) {
               </div>
             ) : null}
 
+            {isMyCantoResponse && pendingCantoType ? (
+              <div className={panelClass("border-violet-300/20 bg-violet-300/8")}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-violet-100/80">Canto</p>
+                  {cantoCountdown !== null ? (
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${cantoCountdown <= 3 ? "border-rose-300/40 bg-rose-300/12 text-rose-50" : "border-violet-300/40 bg-violet-300/12 text-violet-50"}`}>
+                      {cantoCountdown}s
+                    </span>
+                  ) : null}
+                </div>
+                <h2 className="mt-2 text-2xl font-semibold text-white">
+                  {pendingCantoType === "truco" ? "Truco"
+                    : pendingCantoType === "retruco" ? "Retruco"
+                    : pendingCantoType === "vale_cuatro" ? "Vale Cuatro"
+                    : pendingCantoType === "envido" ? "Envido"
+                    : pendingCantoType === "real_envido" ? "Real Envido"
+                    : "Falta Envido"}
+                </h2>
+                <p className="mt-2 text-sm text-slate-200">¿Querés aceptar o rechazar?</p>
+                <div className="mt-5 flex gap-3">
+                  <button
+                    type="button"
+                    disabled={actionPending}
+                    onClick={() => handleResolveCanto(pendingCantoType, "quiero")}
+                    className="flex-1 rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Quiero
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionPending}
+                    onClick={() => handleResolveCanto(pendingCantoType, "no_quiero")}
+                    className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    No Quiero
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {finalSummary ? (
               <div className={panelClass("border-emerald-300/20")}>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200/75">Resultado</p>
@@ -976,6 +1226,82 @@ export function LobbyClient({ code }: { code: string }) {
                   </div>
                 ) : null}
               </div>
+            </div>
+
+            {session ? (
+              <div className={panelClass()}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Reacciones</p>
+                  {visibleReactions.length > 0 ? (
+                    <div className="flex gap-1.5">
+                      {visibleReactions.slice(-5).map((r) => {
+                        const seatName = snapshot.seats.find((s) => s.id === r.seatId)?.displayName;
+                        return (
+                          <span key={r.id} title={seatName ?? undefined} className="text-xl leading-none">
+                            {r.reaction}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {REACTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      disabled={actionPending}
+                      onClick={() => handleSendReaction(emoji)}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xl leading-none transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className={panelClass("flex flex-col gap-0")}>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Chat</p>
+              <div className="mt-4 max-h-52 overflow-y-auto space-y-2 pr-1">
+                {chatMessages.length === 0 ? (
+                  <p className="text-sm text-slate-400">Todavía no hay mensajes.</p>
+                ) : (
+                  chatMessages.map((msg) => {
+                    const seatName = snapshot.seats.find((s) => s.id === msg.seatId)?.displayName ?? "Anon";
+                    const isMe = msg.seatId === currentSeat?.id;
+                    return (
+                      <div key={msg.id} className={`rounded-2xl px-4 py-2.5 text-sm ${isMe ? "border border-cyan-300/20 bg-cyan-300/10 text-cyan-50" : "border border-white/10 bg-white/[0.03] text-slate-200"}`}>
+                        <span className="font-semibold">{seatName}: </span>
+                        {msg.message}
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              {session ? (
+                <form
+                  className="mt-4 flex gap-2"
+                  onSubmit={(e) => { e.preventDefault(); void handleSendChat(); }}
+                >
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    maxLength={200}
+                    placeholder="Escribí un mensaje…"
+                    className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-white/20"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim() || actionPending}
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Enviar
+                  </button>
+                </form>
+              ) : null}
             </div>
           </aside>
         </div>

@@ -335,21 +335,39 @@ export class RoomStoreService {
       throw new BadRequestException('Display name is required.');
     }
 
-    const seat =
-      (typeof input.preferredSeatIndex === 'number'
+    const preferred =
+      typeof input.preferredSeatIndex === 'number'
         ? room.seats.find(
             (entry) =>
               entry.seatIndex === input.preferredSeatIndex &&
-              entry.status === 'open',
+              (entry.status === 'open' || entry.status === 'disconnected'),
           )
-        : undefined) ?? room.seats.find((entry) => entry.status === 'open');
+        : undefined;
+    const seat =
+      preferred ?? room.seats.find((entry) => entry.status === 'open');
 
     if (!seat) {
       throw new BadRequestException('Room is full.');
     }
 
+    const isReplacement = seat.status === 'disconnected';
+    const previousDisplayName = isReplacement ? seat.displayName : null;
+
+    if (isReplacement && seat.roomSessionToken) {
+      this.roomCodeByToken.delete(seat.roomSessionToken);
+    }
+
     const session = this.attachSeat(seat, room.code, room.id, displayName);
-    this.persistSeatClaim(room, seat, session, 'seat_joined');
+
+    if (isReplacement) {
+      this.pushEvent(
+        room,
+        `${displayName} reemplazó a ${previousDisplayName ?? 'jugador desconectado'}.`,
+      );
+      this.persistSeatClaim(room, seat, session, 'seat_replaced');
+    } else {
+      this.persistSeatClaim(room, seat, session, 'seat_joined');
+    }
 
     return {
       snapshot: this.buildSnapshot(room),
@@ -970,6 +988,7 @@ export class RoomStoreService {
       responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
     };
     room.match.turnDeadlineAt = null;
+    room.match.reconnectDeadlineAt = null;
     this.clearTurnTimeout(room.code);
     this.scheduleCantoTimeout(room.code);
     this.setStatus(
@@ -1033,6 +1052,16 @@ export class RoomStoreService {
     if (pending.targetSeatId && pending.targetSeatId !== actorSeat.id) {
       throw new BadRequestException(
         'This canto must be resolved by the targeted seat.',
+      );
+    }
+
+    if (
+      !pending.targetSeatId &&
+      actorTeamSide !== null &&
+      actorTeamSide === callerTeamSide
+    ) {
+      throw new BadRequestException(
+        'Only the opposing team can respond to this canto.',
       );
     }
 
@@ -1205,6 +1234,7 @@ export class RoomStoreService {
       selectionDeadlineAt: new Date(Date.now() + 15_000).toISOString(),
     };
     room.match.turnDeadlineAt = null;
+    room.match.reconnectDeadlineAt = null;
     this.clearTurnTimeout(room.code);
     this.scheduleWildcardTimeout(room.code);
     this.setStatus(
@@ -2010,7 +2040,20 @@ export class RoomStoreService {
     }
 
     if (room.phase === 'response_pending') {
-      return match.pendingCanto?.targetSeatId ?? match.currentTurnSeatId;
+      if (match.pendingCanto?.targetSeatId) {
+        return match.pendingCanto.targetSeatId;
+      }
+      // No explicit target: find the first occupied opposing-team seat
+      const callerSeat = room.seats.find(
+        (s) => s.id === match.pendingCanto?.actorSeatId,
+      );
+      const responder = room.seats.find(
+        (s) =>
+          s.displayName &&
+          s.teamSide !== null &&
+          s.teamSide !== callerSeat?.teamSide,
+      );
+      return responder?.id ?? null;
     }
 
     if (room.phase === 'wildcard_selection') {
@@ -2335,6 +2378,57 @@ export class RoomStoreService {
     }
 
     return false;
+  }
+
+  freeSeat(
+    roomCode: string,
+    actorToken: string,
+    targetSeatId: string,
+  ): RoomSnapshot {
+    const room = this.getRequiredRoom(roomCode);
+    const actor = room.seats.find((s) => s.roomSessionToken === actorToken);
+
+    if (!actor?.isHost) {
+      throw new BadRequestException('Solo el host puede liberar un asiento.');
+    }
+
+    const seat = room.seats.find((s) => s.id === targetSeatId);
+
+    if (!seat) {
+      throw new BadRequestException('Asiento no encontrado.');
+    }
+
+    if (seat.status !== 'disconnected') {
+      throw new BadRequestException('El asiento no está desconectado.');
+    }
+
+    if (seat.id === actor.id) {
+      throw new BadRequestException('No podés liberar tu propio asiento.');
+    }
+
+    const previousDisplayName = seat.displayName;
+
+    if (seat.roomSessionToken) {
+      this.roomCodeByToken.delete(seat.roomSessionToken);
+    }
+
+    seat.status = 'open';
+    seat.displayName = null;
+    seat.roomSessionToken = null;
+    seat.seatClaimToken = null;
+    seat.isReady = false;
+    seat.reconnectToken = null;
+    seat.socketId = null;
+    seat.persistedOccupancyId = null;
+    seat.persistedConnectionId = null;
+
+    this.pushEvent(
+      room,
+      `${actor.displayName ?? 'El host'} liberó el asiento de ${previousDisplayName ?? 'jugador desconectado'}.`,
+    );
+    this.persistSnapshot(room);
+
+    return this.buildSnapshot(room);
   }
 
   private attachSeat(
