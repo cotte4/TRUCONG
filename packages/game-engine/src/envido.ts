@@ -97,20 +97,57 @@ export function getEnvidoDeclinedPoints(callChain: EnvidoCall[], context: Envido
   return Math.max(1, previousAcceptedPoints);
 }
 
+export function validateEnvidoCallChain(callChain: EnvidoCall[]) {
+  if (callChain.length === 0) {
+    throw new Error('At least one Envido call is required.');
+  }
+
+  let envidoCount = 0;
+  let previous: EnvidoCall | null = null;
+
+  for (const call of callChain) {
+    if (call === 'envido') {
+      envidoCount += 1;
+      if (envidoCount > 2) {
+        throw new Error('Envido can be called at most twice.');
+      }
+    }
+
+    if (previous === null) {
+      previous = call;
+      continue;
+    }
+
+    if (previous === 'falta_envido') {
+      throw new Error('No Envido call is allowed after falta envido.');
+    }
+
+    if (previous === 'real_envido' && call !== 'falta_envido') {
+      throw new Error('Only falta envido can follow real envido.');
+    }
+
+    if (previous === 'envido' && call === 'envido' && envidoCount > 2) {
+      throw new Error('Envido can be called at most twice.');
+    }
+
+    previous = call;
+  }
+
+  return [...callChain];
+}
+
 export function resolveEnvidoResponse(
   callChain: EnvidoCall[],
   response: EnvidoResponse,
   context: EnvidoScoreContext,
 ): EnvidoResolution {
-  if (callChain.length === 0) {
-    throw new Error('At least one Envido call is required.');
-  }
+  const validatedCallChain = validateEnvidoCallChain(callChain);
 
-  const acceptedPoints = getEnvidoAcceptedPoints(callChain, context);
-  const declinedPoints = getEnvidoDeclinedPoints(callChain, context);
+  const acceptedPoints = getEnvidoAcceptedPoints(validatedCallChain, context);
+  const declinedPoints = getEnvidoDeclinedPoints(validatedCallChain, context);
 
   return {
-    callChain,
+    callChain: validatedCallChain,
     response,
     accepted: response === 'quiero',
     pointsAwarded: response === 'quiero' ? acceptedPoints : declinedPoints,
@@ -136,18 +173,16 @@ export function getEnvidoWinningTeam(teamScores: TeamScore) {
 }
 
 export function resolveEnvidoScoring(input: EnvidoScoringInput): EnvidoScoringResolution {
-  if (input.callChain.length === 0) {
-    throw new Error('At least one Envido call is required.');
-  }
+  const validatedCallChain = validateEnvidoCallChain(input.callChain);
 
   const winnerTeam = getEnvidoWinningTeam(input.teamScores);
 
   return {
-    callChain: input.callChain,
+    callChain: validatedCallChain,
     teamScores: input.teamScores,
     winnerTeam,
     isTie: winnerTeam === null,
-    pointsAwarded: getEnvidoAcceptedPoints(input.callChain, input.context),
+    pointsAwarded: getEnvidoAcceptedPoints(validatedCallChain, input.context),
   };
 }
 

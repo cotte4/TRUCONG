@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 
 function usePersistentInput(key: string, initial = "") {
   const [value, setValue] = useState(initial);
@@ -22,6 +22,7 @@ function usePersistentInput(key: string, initial = "") {
 }
 import type { CreateRoomRequest, JoinRoomRequest, RoomEntryResponse } from "@dimadong/contracts";
 import { apiBaseUrl } from "@/lib/config";
+import { AVATAR_OPTIONS, DEFAULT_AVATAR_ID, isAvatarId } from "@/lib/avatar-catalog";
 
 async function postJson<TBody, TResult>(url: string, body: TBody, timeoutMs = 15000): Promise<TResult> {
   const controller = new AbortController();
@@ -61,11 +62,16 @@ export function HomeClient() {
   const [createName, setCreateName] = usePersistentInput("home:createName");
   const [joinName, setJoinName] = usePersistentInput("home:joinName");
   const [roomCode, setRoomCode] = usePersistentInput("home:roomCode");
+  const [createAvatarId, setCreateAvatarIdRaw] = usePersistentInput("home:createAvatarId", DEFAULT_AVATAR_ID);
+  const [joinAvatarId, setJoinAvatarIdRaw] = usePersistentInput("home:joinAvatarId", DEFAULT_AVATAR_ID);
   const [maxPlayers, setMaxPlayers] = useState<2 | 4>(4);
   const [targetScore, setTargetScore] = useState<15 | 30>(30);
   const [error, setError] = useState<string | null>(null);
-  const [isCreating, startCreateTransition] = useTransition();
-  const [isJoining, startJoinTransition] = useTransition();
+  const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const isBusy = isCreating || isJoining;
+  const selectedCreateAvatarId = isAvatarId(createAvatarId) ? createAvatarId : DEFAULT_AVATAR_ID;
+  const selectedJoinAvatarId = isAvatarId(joinAvatarId) ? joinAvatarId : DEFAULT_AVATAR_ID;
 
   const enterRoom = (result: RoomEntryResponse) => {
     window.localStorage.setItem(`dimadong:${result.snapshot.code}:session`, result.session.roomSessionToken);
@@ -79,11 +85,23 @@ export function HomeClient() {
   const handleCreate = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    const trimmedName = createName.trim();
 
-    startCreateTransition(async () => {
+    if (isBusy) {
+      return;
+    }
+
+    if (!trimmedName) {
+      setError("Escribí tu nombre para crear la sala.");
+      return;
+    }
+
+    void (async () => {
+      setIsCreating(true);
       try {
         const payload: CreateRoomRequest = {
-          displayName: createName,
+          displayName: trimmedName,
+          avatarId: selectedCreateAvatarId,
           maxPlayers,
           targetScore,
           allowBongs: true,
@@ -92,28 +110,50 @@ export function HomeClient() {
         enterRoom(result);
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "No se pudo crear la sala.");
+      } finally {
+        setIsCreating(false);
       }
-    });
+    })();
   };
 
   const handleJoin = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    const trimmedName = joinName.trim();
+    const normalizedCode = roomCode.trim().toUpperCase();
 
-    startJoinTransition(async () => {
+    if (isBusy) {
+      return;
+    }
+
+    if (!normalizedCode) {
+      setError("Ingresá el código de sala.");
+      return;
+    }
+
+    if (!trimmedName) {
+      setError("Escribí tu nombre para unirte.");
+      return;
+    }
+
+    void (async () => {
+      setIsJoining(true);
       try {
         const payload: JoinRoomRequest = {
-          displayName: joinName,
+          displayName: trimmedName,
+          avatarId: selectedJoinAvatarId,
         };
         const result = await postJson<JoinRoomRequest, RoomEntryResponse>(
-          `${apiBaseUrl}/rooms/${roomCode.trim().toUpperCase()}/join`,
+          `${apiBaseUrl}/rooms/${normalizedCode}/join`,
           payload,
         );
         enterRoom(result);
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "No se pudo entrar a la sala.");
+      } finally {
+        setIsJoining(false);
       }
-    });
+    })();
   };
 
   return (
@@ -173,9 +213,37 @@ export function HomeClient() {
             </div>
           </div>
         </div>
+        <div className="mt-4">
+          <p className="text-sm text-slate-200/78">Avatar</p>
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {AVATAR_OPTIONS.map((avatar) => {
+              const active = selectedCreateAvatarId === avatar.id;
+              return (
+                <button
+                  key={avatar.id}
+                  type="button"
+                  onClick={() => setCreateAvatarIdRaw(avatar.id)}
+                  className={`overflow-hidden rounded-2xl border p-1 transition ${
+                    active
+                      ? "border-cyan-300/60 ring-2 ring-cyan-300/25"
+                      : "border-white/10 bg-slate-900/70 hover:bg-slate-900"
+                  }`}
+                  aria-label={`Elegir avatar ${avatar.label}`}
+                >
+                  <img
+                    src={avatar.imagePath}
+                    alt={avatar.label}
+                    className="h-16 w-full rounded-xl object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <button
           type="submit"
-          disabled={isCreating}
+          disabled={isBusy}
           className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isCreating ? "Creando..." : "Crear sala"}
@@ -207,9 +275,37 @@ export function HomeClient() {
             maxLength={24}
           />
         </label>
+        <div className="mt-4">
+          <p className="text-sm text-slate-200/78">Avatar</p>
+          <div className="mt-2 grid grid-cols-4 gap-2">
+            {AVATAR_OPTIONS.map((avatar) => {
+              const active = selectedJoinAvatarId === avatar.id;
+              return (
+                <button
+                  key={avatar.id}
+                  type="button"
+                  onClick={() => setJoinAvatarIdRaw(avatar.id)}
+                  className={`overflow-hidden rounded-2xl border p-1 transition ${
+                    active
+                      ? "border-cyan-300/60 ring-2 ring-cyan-300/25"
+                      : "border-white/10 bg-slate-900/70 hover:bg-slate-900"
+                  }`}
+                  aria-label={`Elegir avatar ${avatar.label}`}
+                >
+                  <img
+                    src={avatar.imagePath}
+                    alt={avatar.label}
+                    className="h-16 w-full rounded-xl object-cover"
+                    loading="lazy"
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <button
           type="submit"
-          disabled={isJoining}
+          disabled={isBusy}
           className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isJoining ? "Entrando..." : "Entrar a la sala"}

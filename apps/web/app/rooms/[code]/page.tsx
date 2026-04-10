@@ -15,7 +15,7 @@ export default async function RoomPage({
           <div className="flex items-center gap-3">
             <span className="text-xl ufo-pulse inline-block">🛸</span>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Dimadong</p>
+              <p className="font-brand-display text-xs text-slate-300">Dimadong</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">

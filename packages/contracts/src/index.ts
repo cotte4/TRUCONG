@@ -15,6 +15,13 @@ export type MatchPhase =
 export type TeamSide = 'A' | 'B';
 export type SeatStatus = 'open' | 'occupied' | 'disconnected' | 'replaced';
 export type CardSuit = 'espada' | 'basto' | 'oro' | 'copa';
+export const AVATAR_IDS = [
+  'alien-neon-ace',
+  'alien-beanie',
+  'alien-mask',
+  'alien-dreads',
+] as const;
+export type AvatarId = (typeof AVATAR_IDS)[number];
 
 export interface CardView {
   id: string;
@@ -101,6 +108,7 @@ export interface RoomSeatSnapshot {
   status: SeatStatus;
   teamSide: TeamSide | null;
   displayName: string | null;
+  avatarId: AvatarId | null;
   isHost: boolean;
   isReady: boolean;
   handCount: number;
@@ -129,6 +137,7 @@ export interface RoomSession {
   roomCode: string;
   seatId: string;
   displayName: string;
+  avatarId: AvatarId | null;
   roomSessionToken: string;
   seatClaimToken: string;
 }
@@ -147,6 +156,7 @@ export interface SocketAckResult<TData = Record<string, unknown>> {
 
 export interface CreateRoomRequest {
   displayName: string;
+  avatarId?: AvatarId;
   maxPlayers?: 2 | 4;
   targetScore?: 15 | 30;
   allowBongs?: boolean;
@@ -154,6 +164,7 @@ export interface CreateRoomRequest {
 
 export interface JoinRoomRequest {
   displayName: string;
+  avatarId?: AvatarId;
   preferredSeatIndex?: number;
 }
 

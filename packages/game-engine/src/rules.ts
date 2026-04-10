@@ -11,11 +11,16 @@ import type {
 } from './types.js';
 import type { BongCall } from './bongs.js';
 import type { EnvidoResolution, EnvidoScoringResolution } from './envido.js';
-import { resolveEnvidoResponse, resolveEnvidoScoring } from './envido.js';
+import { resolveEnvidoResponse, resolveEnvidoScoring, validateEnvidoCallChain } from './envido.js';
 import type { TrucoResolution } from './truco.js';
-import { resolveTrucoResponse } from './truco.js';
+import { getNextTrucoCall, resolveTrucoResponse } from './truco.js';
 import { countEffectiveBongs } from './bongs.js';
-import { lockWildcardForEnvido, registerWildcardCommitment, resolveWildcardChoice } from './wildcards.js';
+import {
+  lockWildcardForEnvido,
+  registerWildcardCommitment,
+  requireLegalWildcardSelectionByChoice,
+  resolveWildcardChoice,
+} from './wildcards.js';
 import type { HandScoreInput, HandScoreState } from './hand.js';
 import { createEmptyHandScoreState, resolveHandScore } from './hand.js';
 import type { TrickResolutionInput, TrickRulesState } from './tricks.js';
@@ -81,9 +86,9 @@ export type RulesAction =
   | { type: 'truco/respond'; response: TrucoResponse }
   | { type: 'envido/open'; callChain: EnvidoCall[]; initiatorTeam: TeamSide }
   | { type: 'envido/respond'; response: EnvidoResponse; context: EnvidoScoreContext }
-  | { type: 'wildcard/register'; commitment: WildcardCommitment }
-  | { type: 'wildcard/activate'; handId: string; wildcardId: string; choice: WildcardChoice }
-  | { type: 'wildcard/fix-envido'; wildcardId: string; choice: WildcardChoice }
+  | { type: 'wildcard/register'; commitment: WildcardCommitment; legalChoices: WildcardChoice[] }
+  | { type: 'wildcard/activate'; handId: string; wildcardId: string; choice: WildcardChoice; legalChoices: WildcardChoice[] }
+  | { type: 'wildcard/fix-envido'; wildcardId: string; choice: WildcardChoice; legalChoices: WildcardChoice[] }
   | { type: 'bong/record'; call: BongCall }
   | { type: 'trick/resolve'; input: TrickResolutionInput }
   | { type: 'hand/score'; input: HandScoreInput };
@@ -198,10 +203,33 @@ function appendUniqueCall<TCall extends string>(existing: TCall[], call: TCall) 
   return existing[existing.length - 1] === call ? existing : [...existing, call];
 }
 
+function getExpectedTrucoOpenCall(state: DimadongRulesState): TrucoCall | null {
+  const chain = state.truco.callChain;
+  if (chain.length === 0) {
+    return 'truco';
+  }
+
+  const lastCall = chain[chain.length - 1];
+  const lastResolution = state.truco.lastResolution;
+  if (!lastResolution?.accepted || lastResolution.call !== lastCall) {
+    return null;
+  }
+
+  return getNextTrucoCall(lastCall);
+}
+
 export function reduceRulesState(state: DimadongRulesState, action: RulesAction): DimadongRulesState {
   switch (action.type) {
     case 'truco/open': {
       ensureOpenWindow(state.truco.window, 'Truco');
+      if (state.envido.window?.status === 'open') {
+        throw new Error('Cannot open Truco while Envido is pending.');
+      }
+
+      const expectedCall = getExpectedTrucoOpenCall(state);
+      if (expectedCall === null || action.call !== expectedCall) {
+        throw new Error('Invalid Truco escalation.');
+      }
 
       return {
         ...state,
@@ -237,17 +265,18 @@ export function reduceRulesState(state: DimadongRulesState, action: RulesAction)
 
     case 'envido/open': {
       ensureOpenWindow(state.envido.window, 'Envido');
-
-      if (action.callChain.length === 0) {
-        throw new Error('At least one Envido call is required.');
+      if (state.truco.window?.status === 'open') {
+        throw new Error('Cannot open Envido while Truco is pending.');
       }
+
+      const validatedCallChain = validateEnvidoCallChain(action.callChain);
 
       return {
         ...state,
         envido: {
-          callChain: action.callChain,
+          callChain: validatedCallChain,
           window: createResponseWindow<EnvidoCall, EnvidoResponse>(
-            action.callChain[action.callChain.length - 1],
+            validatedCallChain[validatedCallChain.length - 1],
             action.initiatorTeam,
           ),
           lastResolution: state.envido.lastResolution,
@@ -287,9 +316,16 @@ export function reduceRulesState(state: DimadongRulesState, action: RulesAction)
     }
 
     case 'wildcard/register': {
+      const legalChoice = requireLegalWildcardSelectionByChoice({
+        selectedChoice: action.commitment.choice,
+        legalChoices: action.legalChoices,
+      });
       const registered = registerWildcardCommitment(
         { commitments: state.wildcards.commitments },
-        action.commitment,
+        {
+          ...action.commitment,
+          choice: legalChoice,
+        },
       );
 
       return {
@@ -300,7 +336,7 @@ export function reduceRulesState(state: DimadongRulesState, action: RulesAction)
           envidoFixedChoicesByWildcardId: action.commitment.lockedForEnvido
             ? {
                 ...state.wildcards.envidoFixedChoicesByWildcardId,
-                [action.commitment.wildcardId]: action.commitment.choice,
+                [action.commitment.wildcardId]: legalChoice,
               }
             : state.wildcards.envidoFixedChoicesByWildcardId,
         },
@@ -308,10 +344,14 @@ export function reduceRulesState(state: DimadongRulesState, action: RulesAction)
     }
 
     case 'wildcard/activate': {
+      const legalChoice = requireLegalWildcardSelectionByChoice({
+        selectedChoice: action.choice,
+        legalChoices: action.legalChoices,
+      });
       const resolved = resolveWildcardChoice(
         { commitments: state.wildcards.commitments },
         action.wildcardId,
-        action.choice,
+        legalChoice,
       );
 
       return {
@@ -335,10 +375,14 @@ export function reduceRulesState(state: DimadongRulesState, action: RulesAction)
     }
 
     case 'wildcard/fix-envido': {
+      const legalChoice = requireLegalWildcardSelectionByChoice({
+        selectedChoice: action.choice,
+        legalChoices: action.legalChoices,
+      });
       const fixed = lockWildcardForEnvido(
         { commitments: state.wildcards.commitments },
         action.wildcardId,
-        action.choice,
+        legalChoice,
       );
 
       return {
@@ -348,7 +392,7 @@ export function reduceRulesState(state: DimadongRulesState, action: RulesAction)
           commitments: fixed.commitments,
           envidoFixedChoicesByWildcardId: {
             ...state.wildcards.envidoFixedChoicesByWildcardId,
-            [action.wildcardId]: action.choice,
+            [action.wildcardId]: legalChoice,
           },
         },
       };

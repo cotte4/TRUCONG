@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
+  AvatarId,
   CantoOpenPayload,
   CantoResolvePayload,
   CantoType,
@@ -27,6 +28,7 @@ import type {
   WildcardSelectPayload,
 } from "@dimadong/contracts";
 import { apiBaseUrl, socketBaseUrl } from "@/lib/config";
+import { AVATAR_OPTIONS } from "@/lib/avatar-catalog";
 
 function getSessionStorageKey(code: string) {
   return `dimadong:${code}:session`;
@@ -92,11 +94,9 @@ function panelClass(extra = "") {
 function getFanTransform(index: number, total: number) {
   const center = (total - 1) / 2;
   const offset = index - center;
-  const rotate = offset * 6;
-  const translateY = Math.abs(offset) * 10;
-  const translateX = offset * 10;
+  const absOffset = Math.abs(offset);
 
-  return `translateX(${translateX}px) translateY(${translateY}px) rotate(${rotate}deg)`;
+  return `translateX(calc(${offset} * clamp(6px, 1.8vw, 10px))) translateY(calc(${absOffset} * clamp(5px, 1.3vw, 10px))) rotate(calc(${offset} * clamp(2.5deg, 0.9vw, 6deg)))`;
 }
 
 type RealtimePayload = {
@@ -156,28 +156,52 @@ function toneClasses(tone: AlienTone) {
   }
 }
 
-function AlienPilot({
+function resolveAvatarImagePath(avatarId: AvatarId | null | undefined) {
+  if (!avatarId) {
+    return null;
+  }
+
+  return AVATAR_OPTIONS.find((avatar) => avatar.id === avatarId)?.imagePath ?? null;
+}
+
+function AvatarCircle({
+  avatarId,
   tone,
   active = false,
+  size = 40,
 }: {
+  avatarId: AvatarId | null;
   tone: AlienTone;
   active?: boolean;
+  size?: number;
 }) {
-  const palette = toneClasses(tone);
+  const imagePath = resolveAvatarImagePath(avatarId);
+  const fallbackBackground =
+    tone === "red"
+      ? "linear-gradient(140deg, #ff5d72, #7a1d45)"
+      : tone === "green"
+        ? "linear-gradient(140deg, #9eff4f, #2f6e2a)"
+        : tone === "white"
+          ? "linear-gradient(140deg, #f8fafc, #9ca3af)"
+          : "linear-gradient(140deg, #73f0ff, #146b8a)";
 
   return (
-    <div className={`relative h-20 w-16 shrink-0 ${active ? "scale-110 alien-bob" : ""} transition`}>
-      {active ? <div className="absolute inset-x-2 -top-1 h-14 rounded-full bg-cyan-300/20 blur-xl" /> : null}
-      <div className={`absolute left-1/2 top-0 h-11 w-11 -translate-x-1/2 rounded-full border-2 border-slate-950/60 ${palette.head}`} />
-      <div className="absolute left-[9px] top-4 h-5 w-3 rounded-full bg-black" />
-      <div className="absolute right-[9px] top-4 h-5 w-3 rounded-full bg-black" />
-      <div className="absolute left-[10px] top-1 h-4 w-[2px] -rotate-25 rounded-full bg-slate-300" />
-      <div className="absolute right-[10px] top-1 h-4 w-[2px] rotate-25 rounded-full bg-slate-300" />
-      <div className="absolute left-1/2 top-10 h-9 w-8 -translate-x-1/2 rounded-[14px] bg-[#f6f7fb]" />
-      <div className="absolute left-2 top-[45px] h-7 w-2 rotate-18 rounded-full bg-[#f6f7fb]" />
-      <div className="absolute right-2 top-[45px] h-7 w-2 -rotate-18 rounded-full bg-[#f6f7fb]" />
-      <div className="absolute left-[18px] top-[66px] h-10 w-2 rotate-6 rounded-full bg-[#f6f7fb]" />
-      <div className="absolute right-[18px] top-[66px] h-10 w-2 -rotate-6 rounded-full bg-[#f6f7fb]" />
+    <div className={`relative shrink-0 ${active ? "alien-bob" : ""}`} style={{ width: size, height: size }}>
+      <div
+        className={`h-full w-full overflow-hidden rounded-full border-2 border-white/20 ${active ? "shadow-[0_0_28px_rgba(83,234,253,0.65)]" : "shadow-[0_0_18px_rgba(83,234,253,0.24)]"}`}
+        style={{
+          background: imagePath ? undefined : fallbackBackground,
+        }}
+      >
+        {imagePath ? (
+          <img
+            src={imagePath}
+            alt="Avatar"
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -185,6 +209,7 @@ function AlienPilot({
 function AlienCardSprite({
   label,
   subtitle,
+  avatarId = null,
   tone,
   disabled = false,
   active = false,
@@ -192,6 +217,7 @@ function AlienCardSprite({
 }: {
   label: string;
   subtitle: string;
+  avatarId?: AvatarId | null;
   tone: AlienTone;
   disabled?: boolean;
   active?: boolean;
@@ -218,7 +244,7 @@ function AlienCardSprite({
         </div>
       </div>
       <div className="relative mt-4 flex items-end justify-between">
-        <AlienPilot tone={tone} />
+        <AvatarCircle avatarId={avatarId} tone={tone} size={42} />
         <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-300">
           Carta
         </div>
@@ -243,6 +269,7 @@ type ActiveReaction = {
 
 const REACTIONS = ["👽", "🛸", "🔥", "💀", "⚡", "🌟"];
 const REACTION_TTL_MS = 4_000;
+const SOCKET_ACK_TIMEOUT_MS = 8_000;
 
 function useCountdown(deadlineAt: string | null): number | null {
   const [seconds, setSeconds] = useState<number | null>(null);
@@ -447,14 +474,23 @@ export function LobbyClient({ code }: { code: string }) {
       throw new Error("La conexión en tiempo real todavía no está lista.");
     }
 
-    return new Promise<{ ok: boolean; message?: string }>((resolve) => {
+    return new Promise<{ ok: boolean; message?: string }>((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        reject(new Error("La accion tardo demasiado. Revisa tu conexion e intenta de nuevo."));
+      }, SOCKET_ACK_TIMEOUT_MS);
+
       socket.emit(eventName, payload, (response: { ok: boolean; message?: string }) => {
+        window.clearTimeout(timeoutId);
         resolve(response);
       });
     });
   };
 
-  const runSocketAction = async <TPayload,>(eventName: string, payload: TPayload) => {
+  const runSocketAction = async <TPayload,>(
+    eventName: string,
+    payload: TPayload,
+    options?: { waitForSync?: boolean },
+  ) => {
     setError(null);
     setActionPending(true);
 
@@ -463,10 +499,15 @@ export function LobbyClient({ code }: { code: string }) {
       if (!response.ok) {
         throw new Error(response.message ?? "La acción falló.");
       }
-      // actionPending stays true until the server state update arrives via syncRoomState
+      if (options?.waitForSync === false) {
+        setActionPending(false);
+      }
+      // For stateful gameplay events we keep actionPending until syncRoomState.
+      return true;
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "La acción falló.");
       setActionPending(false);
+      return false;
     }
   };
 
@@ -636,14 +677,17 @@ export function LobbyClient({ code }: { code: string }) {
 
   const handleSendChat = async () => {
     if (!session || !chatInput.trim()) return;
+    const message = chatInput.trim();
     const payload: ChatSendPayload = {
       roomCode: normalizedCode,
       roomSessionToken: session.roomSessionToken,
       clientMessageId: crypto.randomUUID(),
-      message: chatInput.trim(),
+      message,
     };
-    setChatInput("");
-    await runSocketAction("chat:send", payload);
+    const sent = await runSocketAction("chat:send", payload, { waitForSync: false });
+    if (sent) {
+      setChatInput("");
+    }
   };
 
   const handleSendReaction = async (reaction: string) => {
@@ -654,7 +698,7 @@ export function LobbyClient({ code }: { code: string }) {
       clientReactionId: crypto.randomUUID(),
       reaction,
     };
-    await runSocketAction("reaction:send", payload);
+    await runSocketAction("reaction:send", payload, { waitForSync: false });
   };
 
   const handleFreeSeat = async (targetSeatId: string) => {
@@ -750,12 +794,12 @@ export function LobbyClient({ code }: { code: string }) {
               </span>
             </div>
 
-            <div className="relative mt-8 min-h-[520px] overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(83,234,253,0.16),transparent_24%),linear-gradient(180deg,#0b1120_0%,#09101d_100%)]">
+            <div className="ovni-table-surface relative mt-8 min-h-[520px] overflow-hidden rounded-[2rem] border border-white/10">
               <div className="ufo-pulse absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(83,234,253,0.2),rgba(13,19,38,0.96)_58%,rgba(9,16,29,1)_100%)] shadow-[0_0_70px_rgba(83,234,253,0.18)]" />
               <div className="absolute left-1/2 top-1/2 h-[210px] w-[210px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/20 bg-[radial-gradient(circle_at_center,rgba(255,212,54,0.12),rgba(6,11,24,0.82)_62%,rgba(6,11,24,0)_100%)]" />
               <div className="absolute left-1/2 top-1/2 flex w-[220px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100/70">Sala {snapshot.code}</p>
-                <p className="mt-3 text-2xl font-semibold text-white">Plato volador</p>
+                <p className="font-brand-display mt-3 text-2xl text-white">Plato volador</p>
                 <p className="mt-2 text-sm leading-6 text-slate-300">
                   Acá van a caer las cartas cuando arranque la mano.
                 </p>
@@ -783,7 +827,7 @@ export function LobbyClient({ code }: { code: string }) {
                     {isCurrentSeat ? <div className="alien-beam absolute left-1/2 top-12 h-28 w-20 -translate-x-1/2 rounded-full bg-cyan-300/12 blur-xl" /> : null}
                     <div className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 ${palette.panel} ${palette.glow}`}>
                       <div className="flex items-center gap-3">
-                        <AlienPilot tone={tone} active={isCurrentSeat} />
+                          <AvatarCircle avatarId={seat.avatarId} tone={tone} active={isCurrentSeat} size={40} />
                         <div className="min-w-0">
                           <p className="truncate text-base font-semibold text-white">
                             {seat.displayName ?? "Asiento libre"}
@@ -934,7 +978,7 @@ export function LobbyClient({ code }: { code: string }) {
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1.18fr_0.82fr]">
-          <section className="space-y-6">
+          <section className="order-2 space-y-6 lg:order-1">
             <div className={`${panelClass()} overflow-hidden`}>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -964,7 +1008,7 @@ export function LobbyClient({ code }: { code: string }) {
                 </div>
               </div>
 
-              <div className="relative mt-8 min-h-[560px] overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(83,234,253,0.14),transparent_22%),linear-gradient(180deg,#0b1020_0%,#09101d_100%)]">
+              <div className="ovni-table-surface relative mt-8 min-h-[560px] overflow-hidden rounded-[2rem] border border-white/10">
                 <div className="ufo-pulse absolute left-1/2 top-1/2 h-[310px] w-[310px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(83,234,253,0.22),rgba(12,18,38,0.96)_55%,rgba(8,13,29,1)_100%)] shadow-[0_0_90px_rgba(83,234,253,0.2)]" />
                 <div className="absolute left-1/2 top-1/2 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/20 bg-[radial-gradient(circle_at_center,rgba(255,210,54,0.12),rgba(8,13,29,0.1)_70%,transparent_100%)]" />
                 {!(matchView?.tableCards?.length) ? (
@@ -1005,7 +1049,7 @@ export function LobbyClient({ code }: { code: string }) {
                       {isActiveSeat ? <div className="alien-beam absolute left-1/2 top-12 h-32 w-24 -translate-x-1/2 rounded-full bg-cyan-300/14 blur-xl" /> : null}
                       <div className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 ${palette.panel} ${palette.glow}`}>
                         <div className="flex items-center gap-3">
-                          <AlienPilot tone={tone} active={isCurrentSeat || isActiveSeat} />
+                          <AvatarCircle avatarId={seat.avatarId} tone={tone} active={isCurrentSeat || isActiveSeat} size={40} />
                           <div className="min-w-0">
                             <p className="truncate text-base font-semibold text-white">
                               {seat.displayName ?? `Asiento ${seat.seatIndex + 1}`}
@@ -1050,6 +1094,7 @@ export function LobbyClient({ code }: { code: string }) {
                         <AlienCardSprite
                           label={play.card.label}
                           subtitle={play.displayName ?? "Mesa"}
+                          avatarId={seat?.avatarId ?? null}
                           tone={tone}
                           active
                           disabled
@@ -1062,7 +1107,7 @@ export function LobbyClient({ code }: { code: string }) {
             </div>
           </section>
 
-          <aside className="space-y-6">
+          <aside className="order-1 space-y-6 lg:order-2">
             <div className={`${panelClass()} border-cyan-300/20 bg-[#11172b]/90`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -1078,22 +1123,24 @@ export function LobbyClient({ code }: { code: string }) {
                 ) : null}
               </div>
 
-              <div className="mt-5 overflow-hidden rounded-[1.7rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-4 pb-6 pt-4">
+              <div className="mt-5 overflow-x-auto overflow-y-hidden rounded-[1.7rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-3 pb-6 pt-4 sm:px-4">
                 {matchView?.yourHand.length ? (
-                  <div className="relative flex min-h-[300px] items-end justify-center">
+                  <div className="relative flex min-h-[280px] min-w-max items-end justify-center sm:min-h-[300px]">
                     <div className="absolute inset-x-8 bottom-0 h-10 rounded-full bg-black/40 blur-2xl" />
                     {matchView.yourHand.map((card, index) => (
                       <div
                         key={card.id}
-                        className="relative -mx-3 w-[190px] shrink-0 transition hover:z-20 hover:-translate-y-4"
+                        className="relative -mx-2 sm:-mx-3 shrink-0 transition md:hover:z-20 md:hover:-translate-y-4"
                         style={{
                           transform: getFanTransform(index, matchView.yourHand.length),
                           zIndex: index + 1,
+                          width: "clamp(132px, 34vw, 190px)",
                         }}
                       >
                         <AlienCardSprite
                           label={card.label}
-                      subtitle={card.isWildcard ? "Comodín alien" : `${card.rank} de ${card.suit}`}
+                          subtitle={card.isWildcard ? "Comodín alien" : `${card.rank} de ${card.suit}`}
+                          avatarId={currentSeat?.avatarId ?? null}
                           tone={getAlienTone(currentSeat ?? snapshot.seats[0], index)}
                           active={isMyTurn}
                           disabled={actionPending || !isMyTurn}
@@ -1117,7 +1164,7 @@ export function LobbyClient({ code }: { code: string }) {
                       type="button"
                       disabled={actionPending}
                       onClick={() => handleOpenCanto(cantoType)}
-                      className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      className={`canto-action-btn ${cantoType === "truco" ? "canto-action-btn-truco" : "canto-action-btn-envido"}`}
                     >
                       {cantoType === "truco" ? "Cantar truco" : "Cantar envido"}
                     </button>
@@ -1195,10 +1242,57 @@ export function LobbyClient({ code }: { code: string }) {
             {finalSummary ? (
               <div className={panelClass("border-emerald-300/20")}>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-200/75">Resultado</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Ganó el equipo {finalSummary.winnerTeamSide}.</h2>
-                <p className="mt-2 text-sm text-slate-300">
+                <h2 className="mt-2 text-2xl font-semibold text-white">
+                  Ganó el equipo {finalSummary.winnerTeamSide === "A" ? "Cyan" : "Verde"}.
+                </h2>
+                <p className="mt-1 text-sm text-slate-400">
                   Puntaje final {finalSummary.finalScore.A} - {finalSummary.finalScore.B}
                 </p>
+
+                {/* Avatares por equipo */}
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  {(["A", "B"] as const).map((side) => {
+                    const teamSeats = snapshot.seats.filter((s) => s.teamSide === side && s.displayName);
+                    const isWinner = finalSummary.winnerTeamSide === side;
+                    const borderColor = side === "A" ? "border-cyan-300/25" : "border-emerald-300/25";
+                    const bgColor = side === "A" ? "bg-cyan-300/6" : "bg-emerald-300/6";
+                    const labelColor = side === "A" ? "text-cyan-200/70" : "text-emerald-200/70";
+                    const score = side === "A" ? finalSummary.finalScore.A : finalSummary.finalScore.B;
+                    return (
+                      <div key={side} className={`rounded-2xl border ${borderColor} ${bgColor} p-3`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${labelColor}`}>
+                            Equipo {side === "A" ? "Cyan" : "Verde"}
+                          </p>
+                          {isWinner ? (
+                            <span className="rounded-full bg-emerald-400/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                              Ganador
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-2xl font-semibold text-white">{score} pts</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {teamSeats.map((seat) => (
+                            <div key={seat.id} className="flex flex-col items-center gap-1">
+                              <AvatarCircle
+                                avatarId={seat.avatarId}
+                                tone={getAlienTone(seat, seat.seatIndex)}
+                                size={36}
+                              />
+                              <span className="max-w-[56px] truncate text-center text-[10px] text-slate-300">
+                                {seat.displayName}
+                              </span>
+                            </div>
+                          ))}
+                          {teamSeats.length === 0 ? (
+                            <p className="text-xs text-slate-500">—</p>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
                 {isHost && phase !== "post_match_summary" ? (
                   <button
                     type="button"
@@ -1309,3 +1403,4 @@ export function LobbyClient({ code }: { code: string }) {
     </div>
   );
 }
+

@@ -8,8 +8,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-brand-display);
 }
 
 html {
@@ -23,7 +24,7 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), "Roboto", Arial, Helvetica, sans-serif;
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
@@ -32,6 +33,108 @@ body {
 
 * {
   box-sizing: border-box;
+}
+
+.font-brand-display {
+  font-family: var(--font-display), "Arial Black", sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ovni-table-surface {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(246, 92, 177, 0.2), transparent 26%),
+    radial-gradient(circle at 82% 14%, rgba(0, 229, 255, 0.24), transparent 24%),
+    radial-gradient(circle at 50% 100%, rgba(255, 120, 54, 0.18), transparent 45%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 28%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.04) 0px,
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px,
+      transparent 10px
+    ),
+    linear-gradient(180deg, #090e1d 0%, #0a1224 56%, #060a14 100%);
+}
+
+.canto-action-btn {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+  padding: 0.6rem 1.1rem;
+  font-size: 0.83rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f8f8ff;
+  transition: transform 160ms ease, box-shadow 220ms ease, filter 180ms ease;
+}
+
+.canto-action-btn::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      110deg,
+      transparent 12%,
+      rgba(255, 255, 255, 0.5) 22%,
+      transparent 33%
+    );
+  transform: translateX(-140%);
+  transition: transform 260ms ease;
+}
+
+.canto-action-btn:hover {
+  transform: translateY(-1px) scale(1.02);
+  filter: saturate(1.2);
+}
+
+.canto-action-btn:hover::after {
+  transform: translateX(130%);
+}
+
+.canto-action-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.canto-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  box-shadow: none;
+}
+
+.canto-action-btn-truco {
+  background-image: linear-gradient(115deg, #ff6b00 0%, #ff2b59 55%, #8d2dff 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 132, 75, 0.28) inset,
+    0 0 28px rgba(255, 95, 52, 0.34);
+}
+
+.canto-action-btn-truco:hover {
+  animation: truco-shake 170ms linear 1;
+  box-shadow:
+    0 0 0 1px rgba(255, 186, 146, 0.35) inset,
+    0 0 32px rgba(255, 82, 32, 0.45),
+    0 0 55px rgba(217, 45, 255, 0.25);
+}
+
+.canto-action-btn-envido {
+  background-image: linear-gradient(115deg, #ff4db8 0%, #913dff 58%, #3f5dff 100%);
+  box-shadow:
+    0 0 0 1px rgba(207, 143, 255, 0.26) inset,
+    0 0 28px rgba(183, 91, 255, 0.34);
+}
+
+.canto-action-btn-envido:hover {
+  box-shadow:
+    0 0 0 1px rgba(224, 192, 255, 0.35) inset,
+    0 0 32px rgba(194, 66, 255, 0.42),
+    0 0 56px rgba(78, 120, 255, 0.25);
 }
 
 .ufo-pulse {
@@ -44,6 +147,24 @@ body {
 
 .alien-beam {
   animation: alien-beam 1.8s ease-in-out infinite;
+}
+
+@keyframes truco-shake {
+  0% {
+    transform: translateY(-1px) translateX(0) rotate(0deg) scale(1.02);
+  }
+  25% {
+    transform: translateY(-1px) translateX(-1px) rotate(-0.8deg) scale(1.02);
+  }
+  50% {
+    transform: translateY(-1px) translateX(1px) rotate(0.8deg) scale(1.02);
+  }
+  75% {
+    transform: translateY(-1px) translateX(-1px) rotate(-0.6deg) scale(1.02);
+  }
+  100% {
+    transform: translateY(-1px) translateX(0) rotate(0deg) scale(1.02);
+  }
 }
 
 @keyframes ufo-pulse {
@@ -70,5 +191,11 @@ body {
   }
   50% {
     opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canto-action-btn-truco:hover {
+    animation: none;
   }
 }

@@ -12,7 +12,7 @@ export default function Home() {
             {/* Tiny UFO */}
             <span className="text-xl ufo-pulse inline-block">🛸</span>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Dimadong</p>
+              <p className="font-brand-display text-xs text-slate-300">Dimadong</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -35,7 +35,7 @@ export default function Home() {
         <section className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:gap-16">
           {/* Text */}
           <div className="flex-1 space-y-6">
-            <h1 className="text-5xl font-semibold tracking-tight text-white sm:text-6xl lg:text-7xl">
+            <h1 className="font-brand-display text-5xl text-white sm:text-6xl lg:text-7xl">
               Truco con{" "}
               <span className="text-cyan-300">aliens,</span>
               <br />
@@ -136,7 +136,7 @@ export default function Home() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Entrada</p>
-              <h2 className="mt-2 text-3xl font-semibold text-white">Crear o unirse a una sala</h2>
+              <h2 className="font-brand-display mt-2 text-3xl text-white">Crear o unirse a una sala</h2>
             </div>
           </div>
           <HomeClient />

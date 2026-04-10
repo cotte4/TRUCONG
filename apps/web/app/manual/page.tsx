@@ -27,7 +27,7 @@ export default function ManualPage() {
         <nav className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-white/10 bg-slate-950/72 px-5 py-3 backdrop-blur">
           <div className="flex items-center gap-3">
             <span className="text-xl ufo-pulse inline-block">🛸</span>
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Dimadong</p>
+            <p className="font-brand-display text-xs text-slate-300">Dimadong</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <Link
@@ -46,8 +46,8 @@ export default function ManualPage() {
         </nav>
 
         <header>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-cyan-200/70">Manual de DIMADONG</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+          <p className="font-brand-display text-xs text-cyan-100/80">Manual de DIMADONG</p>
+          <h1 className="font-brand-display mt-3 text-4xl text-white sm:text-5xl">
             Las reglas, las rarezas y cómo funciona la app.
           </h1>
         </header>

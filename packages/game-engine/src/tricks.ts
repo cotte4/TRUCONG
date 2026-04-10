@@ -57,12 +57,30 @@ export function resolveTrickPlay(
   wildcards: Pick<WildcardRulesState, 'commitments' | 'activeWildcardByHandId'>,
 ): ResolvedTrickPlay {
   const activeWildcardId = getActiveWildcardIdForHand(wildcards, handId);
-  const commitment =
-    play.wildcardId ? wildcards.commitments[play.wildcardId] ?? null : null;
-  const wildcardChoice =
-    play.isWildcard && play.wildcardId && activeWildcardId === play.wildcardId
-      ? commitment?.choice ?? null
-      : null;
+  const hasWildcardId = Boolean(play.wildcardId);
+  const commitment = hasWildcardId ? wildcards.commitments[play.wildcardId!] ?? null : null;
+  let wildcardChoice = null;
+
+  if (hasWildcardId && !play.isWildcard) {
+    throw new Error('Wildcard play must set isWildcard=true when wildcardId is provided.');
+  }
+
+  if (play.isWildcard) {
+    if (!play.wildcardId) {
+      throw new Error('Wildcard play is missing wildcardId.');
+    }
+
+    if (activeWildcardId !== play.wildcardId) {
+      throw new Error('Wildcard play does not match the active wildcard for this hand.');
+    }
+
+    if (!commitment?.choice) {
+      throw new Error('Wildcard play has no committed choice.');
+    }
+
+    wildcardChoice = commitment.choice;
+  }
+
   const effectiveCard = wildcardChoice ?? play.card;
 
   return {
@@ -85,6 +103,22 @@ export function resolveTrickOutcome(input: TrickResolutionInput): TrickOutcome {
 
   for (let index = 1; index < plays.length; index += 1) {
     const candidate = plays[index];
+    const wildcardTie = areWildcardsTied(
+      {
+        isWildcard: Boolean(winningPlay.isWildcard),
+        choice: winningPlay.wildcardChoice ?? winningPlay.effectiveCard,
+      },
+      {
+        isWildcard: Boolean(candidate.isWildcard),
+        choice: candidate.wildcardChoice ?? candidate.effectiveCard,
+      },
+    );
+
+    if (wildcardTie) {
+      tieReason = 'wildcard_tie';
+      continue;
+    }
+
     const comparison = compareTrucoCards(candidate.effectiveCard, winningPlay.effectiveCard);
 
     if (comparison > 0) {
@@ -94,18 +128,7 @@ export function resolveTrickOutcome(input: TrickResolutionInput): TrickOutcome {
     }
 
     if (comparison === 0) {
-      const wildcardTie = areWildcardsTied(
-        {
-          isWildcard: Boolean(winningPlay.isWildcard),
-          choice: winningPlay.wildcardChoice ?? winningPlay.effectiveCard,
-        },
-        {
-          isWildcard: Boolean(candidate.isWildcard),
-          choice: candidate.wildcardChoice ?? candidate.effectiveCard,
-        },
-      );
-
-      tieReason = wildcardTie ? 'wildcard_tie' : 'card_tie';
+      tieReason = 'card_tie';
     }
   }
 

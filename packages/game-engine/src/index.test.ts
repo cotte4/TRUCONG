@@ -295,6 +295,20 @@ describe('game engine helpers', () => {
     });
   });
 
+  it('rejects invalid envido call chains', () => {
+    const context = { targetScore: 30, teamScores: { A: 12, B: 14 } };
+    expect(() =>
+      resolveEnvidoResponse(['real_envido', 'envido'], 'quiero', context),
+    ).toThrow('Only falta envido can follow real envido.');
+    expect(() =>
+      resolveEnvidoScoring({
+        callChain: ['falta_envido', 'envido'],
+        context,
+        teamScores: { A: 20, B: 18 },
+      }),
+    ).toThrow('No Envido call is allowed after falta envido.');
+  });
+
   it('uses falta envido against the target score', () => {
     const context = { targetScore: 30, teamScores: { A: 18, B: 26 } };
 
@@ -659,7 +673,11 @@ describe('game engine helpers', () => {
           label: '7 de oro',
         },
       ],
-      timeoutChoice: getUndeclaredWildcardTimeoutChoice(),
+      timeoutChoice: {
+        rank: 7,
+        suit: 'oro',
+        label: '7 de oro',
+      },
       needsSelection: true,
     });
     expect(
@@ -774,6 +792,12 @@ describe('game engine helpers', () => {
         ...createCardSignature(1, 'espada'),
         label: '1 de espada',
       },
+      legalChoices: [
+        {
+          ...createCardSignature(1, 'espada'),
+          label: '1 de espada',
+        },
+      ],
     });
 
     const activated = reduceRulesState(wildcardFixed, {
@@ -784,6 +808,12 @@ describe('game engine helpers', () => {
         ...createCardSignature(1, 'espada'),
         label: '1 de espada',
       },
+      legalChoices: [
+        {
+          ...createCardSignature(1, 'espada'),
+          label: '1 de espada',
+        },
+      ],
     });
 
     expect(activated.wildcards.activeWildcardByHandId['hand-1']).toBe('wild-1');
@@ -822,6 +852,42 @@ describe('game engine helpers', () => {
 
     expect(getPendingCantoDecision(trucoCleared)).toBeNull();
     expect(canPlayCardInCurrentState(trucoCleared)).toBe(true);
+  });
+
+  it('rejects invalid truco escalations and cross-canto openings', () => {
+    expect(() =>
+      reduceRulesState(createInitialRulesState(), {
+        type: 'truco/open',
+        call: 'retruco',
+        initiatorTeam: 'A',
+      }),
+    ).toThrow('Invalid Truco escalation.');
+
+    const trucoPending = reduceRulesState(createInitialRulesState(), {
+      type: 'truco/open',
+      call: 'truco',
+      initiatorTeam: 'A',
+    });
+    expect(() =>
+      reduceRulesState(trucoPending, {
+        type: 'envido/open',
+        callChain: ['envido'],
+        initiatorTeam: 'B',
+      }),
+    ).toThrow('Cannot open Envido while Truco is pending.');
+
+    const envidoPending = reduceRulesState(createInitialRulesState(), {
+      type: 'envido/open',
+      callChain: ['envido'],
+      initiatorTeam: 'A',
+    });
+    expect(() =>
+      reduceRulesState(envidoPending, {
+        type: 'truco/open',
+        call: 'truco',
+        initiatorTeam: 'B',
+      }),
+    ).toThrow('Cannot open Truco while Envido is pending.');
   });
 
   it('maps envido canto results into score deltas', () => {
@@ -892,12 +958,67 @@ describe('game engine helpers', () => {
     expect(outcome.winningPlay?.effectiveCard).toMatchObject(createCardSignature(1, 'espada'));
   });
 
+  it('rejects trick plays that include wildcardId without isWildcard=true', () => {
+    expect(() =>
+      resolveTrickOutcome({
+        handId: 'hand-1',
+        wildcards: {
+          activeWildcardByHandId: {
+            'hand-1': 'wild-1',
+          },
+          commitments: {
+            'wild-1': {
+              wildcardId: 'wild-1',
+              choice: {
+                ...createCardSignature(1, 'espada'),
+                label: '1 de espada',
+              },
+              lockedForEnvido: false,
+            },
+          },
+        },
+        plays: [
+          {
+            seatId: 'seat-a',
+            team: 'A',
+            card: createCardSignature(4, 'copa'),
+            wildcardId: 'wild-1',
+          },
+          {
+            seatId: 'seat-b',
+            team: 'B',
+            card: createCardSignature(7, 'oro'),
+          },
+        ],
+      }),
+    ).toThrow('Wildcard play must set isWildcard=true when wildcardId is provided.');
+  });
+
   it('keeps wildcard-vs-wildcard ties deterministic', () => {
     const outcome = resolveTrickOutcome({
       handId: 'hand-2',
       wildcards: {
-        activeWildcardByHandId: {},
-        commitments: {},
+        activeWildcardByHandId: {
+          'hand-2': 'wild-a',
+        },
+        commitments: {
+          'wild-a': {
+            wildcardId: 'wild-a',
+            choice: {
+              ...createCardSignature(1, 'espada'),
+              label: '1 de espada',
+            },
+            lockedForEnvido: false,
+          },
+          'wild-b': {
+            wildcardId: 'wild-b',
+            choice: {
+              ...createCardSignature(4, 'copa'),
+              label: '4 de copa',
+            },
+            lockedForEnvido: false,
+          },
+        },
       },
       plays: [
         {
@@ -912,7 +1033,7 @@ describe('game engine helpers', () => {
           team: 'B',
           card: createCardSignature(3, 'basto'),
           isWildcard: true,
-          wildcardId: 'wild-b',
+          wildcardId: 'wild-a',
         },
       ],
     });
@@ -1034,6 +1155,12 @@ describe('game engine helpers', () => {
             ...createCardSignature(1, 'espada'),
             label: '1 de espada',
           },
+          legalChoices: [
+            {
+              ...createCardSignature(1, 'espada'),
+              label: '1 de espada',
+            },
+          ],
         },
       ).truco,
       endedByFold: null,

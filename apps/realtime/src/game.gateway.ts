@@ -7,6 +7,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
+import { BadRequestException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import type {
   ActionSubmitAck,
@@ -99,10 +100,13 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: RoomJoinPayload,
     @ConnectedSocket() client: RealtimeSocket,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
     const result = await this.roomStore.connectSession(
       roomCode,
-      payload.roomSessionToken,
+      roomSessionToken,
       client.id,
     );
     const lifecycle = this.roomStore.getRoomLifecycleState(
@@ -133,16 +137,16 @@ export class GameGateway implements OnGatewayDisconnect {
     };
 
     client.data.roomCode = roomCode;
-    client.data.roomSessionToken = payload.roomSessionToken;
+    client.data.roomSessionToken = roomSessionToken;
     client.data.seatId = result.session?.seatId;
 
-    void client.join(roomCode);
+    await client.join(roomCode);
     this.emitRoomState(
       roomCode,
       result.snapshot,
       this.buildRoomUpdatedEvent(
         roomCode,
-        payload.roomSessionToken,
+        roomSessionToken,
         'room joined',
         lifecycle,
         result.snapshot,
@@ -150,7 +154,7 @@ export class GameGateway implements OnGatewayDisconnect {
       ),
       this.buildSeatUpdatedEvent(
         roomCode,
-        payload.roomSessionToken,
+        roomSessionToken,
         result.snapshot,
         result.session?.seatId ?? null,
       ),
@@ -169,10 +173,13 @@ export class GameGateway implements OnGatewayDisconnect {
     @Ack() ack: (response: SessionResumeAck) => void,
   ) {
     try {
-      const roomCode = payload.roomCode.toUpperCase();
+      const roomCode = this.normalizeRoomCode(payload.roomCode);
+      const roomSessionToken = this.normalizeRoomSessionToken(
+        payload.roomSessionToken,
+      );
       const result = await this.roomStore.resumeRoom(
         roomCode,
-        payload.roomSessionToken,
+        roomSessionToken,
       );
       const recoveredAt = new Date().toISOString();
       const lifecycle = this.roomStore.getRoomLifecycleState(
@@ -191,11 +198,11 @@ export class GameGateway implements OnGatewayDisconnect {
       );
 
       if (result.session) {
-        void client.join(roomCode);
+        await client.join(roomCode);
       }
 
       client.data.roomCode = roomCode;
-      client.data.roomSessionToken = payload.roomSessionToken;
+      client.data.roomSessionToken = roomSessionToken;
       client.data.seatId = result.session?.seatId ?? client.data.seatId;
 
       this.emitRoomState(
@@ -203,7 +210,7 @@ export class GameGateway implements OnGatewayDisconnect {
         result.snapshot,
         this.buildRoomUpdatedEvent(
           roomCode,
-          payload.roomSessionToken,
+          roomSessionToken,
           'session recovered',
           lifecycle,
           result.snapshot,
@@ -211,7 +218,7 @@ export class GameGateway implements OnGatewayDisconnect {
         ),
         this.buildSeatUpdatedEvent(
           roomCode,
-          payload.roomSessionToken,
+          roomSessionToken,
           result.snapshot,
           result.session?.seatId ?? client.data.seatId ?? null,
         ),
@@ -247,7 +254,7 @@ export class GameGateway implements OnGatewayDisconnect {
     } catch (error) {
       ack({
         ok: false,
-        roomCode: payload.roomCode.toUpperCase(),
+        roomCode: this.safeRoomCode(payload.roomCode),
         session: null,
         message:
           error instanceof Error
@@ -302,29 +309,26 @@ export class GameGateway implements OnGatewayDisconnect {
     @Ack() ack: (response: { ok: boolean; message?: string }) => void,
   ) {
     try {
-      const snapshot = this.roomStore.toggleReady(
-        payload.roomCode,
+      const roomCode = this.normalizeRoomCode(payload.roomCode);
+      const roomSessionToken = this.normalizeRoomSessionToken(
         payload.roomSessionToken,
       );
+      const snapshot = this.roomStore.toggleReady(roomCode, roomSessionToken);
       const lifecycle = this.roomStore.getRoomLifecycleState(
         snapshot.code,
-        this.roomStore.getSession(payload.roomSessionToken)?.seatId ?? null,
+        this.roomStore.getSession(roomSessionToken)?.seatId ?? null,
       );
       this.emitRoomState(
         snapshot.code,
         snapshot,
         this.buildRoomUpdatedEvent(
           snapshot.code,
-          payload.roomSessionToken,
+          roomSessionToken,
           'ready toggled',
           lifecycle,
           snapshot,
         ),
-        this.buildSeatUpdatedEvent(
-          snapshot.code,
-          payload.roomSessionToken,
-          snapshot,
-        ),
+        this.buildSeatUpdatedEvent(snapshot.code, roomSessionToken, snapshot),
       );
       ack({ ok: true });
     } catch (error) {
@@ -344,26 +348,38 @@ export class GameGateway implements OnGatewayDisconnect {
     @Ack() ack: (response: { ok: boolean; message?: string }) => void,
   ) {
     try {
-      const snapshot = this.roomStore.assignTeam(payload);
+      const roomCode = this.normalizeRoomCode(payload.roomCode);
+      const roomSessionToken = this.normalizeRoomSessionToken(
+        payload.roomSessionToken,
+      );
+      const targetSeatId = this.normalizeSeatId(
+        payload.targetSeatId,
+        'targetSeatId',
+      );
+      if (payload.teamSide !== 'A' && payload.teamSide !== 'B') {
+        throw new BadRequestException('teamSide must be A or B.');
+      }
+      const snapshot = this.roomStore.assignTeam({
+        ...payload,
+        roomCode,
+        roomSessionToken,
+        targetSeatId,
+      });
       const lifecycle = this.roomStore.getRoomLifecycleState(
         snapshot.code,
-        this.roomStore.getSession(payload.roomSessionToken)?.seatId ?? null,
+        this.roomStore.getSession(roomSessionToken)?.seatId ?? null,
       );
       this.emitRoomState(
         snapshot.code,
         snapshot,
         this.buildRoomUpdatedEvent(
           snapshot.code,
-          payload.roomSessionToken,
+          roomSessionToken,
           'team changed',
           lifecycle,
           snapshot,
         ),
-        this.buildSeatUpdatedEvent(
-          snapshot.code,
-          payload.roomSessionToken,
-          snapshot,
-        ),
+        this.buildSeatUpdatedEvent(snapshot.code, roomSessionToken, snapshot),
       );
       ack({ ok: true });
     } catch (error) {
@@ -381,29 +397,26 @@ export class GameGateway implements OnGatewayDisconnect {
     @Ack() ack: (response: { ok: boolean; message?: string }) => void,
   ) {
     try {
-      const snapshot = this.roomStore.startMatch(
-        payload.roomCode,
+      const roomCode = this.normalizeRoomCode(payload.roomCode);
+      const roomSessionToken = this.normalizeRoomSessionToken(
         payload.roomSessionToken,
       );
+      const snapshot = this.roomStore.startMatch(roomCode, roomSessionToken);
       const lifecycle = this.roomStore.getRoomLifecycleState(
         snapshot.code,
-        this.roomStore.getSession(payload.roomSessionToken)?.seatId ?? null,
+        this.roomStore.getSession(roomSessionToken)?.seatId ?? null,
       );
       this.emitRoomState(
         snapshot.code,
         snapshot,
         this.buildRoomUpdatedEvent(
           snapshot.code,
-          payload.roomSessionToken,
+          roomSessionToken,
           'match started',
           lifecycle,
           snapshot,
         ),
-        this.buildSeatUpdatedEvent(
-          snapshot.code,
-          payload.roomSessionToken,
-          snapshot,
-        ),
+        this.buildSeatUpdatedEvent(snapshot.code, roomSessionToken, snapshot),
       );
       ack({ ok: true });
     } catch (error) {
@@ -420,14 +433,24 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: SummaryStartPayload,
     @Ack() ack: (response: SummaryStartAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const clientActionId = this.normalizeClientActionId(payload.clientActionId);
+    const source =
+      payload.source === 'manual' ||
+      payload.source === 'match_end' ||
+      payload.source === 'reconnect'
+        ? payload.source
+        : 'manual';
     const startedAt = new Date().toISOString();
 
     try {
       const result = this.roomStore.startSummaryWithResult(
         roomCode,
-        payload.roomSessionToken,
-        payload.source ?? 'manual',
+        roomSessionToken,
+        source,
       );
       const snapshot = result.snapshot;
       const lifecycle = result.lifecycle;
@@ -453,16 +476,12 @@ export class GameGateway implements OnGatewayDisconnect {
         snapshot,
         this.buildRoomUpdatedEvent(
           roomCode,
-          payload.roomSessionToken,
+          roomSessionToken,
           'summary started',
           lifecycle,
           snapshot,
         ),
-        this.buildSeatUpdatedEvent(
-          roomCode,
-          payload.roomSessionToken,
-          snapshot,
-        ),
+        this.buildSeatUpdatedEvent(roomCode, roomSessionToken, snapshot),
       );
       this.server.to(roomCode).emit('summary:started', {
         roomCode,
@@ -480,12 +499,12 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: true,
         roomCode,
-        clientActionId: payload.clientActionId,
+        clientActionId,
         source: result.source,
         startedAt,
         data: {
           roomCode,
-          clientActionId: payload.clientActionId,
+          clientActionId,
           source: result.source,
           startedAt,
           snapshot,
@@ -499,8 +518,8 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: false,
         roomCode,
-        clientActionId: payload.clientActionId,
-        source: payload.source ?? 'manual',
+        clientActionId,
+        source,
         startedAt,
         message:
           error instanceof Error
@@ -516,8 +535,17 @@ export class GameGateway implements OnGatewayDisconnect {
     @Ack() ack: (response: { ok: boolean; message?: string }) => void,
   ) {
     try {
-      const roomCode = payload.roomCode.toUpperCase();
-      const result = this.roomStore.playCardWithResult(payload);
+      const roomCode = this.normalizeRoomCode(payload.roomCode);
+      const roomSessionToken = this.normalizeRoomSessionToken(
+        payload.roomSessionToken,
+      );
+      const cardId = this.normalizeCardId(payload.cardId);
+      const result = this.roomStore.playCardWithResult({
+        ...payload,
+        roomCode,
+        roomSessionToken,
+        cardId,
+      });
       const snapshot = result.snapshot;
       const lifecycle = result.lifecycle;
       const matchView = lifecycle.matchView;
@@ -534,6 +562,14 @@ export class GameGateway implements OnGatewayDisconnect {
       const handTrickWins = state.handTrickWins;
       const resolvedAt = new Date().toISOString();
       const latestTrickResult = transition.latestTrickResult;
+      const trickTableCards =
+        result.resolvedTableCards?.map((play) => ({
+          seatId: play.seatId,
+          displayName:
+            snapshot.seats.find((seat) => seat.id === play.seatId)
+              ?.displayName ?? null,
+          card: play.card,
+        })) ?? state.tableCards;
       const trickResolvedEvent: TrickResolvedEvent = {
         roomCode: snapshot.code,
         handNumber: state.handNumber,
@@ -541,16 +577,13 @@ export class GameGateway implements OnGatewayDisconnect {
         dealerSeatId: state.dealerSeatId,
         currentTurnSeatId: state.currentTurnSeatId,
         handTrickWins,
-        winnerSeatId:
-          latestTrickResult?.winnerSeatId ??
-          state.tableCards[0]?.seatId ??
-          null,
+        winnerSeatId: latestTrickResult?.winnerSeatId ?? null,
         winnerTeamSide: latestTrickResult?.winnerTeamSide ?? null,
         winningCardLabel:
           latestTrickResult?.winningCardLabel ??
-          state.tableCards[0]?.card.label ??
+          trickTableCards[0]?.card.label ??
           null,
-        tableCards: state.tableCards,
+        tableCards: trickTableCards,
         resolvedTricks: state.resolvedTricks,
         resolvedAt: transition.latestTrickResolvedAt ?? resolvedAt,
         nextTurnSeatId: state.currentTurnSeatId,
@@ -570,16 +603,12 @@ export class GameGateway implements OnGatewayDisconnect {
         snapshot,
         this.buildRoomUpdatedEvent(
           snapshot.code,
-          payload.roomSessionToken,
+          roomSessionToken,
           'card played',
           lifecycle,
           snapshot,
         ),
-        this.buildSeatUpdatedEvent(
-          snapshot.code,
-          payload.roomSessionToken,
-          snapshot,
-        ),
+        this.buildSeatUpdatedEvent(snapshot.code, roomSessionToken, snapshot),
       );
       if (result.trickResolved) {
         this.server
@@ -641,9 +670,14 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: WildcardRequestPayload,
     @Ack() ack: (response: WildcardRequestAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const clientActionId = this.normalizeClientActionId(payload.clientActionId);
+    const cardId = this.normalizeCardId(payload.cardId);
     const requestedAt = new Date().toISOString();
-    const session = this.roomStore.getSession(payload.roomSessionToken);
+    const session = this.roomStore.getSession(roomSessionToken);
     let lifecycle = this.roomStore.getRoomLifecycleState(
       roomCode,
       session?.seatId ?? null,
@@ -652,8 +686,8 @@ export class GameGateway implements OnGatewayDisconnect {
     try {
       const snapshot = this.roomStore.requestWildcardSelection(
         roomCode,
-        payload.roomSessionToken,
-        payload.cardId,
+        roomSessionToken,
+        cardId,
       );
       lifecycle = this.roomStore.getRoomLifecycleState(
         roomCode,
@@ -679,7 +713,7 @@ export class GameGateway implements OnGatewayDisconnect {
       const event: WildcardSelectionRequiredEvent = {
         roomCode,
         seatId: session?.seatId ?? '',
-        cardId: payload.cardId,
+        cardId,
         handNumber: state?.handNumber ?? 0,
         requestedAt,
         selectionDeadlineAt: selection.selectionDeadlineAt,
@@ -696,13 +730,13 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: true,
         roomCode,
-        clientActionId: payload.clientActionId,
-        cardId: payload.cardId,
+        clientActionId,
+        cardId,
         accepted: true,
         queued: false,
         data: {
-          clientActionId: payload.clientActionId,
-          cardId: payload.cardId,
+          clientActionId,
+          cardId,
           requestedAt,
           accepted: true,
           queued: false,
@@ -718,8 +752,8 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: false,
         roomCode,
-        clientActionId: payload.clientActionId,
-        cardId: payload.cardId,
+        clientActionId,
+        cardId,
         accepted: false,
         queued: false,
         message:
@@ -727,8 +761,8 @@ export class GameGateway implements OnGatewayDisconnect {
             ? error.message
             : 'Could not request wildcard selection.',
         data: {
-          clientActionId: payload.clientActionId,
-          cardId: payload.cardId,
+          clientActionId,
+          cardId,
           requestedAt,
           accepted: false,
           queued: false,
@@ -753,15 +787,23 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: CantoOpenPayload,
     @Ack() ack: (response: CantoOpenAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
-    const session = this.roomStore.getSession(payload.roomSessionToken);
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const clientActionId = this.normalizeClientActionId(payload.clientActionId);
+    const cantoType = this.normalizeCantoType(payload.cantoType);
+    const session = this.roomStore.getSession(roomSessionToken);
+    const targetSeatId = payload.targetSeatId
+      ? this.normalizeSeatId(payload.targetSeatId, 'targetSeatId')
+      : null;
     const openedAt = new Date().toISOString();
     try {
       const snapshot = this.roomStore.openCanto(
         roomCode,
-        payload.roomSessionToken,
-        payload.cantoType,
-        payload.targetSeatId ?? null,
+        roomSessionToken,
+        cantoType,
+        targetSeatId,
       );
       const lifecycle = this.roomStore.getRoomLifecycleState(
         roomCode,
@@ -783,12 +825,12 @@ export class GameGateway implements OnGatewayDisconnect {
         roomCode,
         seatId: session?.seatId ?? null,
         actorSeatId: session?.seatId ?? null,
-        clientActionId: payload.clientActionId,
-        cantoType: payload.cantoType,
+        clientActionId,
+        cantoType,
         statusText: snapshot.statusText,
         openedAt,
         responseDeadlineAt,
-        targetSeatId: payload.targetSeatId ?? null,
+        targetSeatId,
         state,
         transition,
         snapshot,
@@ -800,15 +842,15 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: true,
         roomCode,
-        clientActionId: payload.clientActionId,
-        cantoType: payload.cantoType,
-        targetSeatId: payload.targetSeatId ?? null,
+        clientActionId,
+        cantoType,
+        targetSeatId,
         accepted: true,
         queued: false,
         data: {
-          clientActionId: payload.clientActionId,
-          cantoType: payload.cantoType,
-          targetSeatId: payload.targetSeatId ?? null,
+          clientActionId,
+          cantoType,
+          targetSeatId,
           accepted: true,
           queued: false,
           openedAt,
@@ -829,17 +871,17 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: false,
         roomCode,
-        clientActionId: payload.clientActionId,
-        cantoType: payload.cantoType,
-        targetSeatId: payload.targetSeatId ?? null,
+        clientActionId,
+        cantoType,
+        targetSeatId,
         accepted: false,
         queued: false,
         message:
           error instanceof Error ? error.message : 'Could not open canto.',
         data: {
-          clientActionId: payload.clientActionId,
-          cantoType: payload.cantoType,
-          targetSeatId: payload.targetSeatId ?? null,
+          clientActionId,
+          cantoType,
+          targetSeatId,
           accepted: false,
           queued: false,
           openedAt,
@@ -864,8 +906,17 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: CantoResolvePayload,
     @Ack() ack: (response: CantoResolveAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
-    const session = this.roomStore.getSession(payload.roomSessionToken);
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const clientActionId = this.normalizeClientActionId(payload.clientActionId);
+    const cantoType = this.normalizeCantoType(payload.cantoType);
+    const cantoResponse = this.normalizeCantoResponse(payload.response);
+    const session = this.roomStore.getSession(roomSessionToken);
+    const targetSeatId = payload.targetSeatId
+      ? this.normalizeSeatId(payload.targetSeatId, 'targetSeatId')
+      : null;
     const resolvedAt = new Date().toISOString();
     const beforeSnapshot = this.safeSnapshot(roomCode);
     const beforeLifecycle = this.roomStore.getRoomLifecycleState(
@@ -877,8 +928,8 @@ export class GameGateway implements OnGatewayDisconnect {
     try {
       const result = this.roomStore.resolveCantoWithResult(
         roomCode,
-        payload.roomSessionToken,
-        payload.response,
+        roomSessionToken,
+        cantoResponse,
       );
       const snapshot = result.snapshot;
       const lifecycle = result.lifecycle;
@@ -898,13 +949,13 @@ export class GameGateway implements OnGatewayDisconnect {
         roomCode,
         seatId: session?.seatId ?? null,
         actorSeatId: session?.seatId ?? null,
-        clientActionId: payload.clientActionId,
-        cantoType: payload.cantoType,
-        result: payload.response,
+        clientActionId,
+        cantoType,
+        result: cantoResponse,
         scoreDelta,
         statusText: snapshot.statusText,
         resolvedAt,
-        targetSeatId: payload.targetSeatId ?? null,
+        targetSeatId,
         state,
         transition,
         snapshot,
@@ -932,17 +983,17 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: true,
         roomCode,
-        clientActionId: payload.clientActionId,
-        cantoType: payload.cantoType,
-        response: payload.response,
-        targetSeatId: payload.targetSeatId ?? null,
+        clientActionId,
+        cantoType,
+        response: cantoResponse,
+        targetSeatId,
         accepted: true,
         queued: false,
         data: {
-          clientActionId: payload.clientActionId,
-          cantoType: payload.cantoType,
-          response: payload.response,
-          targetSeatId: payload.targetSeatId ?? null,
+          clientActionId,
+          cantoType,
+          response: cantoResponse,
+          targetSeatId,
           accepted: true,
           queued: false,
           resolvedAt,
@@ -958,19 +1009,19 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: false,
         roomCode,
-        clientActionId: payload.clientActionId,
-        cantoType: payload.cantoType,
-        response: payload.response,
-        targetSeatId: payload.targetSeatId ?? null,
+        clientActionId,
+        cantoType,
+        response: cantoResponse,
+        targetSeatId,
         accepted: false,
         queued: false,
         message:
           error instanceof Error ? error.message : 'Could not resolve canto.',
         data: {
-          clientActionId: payload.clientActionId,
-          cantoType: payload.cantoType,
-          response: payload.response,
-          targetSeatId: payload.targetSeatId ?? null,
+          clientActionId,
+          cantoType,
+          response: cantoResponse,
+          targetSeatId,
           accepted: false,
           queued: false,
           resolvedAt,
@@ -993,24 +1044,39 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: WildcardSelectPayload,
     @Ack() ack: (response: WildcardSelectAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
-    const session = this.roomStore.getSession(payload.roomSessionToken);
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const clientActionId = this.normalizeClientActionId(payload.clientActionId);
+    const cardId = this.normalizeCardId(payload.cardId);
+    const selectedLabel = this.normalizeWildcardLabel(
+      payload.selectedLabel,
+      'selectedLabel',
+    );
+    const session = this.roomStore.getSession(roomSessionToken);
     const selectedAt = new Date().toISOString();
-    const lifecycle = this.roomStore.getRoomLifecycleState(
+    const lifecycleBeforeSelect = this.roomStore.getRoomLifecycleState(
       roomCode,
       session?.seatId ?? null,
     );
-    const pendingSelection = lifecycle.wildcardSelectionState;
+    const pendingSelection = lifecycleBeforeSelect.wildcardSelectionState;
     try {
       const snapshot = this.roomStore.selectWildcard(
         roomCode,
-        payload.roomSessionToken,
-        payload.cardId,
-        payload.selectedLabel,
+        roomSessionToken,
+        cardId,
+        selectedLabel,
+      );
+      const lifecycle = this.roomStore.getRoomLifecycleState(
+        roomCode,
+        session?.seatId ?? null,
       );
       const matchView = lifecycle.matchView;
       const selectedCard =
-        matchView?.yourHand.find((card) => card.id === payload.cardId) ?? null;
+        lifecycleBeforeSelect.matchView?.yourHand.find(
+          (card) => card.id === cardId,
+        ) ?? null;
 
       if (!selectedCard) {
         throw new Error('Wildcard card could not be resolved after selection.');
@@ -1019,7 +1085,7 @@ export class GameGateway implements OnGatewayDisconnect {
       const selection = pendingSelection
         ? {
             ...pendingSelection,
-            selectedLabel: payload.selectedLabel,
+            selectedLabel,
           }
         : null;
 
@@ -1040,10 +1106,10 @@ export class GameGateway implements OnGatewayDisconnect {
       const event: WildcardSelectedEvent = {
         roomCode,
         seatId: session?.seatId ?? '',
-        cardId: payload.cardId,
+        cardId,
         handNumber: matchView?.handNumber ?? 0,
         selectedCard,
-        selectedLabel: payload.selectedLabel,
+        selectedLabel,
         selectedAt,
         accepted: true,
         selection,
@@ -1058,14 +1124,14 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: true,
         roomCode,
-        clientActionId: payload.clientActionId,
-        cardId: payload.cardId,
+        clientActionId,
+        cardId,
         accepted: true,
         queued: false,
         data: {
-          clientActionId: payload.clientActionId,
-          cardId: payload.cardId,
-          selectedLabel: payload.selectedLabel,
+          clientActionId,
+          cardId,
+          selectedLabel,
           selectedAt,
           accepted: true,
           queued: false,
@@ -1080,28 +1146,31 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: false,
         roomCode,
-        clientActionId: payload.clientActionId,
-        cardId: payload.cardId,
+        clientActionId,
+        cardId,
         accepted: false,
         queued: false,
         message:
           error instanceof Error ? error.message : 'Could not select wildcard.',
         data: {
-          clientActionId: payload.clientActionId,
-          cardId: payload.cardId,
-          selectedLabel: payload.selectedLabel,
+          clientActionId,
+          cardId,
+          selectedLabel,
           selectedAt,
           accepted: false,
           queued: false,
           selection: pendingSelection,
           state: this.getRoomProgressState(
             roomCode,
-            lifecycle,
+            lifecycleBeforeSelect,
             this.safeSnapshot(roomCode),
           ),
-          transition: this.getRoomTransitionState(roomCode, lifecycle),
+          transition: this.getRoomTransitionState(
+            roomCode,
+            lifecycleBeforeSelect,
+          ),
           snapshot: this.safeSnapshot(roomCode),
-          matchView: lifecycle.matchView,
+          matchView: lifecycleBeforeSelect.matchView,
           reason:
             error instanceof Error
               ? error.message
@@ -1116,10 +1185,26 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: ActionSubmitPayload,
     @Ack() ack: (response: ActionSubmitAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
-    const session = this.roomStore.getSession(payload.roomSessionToken);
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const clientActionId = this.normalizeClientActionId(payload.clientActionId);
+    const actionType = this.normalizeActionType(payload.actionType);
+    const actionPayload = this.normalizeActionPayload(payload.payload);
+    if (!actionPayload || typeof actionPayload !== 'object') {
+      throw new BadRequestException('payload is required.');
+    }
+    const session = this.roomStore.getSession(roomSessionToken);
     try {
-      const snapshot = this.roomStore.submitAction(payload);
+      const snapshot = this.roomStore.submitAction({
+        ...payload,
+        roomCode,
+        roomSessionToken,
+        clientActionId,
+        actionType,
+        payload: actionPayload,
+      });
       const lifecycle = this.roomStore.getRoomLifecycleState(
         roomCode,
         session?.seatId ?? null,
@@ -1139,10 +1224,10 @@ export class GameGateway implements OnGatewayDisconnect {
 
       const event: ActionSubmittedEvent = {
         roomCode,
-        clientActionId: payload.clientActionId,
-        actionType: payload.actionType,
+        clientActionId,
+        actionType,
         actorSeatId: session?.seatId ?? null,
-        payload: payload.payload,
+        payload: actionPayload,
         accepted: true,
         state,
         transition,
@@ -1157,28 +1242,24 @@ export class GameGateway implements OnGatewayDisconnect {
         snapshot,
         this.buildRoomUpdatedEvent(
           roomCode,
-          payload.roomSessionToken,
-          `action submitted: ${payload.actionType}`,
+          roomSessionToken,
+          `action submitted: ${actionType}`,
           lifecycle,
           snapshot,
         ),
-        this.buildSeatUpdatedEvent(
-          roomCode,
-          payload.roomSessionToken,
-          snapshot,
-        ),
+        this.buildSeatUpdatedEvent(roomCode, roomSessionToken, snapshot),
       );
 
       ack({
         ok: true,
         roomCode,
-        actionType: payload.actionType,
-        clientActionId: payload.clientActionId,
+        actionType,
+        clientActionId,
         accepted: true,
         queued: false,
         data: {
-          clientActionId: payload.clientActionId,
-          actionType: payload.actionType,
+          clientActionId,
+          actionType,
           accepted: true,
           queued: false,
           state,
@@ -1202,8 +1283,8 @@ export class GameGateway implements OnGatewayDisconnect {
         error instanceof Error ? error.message : 'Could not submit the action.';
       const rejectedEvent: ActionRejectedEvent = {
         roomCode,
-        clientActionId: payload.clientActionId,
-        actionType: payload.actionType,
+        clientActionId,
+        actionType,
         message: reason,
         state,
         transition,
@@ -1218,14 +1299,14 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: false,
         roomCode,
-        actionType: payload.actionType,
-        clientActionId: payload.clientActionId,
+        actionType,
+        clientActionId,
         accepted: false,
         queued: false,
         message: reason,
         data: {
-          clientActionId: payload.clientActionId,
-          actionType: payload.actionType,
+          clientActionId,
+          actionType,
           accepted: false,
           queued: false,
           state,
@@ -1244,14 +1325,21 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: ChatSendPayload,
     @Ack() ack: (response: ChatSendAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
-    const session = this.roomStore.getSession(payload.roomSessionToken);
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const clientMessageId = this.normalizeClientActionId(
+      payload.clientMessageId,
+    );
+    const message = this.normalizeChatMessage(payload.message);
+    const session = this.roomStore.getSession(roomSessionToken);
 
     if (!session) {
       ack({
         ok: false,
         roomCode,
-        clientMessageId: payload.clientMessageId,
+        clientMessageId,
         accepted: false,
         queued: false,
         message: 'Session not found.',
@@ -1268,9 +1356,9 @@ export class GameGateway implements OnGatewayDisconnect {
     const state = this.getRoomProgressState(roomCode, lifecycle, snapshot);
     const event: ChatReceivedEvent = {
       roomCode,
-      clientMessageId: payload.clientMessageId,
+      clientMessageId,
       seatId: session.seatId,
-      message: payload.message.slice(0, 200),
+      message,
       accepted: true,
       state,
       snapshot,
@@ -1282,11 +1370,11 @@ export class GameGateway implements OnGatewayDisconnect {
     ack({
       ok: true,
       roomCode,
-      clientMessageId: payload.clientMessageId,
+      clientMessageId,
       accepted: true,
       queued: false,
       data: {
-        clientMessageId: payload.clientMessageId,
+        clientMessageId,
         accepted: true,
         queued: false,
         state,
@@ -1301,15 +1389,25 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: ReactionSendPayload,
     @Ack() ack: (response: ReactionSendAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
-    const session = this.roomStore.getSession(payload.roomSessionToken);
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const clientReactionId = this.normalizeClientActionId(
+      payload.clientReactionId,
+    );
+    const reaction = this.normalizeReaction(payload.reaction);
+    const targetSeatId = payload.targetSeatId
+      ? this.normalizeSeatId(payload.targetSeatId, 'targetSeatId')
+      : null;
+    const session = this.roomStore.getSession(roomSessionToken);
 
     if (!session) {
       ack({
         ok: false,
         roomCode,
-        clientReactionId: payload.clientReactionId,
-        targetSeatId: payload.targetSeatId ?? null,
+        clientReactionId,
+        targetSeatId,
         accepted: false,
         queued: false,
         message: 'Session not found.',
@@ -1326,10 +1424,10 @@ export class GameGateway implements OnGatewayDisconnect {
     const state = this.getRoomProgressState(roomCode, lifecycle, snapshot);
     const event: ReactionReceivedEvent = {
       roomCode,
-      clientReactionId: payload.clientReactionId,
+      clientReactionId,
       seatId: session.seatId,
-      targetSeatId: payload.targetSeatId ?? null,
-      reaction: payload.reaction,
+      targetSeatId,
+      reaction,
       accepted: true,
       state,
       snapshot,
@@ -1341,13 +1439,13 @@ export class GameGateway implements OnGatewayDisconnect {
     ack({
       ok: true,
       roomCode,
-      clientReactionId: payload.clientReactionId,
-      targetSeatId: payload.targetSeatId ?? null,
+      clientReactionId,
+      targetSeatId,
       accepted: true,
       queued: false,
       data: {
-        clientReactionId: payload.clientReactionId,
-        targetSeatId: payload.targetSeatId ?? null,
+        clientReactionId,
+        targetSeatId,
         accepted: true,
         queued: false,
         state,
@@ -1362,19 +1460,26 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: SeatFreePayload,
     @Ack() ack: (response: SeatFreeAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const targetSeatId = this.normalizeSeatId(
+      payload.targetSeatId,
+      'targetSeatId',
+    );
     const freedAt = new Date().toISOString();
 
     try {
       const snapshot = this.roomStore.freeSeat(
         roomCode,
-        payload.roomSessionToken,
-        payload.targetSeatId,
+        roomSessionToken,
+        targetSeatId,
       );
       const lifecycle = this.roomStore.getRoomLifecycleState(roomCode, null);
       const result: SeatFreeResult = {
         roomCode,
-        targetSeatId: payload.targetSeatId,
+        targetSeatId,
         freedAt,
         snapshot,
       };
@@ -1384,7 +1489,7 @@ export class GameGateway implements OnGatewayDisconnect {
         snapshot,
         this.buildRoomUpdatedEvent(
           roomCode,
-          payload.roomSessionToken,
+          roomSessionToken,
           'seat freed',
           lifecycle,
           snapshot,
@@ -1396,14 +1501,14 @@ export class GameGateway implements OnGatewayDisconnect {
       ack({
         ok: true,
         roomCode,
-        targetSeatId: payload.targetSeatId,
+        targetSeatId,
         data: result,
       });
     } catch (error) {
       ack({
         ok: false,
         roomCode,
-        targetSeatId: payload.targetSeatId,
+        targetSeatId,
         message:
           error instanceof Error ? error.message : 'Could not free the seat.',
       });
@@ -1415,8 +1520,11 @@ export class GameGateway implements OnGatewayDisconnect {
     @MessageBody() payload: RoomDestroyPayload,
     @Ack() ack: (response: RoomDestroyAck) => void,
   ) {
-    const roomCode = payload.roomCode.toUpperCase();
-    const session = this.roomStore.getSession(payload.roomSessionToken);
+    const roomCode = this.normalizeRoomCode(payload.roomCode);
+    const roomSessionToken = this.normalizeRoomSessionToken(
+      payload.roomSessionToken,
+    );
+    const session = this.roomStore.getSession(roomSessionToken);
     const destroyedAt = new Date().toISOString();
     const lifecycleBeforeDestroy = this.roomStore.getRoomLifecycleState(
       roomCode,
@@ -1444,7 +1552,7 @@ export class GameGateway implements OnGatewayDisconnect {
     try {
       const snapshot = this.roomStore.destroyRoom(
         roomCode,
-        payload.roomSessionToken,
+        roomSessionToken,
         payload.reason,
       );
       const event: RoomDestroyedEvent = {
@@ -1762,6 +1870,134 @@ export class GameGateway implements OnGatewayDisconnect {
       this.roomStore.getMatchProgressState(roomCode) ??
       this.buildFallbackMatchProgressState(snapshot, lifecycle.matchView)
     );
+  }
+
+  private normalizeRoomCode(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length !== 6) {
+      throw new BadRequestException('roomCode is required.');
+    }
+
+    return value.trim().toUpperCase();
+  }
+
+  private normalizeRoomSessionToken(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('roomSessionToken is required.');
+    }
+
+    return value.trim();
+  }
+
+  private normalizeSeatId(value: unknown, field: string): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException(`${field} is required.`);
+    }
+
+    return value.trim();
+  }
+
+  private normalizeClientActionId(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('clientActionId is required.');
+    }
+
+    return value.trim();
+  }
+
+  private normalizeCardId(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('cardId is required.');
+    }
+
+    return value.trim();
+  }
+
+  private normalizeChatMessage(value: unknown): string {
+    if (typeof value !== 'string') {
+      throw new BadRequestException('message is required.');
+    }
+
+    const message = value.trim();
+    if (message.length === 0 || message.length > 200) {
+      throw new BadRequestException('message must be between 1 and 200 chars.');
+    }
+
+    return message;
+  }
+
+  private normalizeReaction(value: unknown): string {
+    if (typeof value !== 'string') {
+      throw new BadRequestException('reaction is required.');
+    }
+
+    const reaction = value.trim();
+    if (reaction.length === 0 || reaction.length > 16) {
+      throw new BadRequestException('reaction is invalid.');
+    }
+
+    return reaction;
+  }
+
+  private normalizeActionType(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('actionType is required.');
+    }
+
+    return value.trim();
+  }
+
+  private normalizeActionPayload(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new BadRequestException('payload must be an object.');
+    }
+
+    return value as Record<string, unknown>;
+  }
+
+  private normalizeCantoType(value: unknown): CantoOpenPayload['cantoType'] {
+    if (
+      value === 'envido' ||
+      value === 'real_envido' ||
+      value === 'falta_envido' ||
+      value === 'truco' ||
+      value === 'retruco' ||
+      value === 'vale_cuatro'
+    ) {
+      return value;
+    }
+
+    throw new BadRequestException('Invalid cantoType.');
+  }
+
+  private normalizeCantoResponse(
+    value: unknown,
+  ): CantoResolvePayload['response'] {
+    if (
+      value === 'quiero' ||
+      value === 'no_quiero' ||
+      value === 'accepted' ||
+      value === 'rejected'
+    ) {
+      return value;
+    }
+
+    throw new BadRequestException('Invalid canto response.');
+  }
+
+  private normalizeWildcardLabel(value: unknown, field: string): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException(`${field} is required.`);
+    }
+
+    return value.trim();
+  }
+
+  private safeRoomCode(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      return 'UNKNOWN';
+    }
+
+    return value.trim().toUpperCase();
   }
 
   private countTrickWins(trickResults: MatchView['trickResults']): {

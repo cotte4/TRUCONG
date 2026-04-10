@@ -1,5 +1,15 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { AVATAR_IDS } from '@dimadong/contracts';
 import type {
+  AvatarId,
   CreateRoomRequest,
   JoinRoomRequest,
   MatchProgressState,
@@ -15,7 +25,9 @@ export class RoomsController {
 
   @Post()
   createRoom(@Body() body: CreateRoomRequest): RoomEntryResponse {
-    return this.buildRoomEntryResponse(this.roomStore.createRoom(body));
+    return this.buildRoomEntryResponse(
+      this.roomStore.createRoom(this.parseCreateRoomRequest(body)),
+    );
   }
 
   @Post(':code/join')
@@ -23,8 +35,9 @@ export class RoomsController {
     @Param('code') code: string,
     @Body() body: JoinRoomRequest,
   ): Promise<RoomEntryResponse> {
+    const roomCode = this.normalizeRoomCode(code);
     return this.buildRoomEntryResponse(
-      await this.roomStore.joinRoom(code, body),
+      await this.roomStore.joinRoom(roomCode, this.parseJoinRoomRequest(body)),
     );
   }
 
@@ -33,7 +46,11 @@ export class RoomsController {
     @Param('code') code: string,
     @Body() body: SessionResumePayload,
   ): Promise<ResumeRoomResponse> {
-    return this.buildResumeResponse(code, body.roomSessionToken);
+    const roomCode = this.normalizeRoomCode(code);
+    return this.buildResumeResponse(
+      roomCode,
+      this.normalizeRoomSessionToken(body?.roomSessionToken),
+    );
   }
 
   @Get(':code')
@@ -41,7 +58,104 @@ export class RoomsController {
     @Param('code') code: string,
     @Query('roomSessionToken') roomSessionToken?: string,
   ): Promise<ResumeRoomResponse> {
-    return this.buildResumeResponse(code, roomSessionToken);
+    const roomCode = this.normalizeRoomCode(code);
+    return this.buildResumeResponse(roomCode, roomSessionToken);
+  }
+
+  private normalizeRoomCode(code: unknown): string {
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      throw new BadRequestException('Room code is required.');
+    }
+
+    return code.trim().toUpperCase();
+  }
+
+  private normalizeDisplayName(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('Display name is required.');
+    }
+
+    return value.trim();
+  }
+
+  private normalizeRoomSessionToken(value: unknown): string {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('roomSessionToken is required.');
+    }
+
+    return value.trim();
+  }
+
+  private parseAvatarId(value: unknown): AvatarId | undefined {
+    if (typeof value === 'undefined') {
+      return undefined;
+    }
+
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new BadRequestException('avatarId must be a non-empty string.');
+    }
+
+    const normalized = value.trim() as AvatarId;
+
+    if (!AVATAR_IDS.includes(normalized)) {
+      throw new BadRequestException('avatarId is not valid.');
+    }
+
+    return normalized;
+  }
+
+  private parseCreateRoomRequest(body: CreateRoomRequest): CreateRoomRequest {
+    if (!body || typeof body !== 'object') {
+      throw new BadRequestException('Invalid create room payload.');
+    }
+
+    const parsed: CreateRoomRequest = {
+      displayName: this.normalizeDisplayName(body.displayName),
+      avatarId: this.parseAvatarId(body.avatarId),
+      allowBongs:
+        typeof body.allowBongs === 'boolean' ? body.allowBongs : undefined,
+    };
+
+    if (typeof body.maxPlayers !== 'undefined') {
+      if (body.maxPlayers !== 2 && body.maxPlayers !== 4) {
+        throw new BadRequestException('maxPlayers must be 2 or 4.');
+      }
+      parsed.maxPlayers = body.maxPlayers;
+    }
+
+    if (typeof body.targetScore !== 'undefined') {
+      if (body.targetScore !== 15 && body.targetScore !== 30) {
+        throw new BadRequestException('targetScore must be 15 or 30.');
+      }
+      parsed.targetScore = body.targetScore;
+    }
+
+    return parsed;
+  }
+
+  private parseJoinRoomRequest(body: JoinRoomRequest): JoinRoomRequest {
+    if (!body || typeof body !== 'object') {
+      throw new BadRequestException('Invalid join room payload.');
+    }
+
+    const parsed: JoinRoomRequest = {
+      displayName: this.normalizeDisplayName(body.displayName),
+      avatarId: this.parseAvatarId(body.avatarId),
+    };
+
+    if (typeof body.preferredSeatIndex !== 'undefined') {
+      if (
+        !Number.isInteger(body.preferredSeatIndex) ||
+        body.preferredSeatIndex < 0
+      ) {
+        throw new BadRequestException(
+          'preferredSeatIndex must be a non-negative integer.',
+        );
+      }
+      parsed.preferredSeatIndex = body.preferredSeatIndex;
+    }
+
+    return parsed;
   }
 
   private async buildResumeResponse(

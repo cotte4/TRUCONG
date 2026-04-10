@@ -1,5 +1,5 @@
 import type { CardSignature, HandWildcardState, WildcardChoice, WildcardCommitment } from './types.js';
-import { areSameTrucoCards, compareTrucoCards, createCardLabel, getCardSignature } from './cards.js';
+import { areSameTrucoCards, createCardLabel, getCardSignature } from './cards.js';
 
 export interface WildcardFilterInput {
   candidateChoices: WildcardChoice[];
@@ -195,15 +195,7 @@ export function isWildcardChoiceAlreadyPlayed(choice: WildcardChoice, playedCard
 }
 
 export function areWildcardsTied(left: WildcardComparison, right: WildcardComparison) {
-  if (!left.isWildcard || !right.isWildcard) {
-    return false;
-  }
-
-  if (left.choice && right.choice) {
-    return compareTrucoCards(left.choice, right.choice) === 0;
-  }
-
-  return true;
+  return left.isWildcard && right.isWildcard;
 }
 
 export function createEmptyWildcardState(): HandWildcardState {
@@ -264,8 +256,15 @@ export function getUndeclaredWildcardTimeoutChoice() {
 }
 
 export function resolveWildcardTimeoutChoice(input: WildcardTimeoutInput) {
-  void input;
-  return getUndeclaredWildcardTimeoutChoice();
+  const legalChoices = getLegalWildcardChoicesForHand(input);
+  const defaultChoice = getUndeclaredWildcardTimeoutChoice();
+  const legalDefaultChoice = getWildcardChoiceByValue(legalChoices, defaultChoice);
+
+  if (legalDefaultChoice) {
+    return legalDefaultChoice;
+  }
+
+  return legalChoices[0] ?? defaultChoice;
 }
 
 export function getPendingWildcardSelectionRequirement(

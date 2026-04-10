@@ -8,6 +8,7 @@ import {
 import { randomBytes, randomUUID } from 'node:crypto';
 import type {
   ActionSubmitPayload,
+  AvatarId,
   CardSuit,
   CreateRoomRequest,
   JoinRoomRequest,
@@ -75,6 +76,7 @@ type MutableSeat = {
   teamSide: TeamSide | null;
   status: SeatStatus;
   displayName: string | null;
+  avatarId: AvatarId | null;
   isHost: boolean;
   isReady: boolean;
   roomSessionToken: string | null;
@@ -231,6 +233,16 @@ type PlayCardResult = {
   trickResolved: boolean;
   handScored: boolean;
   summaryStarted: boolean;
+  resolvedTableCards: Array<{
+    seatId: string;
+    card: {
+      id: string;
+      suit: CardSuit;
+      rank: number;
+      label: string;
+      isWildcard: boolean;
+    };
+  }> | null;
 };
 
 type ResolveCantoResult = {
@@ -283,6 +295,7 @@ export class RoomStoreService {
 
   createRoom(input: CreateRoomRequest): RoomEntryResponse {
     const displayName = input.displayName.trim();
+    const avatarId = input.avatarId ?? null;
 
     if (!displayName) {
       throw new BadRequestException('Display name is required.');
@@ -295,7 +308,13 @@ export class RoomStoreService {
     const code = this.generateRoomCode();
     const seats = this.createSeats(maxPlayers);
     const hostSeat = seats[0];
-    const session = this.attachSeat(hostSeat, code, roomId, displayName);
+    const session = this.attachSeat(
+      hostSeat,
+      code,
+      roomId,
+      displayName,
+      avatarId,
+    );
 
     hostSeat.isHost = true;
 
@@ -330,6 +349,7 @@ export class RoomStoreService {
     await this.restoreRoomIfNeeded(code);
     const room = this.getRequiredRoom(code);
     const displayName = input.displayName.trim();
+    const avatarId = input.avatarId ?? null;
 
     if (!displayName) {
       throw new BadRequestException('Display name is required.');
@@ -357,7 +377,13 @@ export class RoomStoreService {
       this.roomCodeByToken.delete(seat.roomSessionToken);
     }
 
-    const session = this.attachSeat(seat, room.code, room.id, displayName);
+    const session = this.attachSeat(
+      seat,
+      room.code,
+      room.id,
+      displayName,
+      avatarId,
+    );
 
     if (isReplacement) {
       this.pushEvent(
@@ -410,6 +436,7 @@ export class RoomStoreService {
       roomCode: room.code,
       seatId: seat.id,
       displayName: seat.displayName,
+      avatarId: seat.avatarId,
       roomSessionToken: seat.roomSessionToken,
       seatClaimToken: seat.seatClaimToken,
     };
@@ -439,6 +466,14 @@ export class RoomStoreService {
 
     if (!seat) {
       throw new NotFoundException('Session not found.');
+    }
+
+    if (
+      seat.status === 'occupied' &&
+      seat.socketId &&
+      seat.socketId !== socketId
+    ) {
+      throw new BadRequestException('Session is already connected.');
     }
 
     seat.socketId = socketId;
@@ -1453,8 +1488,19 @@ export class RoomStoreService {
     );
     const nextSeat =
       occupiedSeats[(currentSeatIndex + 1) % occupiedSeats.length] ?? null;
+    let resolvedTableCards: PlayCardResult['resolvedTableCards'] = null;
 
     if (room.match.tableCards.length >= occupiedSeats.length) {
+      resolvedTableCards = room.match.tableCards.map((play) => ({
+        seatId: play.seatId,
+        card: {
+          id: play.card.id,
+          suit: play.card.suit,
+          rank: play.card.rank,
+          label: play.card.label,
+          isWildcard: play.card.isWildcard,
+        },
+      }));
       this.resolveCurrentTrick(room);
     } else {
       room.match.currentTurnSeatId = nextSeat?.id ?? null;
@@ -1485,6 +1531,7 @@ export class RoomStoreService {
       summaryStarted: Boolean(
         afterTransition?.matchComplete && !beforeTransition?.matchComplete,
       ),
+      resolvedTableCards,
     };
   }
 
@@ -1525,6 +1572,7 @@ export class RoomStoreService {
           );
           const restoredRoom = this.hydrateRoomFromDbRecord(persistedRoom);
           this.roomsByCode.set(normalizedCode, restoredRoom);
+          this.restoreTransientTimers(normalizedCode);
         } else {
           this.logger.warn(
             `restoreRoomIfNeeded: room ${normalizedCode} has no snapshot (status: ${persistedRoom.status}) — cannot restore`,
@@ -1541,6 +1589,7 @@ export class RoomStoreService {
         persistedRoom.snapshots[0].version,
       );
       this.roomsByCode.set(normalizedCode, restoredRoom);
+      this.restoreTransientTimers(normalizedCode);
     } catch (error) {
       this.logger.warn(
         `Failed to restore room ${normalizedCode} from persistence: ${error instanceof Error ? error.message : 'unknown error'}`,
@@ -1564,6 +1613,7 @@ export class RoomStoreService {
         status: seat.status,
         teamSide: seat.teamSide,
         displayName: seat.displayName,
+        avatarId: seat.avatarId,
         isHost: seat.isHost,
         isReady: seat.isReady,
         handCount: room.match?.handsBySeatId[seat.id]?.length ?? 0,
@@ -1590,6 +1640,7 @@ export class RoomStoreService {
         teamSide: seatIndex % 2 === 0 ? 'A' : 'B',
         status: 'open',
         displayName: null,
+        avatarId: null,
         isHost: false,
         isReady: false,
         roomSessionToken: null,
@@ -1634,6 +1685,7 @@ export class RoomStoreService {
         teamSide: seatSnapshot.teamSide,
         status: hasActiveOccupancy ? seatSnapshot.status : 'open',
         displayName: hasActiveOccupancy ? seatSnapshot.displayName : null,
+        avatarId: hasActiveOccupancy ? (seatSnapshot.avatarId ?? null) : null,
         isHost: seatSnapshot.isHost,
         isReady: seatSnapshot.isReady,
         roomSessionToken: occupancy?.roomSessionToken ?? null,
@@ -1723,6 +1775,7 @@ export class RoomStoreService {
           displayName: hasActiveOccupancy
             ? (persistedSeat.displayName ?? null)
             : null,
+          avatarId: null,
           isHost: false,
           isReady: false,
           roomSessionToken: occupancy?.roomSessionToken ?? null,
@@ -2406,6 +2459,12 @@ export class RoomStoreService {
       throw new BadRequestException('No podés liberar tu propio asiento.');
     }
 
+    if (room.match && room.phase !== 'lobby' && room.phase !== 'ready_check') {
+      throw new BadRequestException(
+        'No se puede liberar un asiento durante una mano activa.',
+      );
+    }
+
     const previousDisplayName = seat.displayName;
 
     if (seat.roomSessionToken) {
@@ -2414,6 +2473,7 @@ export class RoomStoreService {
 
     seat.status = 'open';
     seat.displayName = null;
+    seat.avatarId = null;
     seat.roomSessionToken = null;
     seat.seatClaimToken = null;
     seat.isReady = false;
@@ -2436,11 +2496,13 @@ export class RoomStoreService {
     roomCode: string,
     roomId: string,
     displayName: string,
+    avatarId: AvatarId | null,
   ): RoomSession {
     const roomSessionToken = this.createToken();
     const seatClaimToken = this.createToken();
 
     seat.displayName = displayName;
+    seat.avatarId = avatarId;
     seat.roomSessionToken = roomSessionToken;
     seat.seatClaimToken = seatClaimToken;
     seat.status = 'occupied';
@@ -2452,6 +2514,7 @@ export class RoomStoreService {
       roomCode,
       seatId: seat.id,
       displayName,
+      avatarId,
       roomSessionToken,
       seatClaimToken,
     };
@@ -2976,7 +3039,10 @@ export class RoomStoreService {
     return clone;
   }
 
-  private scheduleTurnTimeout(roomCode: string) {
+  private scheduleTurnTimeout(
+    roomCode: string,
+    options?: { preserveDeadline?: boolean },
+  ) {
     this.clearTurnTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
 
@@ -2988,7 +3054,15 @@ export class RoomStoreService {
       return;
     }
 
-    room.match.turnDeadlineAt = new Date(Date.now() + 10_000).toISOString();
+    const timeoutMs = this.resolveTimeoutDelay(
+      options?.preserveDeadline ? room.match.turnDeadlineAt : null,
+      10_000,
+    );
+    if (!options?.preserveDeadline || !room.match.turnDeadlineAt) {
+      room.match.turnDeadlineAt = new Date(
+        Date.now() + timeoutMs,
+      ).toISOString();
+    }
     const timeout = setTimeout(() => {
       const latestRoom = this.roomsByCode.get(roomCode);
 
@@ -3019,7 +3093,7 @@ export class RoomStoreService {
         roomSessionToken: token,
         cardId,
       });
-    }, 10_000);
+    }, timeoutMs);
     timeout.unref?.();
     this.turnTimeouts.set(roomCode, timeout);
   }
@@ -3033,13 +3107,21 @@ export class RoomStoreService {
     }
   }
 
-  private scheduleReconnectTimeout(roomCode: string) {
+  private scheduleReconnectTimeout(
+    roomCode: string,
+    options?: { preserveDeadline?: boolean },
+  ) {
     this.clearReconnectTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
 
     if (!room?.match || room.phase !== 'reconnect_hold') {
       return;
     }
+
+    const timeoutMs = this.resolveTimeoutDelay(
+      options?.preserveDeadline ? room.match.reconnectDeadlineAt : null,
+      10_000,
+    );
 
     const timeout = setTimeout(() => {
       const latestRoom = this.roomsByCode.get(roomCode);
@@ -3059,7 +3141,7 @@ export class RoomStoreService {
         `Le toca a ${latestRoom.seats.find((seat) => seat.id === latestRoom.match?.currentTurnSeatId)?.displayName ?? 'jugador actual'}.`,
       );
       this.scheduleTurnTimeout(roomCode);
-    }, 10_000);
+    }, timeoutMs);
     timeout.unref?.();
     this.reconnectTimeouts.set(roomCode, timeout);
   }
@@ -3073,13 +3155,23 @@ export class RoomStoreService {
     }
   }
 
-  private scheduleCantoTimeout(roomCode: string) {
+  private scheduleCantoTimeout(
+    roomCode: string,
+    options?: { preserveDeadline?: boolean },
+  ) {
     this.clearCantoTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
 
     if (!room?.match?.pendingCanto || room.phase !== 'response_pending') {
       return;
     }
+
+    const timeoutMs = this.resolveTimeoutDelay(
+      options?.preserveDeadline
+        ? room.match.pendingCanto.responseDeadlineAt
+        : null,
+      12_000,
+    );
 
     const timeout = setTimeout(() => {
       const latestRoom = this.roomsByCode.get(roomCode);
@@ -3108,7 +3200,7 @@ export class RoomStoreService {
         `Tiempo agotado. ${pending.cantoType} resuelto como no quiero.`,
       );
       this.resolveCanto(roomCode, token, 'no_quiero');
-    }, 12_000);
+    }, timeoutMs);
 
     timeout.unref?.();
     this.cantoTimeouts.set(roomCode, timeout);
@@ -3123,7 +3215,10 @@ export class RoomStoreService {
     }
   }
 
-  private scheduleWildcardTimeout(roomCode: string) {
+  private scheduleWildcardTimeout(
+    roomCode: string,
+    options?: { preserveDeadline?: boolean },
+  ) {
     this.clearWildcardTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
 
@@ -3133,6 +3228,13 @@ export class RoomStoreService {
     ) {
       return;
     }
+
+    const timeoutMs = this.resolveTimeoutDelay(
+      options?.preserveDeadline
+        ? room.match.pendingWildcardSelection.selectionDeadlineAt
+        : null,
+      15_000,
+    );
 
     const timeout = setTimeout(() => {
       const latestRoom = this.roomsByCode.get(roomCode);
@@ -3157,8 +3259,15 @@ export class RoomStoreService {
         latestRoom,
         'Tiempo agotado. Comodín seleccionado automáticamente como 4 de copa.',
       );
-      this.selectWildcard(roomCode, token, pending.cardId, '4 de copa');
-    }, 15_000);
+      this.selectWildcard(
+        roomCode,
+        token,
+        pending.cardId,
+        pending.availableLabels.includes('4 de copa')
+          ? '4 de copa'
+          : (pending.availableLabels[0] ?? '4 de copa'),
+      );
+    }, timeoutMs);
 
     timeout.unref?.();
     this.wildcardTimeouts.set(roomCode, timeout);
@@ -3170,6 +3279,56 @@ export class RoomStoreService {
     if (existing) {
       clearTimeout(existing);
       this.wildcardTimeouts.delete(roomCode);
+    }
+  }
+
+  private resolveTimeoutDelay(
+    deadlineAt: string | null | undefined,
+    fallbackMs: number,
+  ): number {
+    if (!deadlineAt) {
+      return fallbackMs;
+    }
+
+    const deadlineMs = Date.parse(deadlineAt);
+    if (Number.isNaN(deadlineMs)) {
+      return fallbackMs;
+    }
+
+    return Math.max(0, deadlineMs - Date.now());
+  }
+
+  private restoreTransientTimers(roomCode: string) {
+    const room = this.roomsByCode.get(roomCode);
+    if (!room?.match) {
+      return;
+    }
+
+    this.clearTurnTimeout(roomCode);
+    this.clearReconnectTimeout(roomCode);
+    this.clearCantoTimeout(roomCode);
+    this.clearWildcardTimeout(roomCode);
+
+    if (room.phase === 'action_turn' && room.match.currentTurnSeatId) {
+      this.scheduleTurnTimeout(roomCode, { preserveDeadline: true });
+      return;
+    }
+
+    if (room.phase === 'reconnect_hold') {
+      this.scheduleReconnectTimeout(roomCode, { preserveDeadline: true });
+      return;
+    }
+
+    if (room.phase === 'response_pending' && room.match.pendingCanto) {
+      this.scheduleCantoTimeout(roomCode, { preserveDeadline: true });
+      return;
+    }
+
+    if (
+      room.phase === 'wildcard_selection' &&
+      room.match.pendingWildcardSelection
+    ) {
+      this.scheduleWildcardTimeout(roomCode, { preserveDeadline: true });
     }
   }
 }
