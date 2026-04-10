@@ -1675,7 +1675,45 @@ export class GameGateway implements OnGatewayDisconnect {
     roomUpdated: RoomUpdatedEvent,
     seatUpdated: SeatUpdatedEvent | null,
   ) {
-    this.server.to(roomCode).emit('room:updated', roomUpdated);
+    void this.server
+      .in(roomCode)
+      .fetchSockets()
+      .then((clients) => {
+        if (clients.length === 0) {
+          this.server.to(roomCode).emit('room:updated', roomUpdated);
+          return;
+        }
+
+        for (const client of clients) {
+          const lifecycle = this.roomStore.getRoomLifecycleState(
+            roomCode,
+            client.data.seatId ?? null,
+          );
+          const personalizedEvent: RoomUpdatedEvent = {
+            roomCode,
+            snapshot,
+            matchView: lifecycle.matchView,
+            state: this.getRoomProgressStateOrFallback(
+              roomCode,
+              lifecycle,
+              snapshot,
+            ),
+            transition: this.getRoomTransitionStateOrFallback(
+              roomCode,
+              lifecycle,
+              snapshot,
+            ),
+            wildcardSelection: lifecycle.wildcardSelectionState,
+            envidoSinging: lifecycle.envidoSingingState,
+            reason: roomUpdated.reason,
+          };
+
+          this.server.to(client.id).emit('room:updated', personalizedEvent);
+        }
+      })
+      .catch(() => {
+        this.server.to(roomCode).emit('room:updated', roomUpdated);
+      });
 
     if (seatUpdated) {
       this.server.to(roomCode).emit('seat:updated', seatUpdated);

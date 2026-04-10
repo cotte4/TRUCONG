@@ -60,6 +60,7 @@ type PersistedSnapshotState = {
     trucoOpened?: boolean;
     trickResults: MutableTrickResult[];
     pendingCanto?: MutablePendingCanto | null;
+    suspendedCanto?: MutablePendingCanto | null;
     pendingWildcardSelection?: MutablePendingWildcardSelection | null;
     pendingEnvidoSinging?: MutableEnvidoSinging | null;
     recentEvents: string[];
@@ -185,6 +186,7 @@ type MutableMatchState = {
   trucoOpened: boolean;
   trickResults: MutableTrickResult[];
   pendingCanto: MutablePendingCanto | null;
+  suspendedCanto: MutablePendingCanto | null;
   pendingWildcardSelection: MutablePendingWildcardSelection | null;
   pendingEnvidoSinging: MutableEnvidoSinging | null;
   recentEvents: string[];
@@ -1085,34 +1087,48 @@ export class RoomStoreService {
     targetSeatId?: string | null,
   ): OpenCantoResult {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
+    const interruptedPendingTruco = this.canInterruptPendingTrucoWithEnvido(
+      room,
+      actorSeat.id,
+      cantoType,
+    )
+      ? room.match?.pendingCanto ?? null
+      : null;
 
-    if (room.phase !== 'action_turn' || !room.match) {
+    if (
+      (!interruptedPendingTruco && room.phase !== 'action_turn') ||
+      !room.match
+    ) {
       throw new BadRequestException(
         'Cantos can only be opened during an active turn.',
       );
     }
 
-    if (room.match.currentTurnSeatId !== actorSeat.id) {
+    if (
+      !interruptedPendingTruco &&
+      room.match.currentTurnSeatId !== actorSeat.id
+    ) {
       throw new BadRequestException('Only the active player can open a canto.');
     }
 
-    if (room.match.pendingCanto) {
+    if (room.match.pendingCanto && !interruptedPendingTruco) {
       throw new BadRequestException(
         'There is already a pending canto response.',
       );
     }
 
-    this.validateCantoOpen(room, cantoType);
+    this.validateCantoOpen(room, cantoType, actorSeat.id);
 
     if (this.isTrucoCanto(cantoType)) {
       room.match.trucoOpened = true;
     }
 
     room.phase = 'response_pending';
+    room.match.suspendedCanto = interruptedPendingTruco;
     room.match.pendingCanto = {
       cantoType,
       actorSeatId: actorSeat.id,
-      targetSeatId: targetSeatId ?? null,
+      targetSeatId: interruptedPendingTruco?.actorSeatId ?? targetSeatId ?? null,
       openedAt: new Date().toISOString(),
       responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
     };
@@ -1173,6 +1189,7 @@ export class RoomStoreService {
     }
 
     const pending = room.match.pendingCanto;
+    const suspendedCanto = room.match.suspendedCanto;
     const actorTeamSide = actorSeat.teamSide;
     const callerTeamSide =
       room.seats.find((seat) => seat.id === pending.actorSeatId)?.teamSide ??
@@ -1287,6 +1304,7 @@ export class RoomStoreService {
         room.match.currentTurnSeatId = null;
         room.match.turnDeadlineAt = null;
         room.match.reconnectDeadlineAt = null;
+        room.match.suspendedCanto = null;
         room.match.lastHandScoredAt = new Date().toISOString();
         room.match.lastHandWinnerTeamSide = winningTeam;
         room.match.summary = {
@@ -1302,6 +1320,50 @@ export class RoomStoreService {
         );
         this.persistMatchFinished(room, winningTeam);
       } else {
+        if (suspendedCanto) {
+          room.phase = 'response_pending';
+          room.match.pendingCanto = {
+            ...suspendedCanto,
+            responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
+          };
+          room.match.suspendedCanto = null;
+          room.match.turnDeadlineAt = null;
+          this.setStatus(
+            room,
+            `Se resolvió el ${pending.cantoType}. Queda pendiente la respuesta al ${suspendedCanto.cantoType}.`,
+          );
+          this.scheduleCantoTimeout(room.code);
+          this.persistAction(
+            room,
+            'canto_resolved',
+            {
+              cantoType: pending.cantoType,
+              response,
+              actorSeatId: actorSeat.id,
+              actorTeamSide,
+            },
+            actorSeat,
+          );
+          this.persistSnapshot(room);
+
+          const snapshot = this.buildSnapshot(room);
+          const lifecycle = this.getRoomLifecycleState(room.code, actorSeat.id);
+          const afterTransition = lifecycle.transitionState;
+
+          return {
+            snapshot,
+            lifecycle,
+            scoreDelta,
+            envidoSinging,
+            matchEnded: Boolean(
+              afterTransition?.matchComplete && !beforeTransition?.matchComplete,
+            ),
+            handValueChanged:
+              (room.match?.currentHandPoints ?? beforeHandPoints) !==
+              beforeHandPoints,
+          };
+        }
+
         room.phase = 'action_turn';
         room.match.turnDeadlineAt = null;
         this.setStatus(
@@ -1840,6 +1902,7 @@ export class RoomStoreService {
           trucoOpened: state.match.trucoOpened ?? false,
           trickResults: state.match.trickResults,
           pendingCanto: state.match.pendingCanto ?? null,
+          suspendedCanto: state.match.suspendedCanto ?? null,
           pendingWildcardSelection:
             state.match.pendingWildcardSelection ?? null,
           pendingEnvidoSinging: state.match.pendingEnvidoSinging ?? null,
@@ -1945,6 +2008,7 @@ export class RoomStoreService {
     const occupiedSeats = this.getOccupiedSeats(room);
     const deck = this.shuffle(this.createDeck());
     const handsBySeatId: Record<string, MutableCard[]> = {};
+    const firstSeatId = occupiedSeats[0]?.id ?? null;
 
     for (const seat of occupiedSeats) {
       handsBySeatId[seat.id] = deck.splice(0, 3);
@@ -1956,8 +2020,8 @@ export class RoomStoreService {
       snapshotVersion: 0,
       handNumber: 1,
       trickNumber: 1,
-      dealerSeatId: occupiedSeats[0]?.id ?? null,
-      currentTurnSeatId: occupiedSeats[0]?.id ?? null,
+      dealerSeatId: firstSeatId,
+      currentTurnSeatId: firstSeatId,
       handsBySeatId,
       tableCards: [],
       teamScores: { A: 0, B: 0 },
@@ -1967,6 +2031,7 @@ export class RoomStoreService {
       trucoOpened: false,
       trickResults: [],
       pendingCanto: null,
+      suspendedCanto: null,
       pendingWildcardSelection: null,
       pendingEnvidoSinging: null,
       recentEvents: [],
@@ -1987,6 +2052,7 @@ export class RoomStoreService {
       return;
     }
 
+    const trickLeadSeatId = match.tableCards[0]?.seatId ?? match.currentTurnSeatId;
     const winningPlay = this.getWinningPlay(match.tableCards);
     const winningSeat = winningPlay
       ? (room.seats.find((seat) => seat.id === winningPlay.seatId) ?? null)
@@ -2017,26 +2083,36 @@ export class RoomStoreService {
     );
 
     const handWinner = this.getHandWinner(room, match, trickNumber);
+    const nextTrickSeatId =
+      winningSeat?.id ??
+      trickLeadSeatId ??
+      this.getHandStarterSeatId(room, match);
 
     if (handWinner) {
       match.teamScores[handWinner] += match.currentHandPoints;
       match.lastHandWinnerTeamSide = handWinner;
       match.lastHandScoredAt = new Date().toISOString();
+      match.currentTurnSeatId = null;
+      match.tableCards = [];
+      match.turnDeadlineAt = null;
+      match.reconnectDeadlineAt = null;
       this.pushEvent(
         room,
         `El Equipo ${handWinner} ganó la mano ${match.handNumber} por ${match.currentHandPoints} punto${match.currentHandPoints === 1 ? '' : 's'}.`,
       );
+      this.persistAction(room, 'trick_resolved', {
+        trickNumber,
+        winnerSeatId: winningSeat?.id ?? null,
+        winnerTeamSide: winningTeamSide,
+        winningCardLabel: winningPlay?.card.label ?? null,
+      });
 
       if (match.teamScores[handWinner] >= room.targetScore) {
         room.phase = 'match_end';
-        match.currentTurnSeatId = null;
-        match.tableCards = [];
         match.summary = {
           winnerTeamSide: handWinner,
           finalScore: { ...match.teamScores },
         };
-        match.turnDeadlineAt = null;
-        match.reconnectDeadlineAt = null;
         this.clearTurnTimeout(room.code);
         this.clearReconnectTimeout(room.code);
         this.setStatus(room, `El Equipo ${handWinner} ganó la partida.`);
@@ -2049,19 +2125,18 @@ export class RoomStoreService {
         return;
       }
 
-      this.prepareNextHand(
-        room,
-        winningSeat?.id ?? this.getOccupiedSeats(room)[0]?.id ?? null,
-      );
+      this.prepareNextHand(room);
       return;
     }
 
     match.tableCards = [];
     match.trickNumber += 1;
-    match.currentTurnSeatId = winningSeat?.id ?? match.currentTurnSeatId;
+    match.currentTurnSeatId = nextTrickSeatId;
+    match.turnDeadlineAt = null;
+    match.reconnectDeadlineAt = null;
     this.setStatus(
       room,
-      `Le toca a ${winningSeat?.displayName ?? 'siguiente jugador'} en la vuelta ${match.trickNumber}.`,
+      `Le toca a ${room.seats.find((seat) => seat.id === nextTrickSeatId)?.displayName ?? 'siguiente jugador'} en la vuelta ${match.trickNumber}.`,
     );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(room, 'trick_resolved', {
@@ -2072,7 +2147,7 @@ export class RoomStoreService {
     });
   }
 
-  private prepareNextHand(room: MutableRoom, nextDealerSeatId: string | null) {
+  private prepareNextHand(room: MutableRoom) {
     const match = room.match;
 
     if (!match) {
@@ -2082,6 +2157,7 @@ export class RoomStoreService {
     const occupiedSeats = this.getOccupiedSeats(room);
     const deck = this.shuffle(this.createDeck());
     const handsBySeatId: Record<string, MutableCard[]> = {};
+    const nextDealerSeatId = this.getNextOccupiedSeatId(room, match.dealerSeatId);
 
     for (const seat of occupiedSeats) {
       handsBySeatId[seat.id] = deck.splice(0, 3);
@@ -2097,6 +2173,7 @@ export class RoomStoreService {
     match.currentHandPoints = 1;
     match.envidoResolved = false;
     match.trucoOpened = false;
+    match.suspendedCanto = null;
     match.pendingEnvidoSinging = null;
     match.lastHandScoredAt = null;
     match.lastHandWinnerTeamSide = null;
@@ -2106,7 +2183,7 @@ export class RoomStoreService {
     this.setStatus(room, `Mano ${match.handNumber} en juego.`);
     this.pushEvent(
       room,
-      `Nueva mano repartida. Arranca ${room.seats.find((seat) => seat.id === nextDealerSeatId)?.displayName ?? 'el repartidor'}.`,
+      `Nueva mano repartida. Arranca ${room.seats.find((seat) => seat.id === nextDealerSeatId)?.displayName ?? 'la mano'}.`,
     );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(room, 'hand_prepared', {
@@ -2164,9 +2241,32 @@ export class RoomStoreService {
     );
   }
 
+  private canInterruptPendingTrucoWithEnvido(
+    room: MutableRoom,
+    actorSeatId: string | null,
+    cantoType: MutablePendingCanto['cantoType'],
+  ) {
+    if (!room.match || this.isTrucoCanto(cantoType)) {
+      return false;
+    }
+
+    const pending = room.match.pendingCanto;
+
+    return (
+      room.phase === 'response_pending' &&
+      pending !== null &&
+      this.isTrucoCanto(pending.cantoType) &&
+      pending.targetSeatId === actorSeatId &&
+      room.match.trickNumber === 1 &&
+      room.match.tableCards.length === 0 &&
+      !room.match.envidoResolved
+    );
+  }
+
   private validateCantoOpen(
     room: MutableRoom,
     cantoType: MutablePendingCanto['cantoType'],
+    actorSeatId?: string | null,
   ) {
     if (!room.match) {
       return;
@@ -2180,7 +2280,14 @@ export class RoomStoreService {
         );
       }
 
-      if (room.match.trucoOpened) {
+      if (
+        room.match.trucoOpened &&
+        !this.canInterruptPendingTrucoWithEnvido(
+          room,
+          actorSeatId ?? null,
+          cantoType,
+        )
+      ) {
         throw new BadRequestException(
           'No se puede cantar envido después de que se cantó el truco.',
         );
@@ -2454,10 +2561,7 @@ export class RoomStoreService {
     }
 
     if (bestByTeam.A === bestByTeam.B) {
-      const dealerTeam = occupiedSeats.find(
-        (seat) => seat.id === room.match?.dealerSeatId,
-      )?.teamSide;
-      return dealerTeam ?? 'A';
+      return this.getManoTeamSide(room) ?? 'A';
     }
 
     return bestByTeam.A > bestByTeam.B ? 'A' : 'B';
@@ -2580,6 +2684,7 @@ export class RoomStoreService {
   ): MutableEnvidoDeclaration[] {
     const declarations: MutableEnvidoDeclaration[] = [];
     let callingTeamBest = 0;
+    const manoTeamSide = this.getManoTeamSide(room) ?? singing.callerTeamSide;
 
     for (const seatId of singing.singingOrder) {
       const seat = room.seats.find((s) => s.id === seatId);
@@ -2597,9 +2702,13 @@ export class RoomStoreService {
         callingTeamBest = Math.max(callingTeamBest, score);
       } else {
         // Accepting team: declare only if they can beat the calling team best.
-        // On tie: the mano team (caller's team) wins, so accepting team needs
+        // On tie, mano wins, so accepting team needs
         // strictly greater score to take the points.
-        action = score > callingTeamBest ? 'declared' : 'son_buenas';
+        action =
+          score > callingTeamBest ||
+          (score === callingTeamBest && seat.teamSide === manoTeamSide)
+            ? 'declared'
+            : 'son_buenas';
       }
 
       declarations.push({
@@ -2621,8 +2730,9 @@ export class RoomStoreService {
   ): TeamScoreView {
     singing.declarations = declarations;
 
-    // Winner = seat with highest declared score; on tie, calling team wins (mano advantage)
-    let winnerTeam: TeamSide = singing.callerTeamSide;
+    // Winner = seat with highest declared score; on tie, mano wins.
+    let winnerTeam: TeamSide =
+      this.getManoTeamSide(room) ?? singing.callerTeamSide;
     let best = -1;
 
     for (const d of declarations) {
@@ -2631,7 +2741,7 @@ export class RoomStoreService {
         winnerTeam = d.teamSide;
       } else if (d.action === 'declared' && d.score === best) {
         // tie → mano (caller) wins
-        winnerTeam = singing.callerTeamSide;
+        winnerTeam = this.getManoTeamSide(room) ?? singing.callerTeamSide;
       }
     }
 
@@ -2766,6 +2876,7 @@ export class RoomStoreService {
         room.phase = 'match_end';
         room.match.currentTurnSeatId = null;
         room.match.turnDeadlineAt = null;
+        room.match.suspendedCanto = null;
         room.match.summary = {
           winnerTeamSide: winningTeam,
           finalScore: { ...room.match.teamScores },
@@ -2774,6 +2885,34 @@ export class RoomStoreService {
         this.setStatus(room, `El Equipo ${winningTeam} ganó la partida.`);
         this.persistMatchFinished(room, winningTeam);
       } else {
+        if (room.match.suspendedCanto) {
+          const resumed = room.match.suspendedCanto;
+          room.phase = 'response_pending';
+          room.match.pendingCanto = {
+            ...resumed,
+            responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
+          };
+          room.match.suspendedCanto = null;
+          room.match.turnDeadlineAt = null;
+          this.setStatus(
+            room,
+            `Se resolvió el ${singing.cantoType}. Queda pendiente la respuesta al ${resumed.cantoType}.`,
+          );
+          this.scheduleCantoTimeout(room.code);
+          this.persistSnapshot(room);
+          const snapshot = this.buildSnapshot(room);
+          const lifecycle = this.getRoomLifecycleState(room.code, actorSeat.id);
+
+          return {
+            snapshot,
+            lifecycle,
+            declarations,
+            scoreDelta,
+            matchEnded,
+            envidoSinging: singing,
+          };
+        }
+
         room.phase = 'action_turn';
         room.match.turnDeadlineAt = null;
         this.setStatus(room, 'Envido cantado. La mano continúa.');
@@ -2860,30 +2999,85 @@ export class RoomStoreService {
     match: MutableMatchState,
     trickNumber: number,
   ): TeamSide | null {
-    if (match.handTrickWins.A >= 2) {
-      return 'A';
+    const manoTeam = this.getTeamSideForSeat(room, match.dealerSeatId) ?? 'A';
+    const [firstTrick, secondTrick, thirdTrick] = match.trickResults;
+    const firstWinner = firstTrick?.winnerTeamSide ?? null;
+    const secondWinner = secondTrick?.winnerTeamSide ?? null;
+    const thirdWinner = thirdTrick?.winnerTeamSide ?? null;
+
+    if (trickNumber === 1) {
+      return null;
     }
 
-    if (match.handTrickWins.B >= 2) {
-      return 'B';
-    }
-
-    if (trickNumber >= 3) {
-      if (match.handTrickWins.A > match.handTrickWins.B) {
-        return 'A';
+    if (trickNumber === 2) {
+      if (firstWinner === null && secondWinner === null) {
+        return manoTeam;
       }
 
-      if (match.handTrickWins.B > match.handTrickWins.A) {
-        return 'B';
+      if (firstWinner === null) {
+        return secondWinner;
       }
 
-      const dealerSeat = room.seats.find(
-        (seat) => seat.id === match.dealerSeatId,
-      );
-      return dealerSeat?.teamSide ?? 'A';
+      if (secondWinner === null || secondWinner === firstWinner) {
+        return firstWinner;
+      }
+
+      return null;
     }
 
-    return null;
+    if (firstWinner === null) {
+      if (secondWinner === null) {
+        return manoTeam;
+      }
+
+      return secondWinner;
+    }
+
+    if (secondWinner === null || secondWinner === firstWinner) {
+      return firstWinner;
+    }
+
+    if (thirdWinner === null) {
+      return firstWinner;
+    }
+
+    return thirdWinner;
+  }
+
+  private getTeamSideForSeat(room: MutableRoom, seatId: string | null) {
+    if (!seatId) {
+      return null;
+    }
+
+    return room.seats.find((seat) => seat.id === seatId)?.teamSide ?? null;
+  }
+
+  private getManoTeamSide(room: MutableRoom) {
+    return this.getTeamSideForSeat(room, room.match?.dealerSeatId ?? null);
+  }
+
+  private getHandStarterSeatId(room: MutableRoom, match: MutableMatchState) {
+    return match.dealerSeatId ?? this.getOccupiedSeats(room)[0]?.id ?? null;
+  }
+
+  private getNextOccupiedSeatId(room: MutableRoom, fromSeatId: string | null) {
+    const occupiedSeats = this.getOccupiedSeats(room);
+
+    if (occupiedSeats.length === 0) {
+      return null;
+    }
+
+    if (!fromSeatId) {
+      return occupiedSeats[0]?.id ?? null;
+    }
+
+    const currentIndex = occupiedSeats.findIndex((seat) => seat.id === fromSeatId);
+
+    if (currentIndex === -1) {
+      return occupiedSeats[0]?.id ?? null;
+    }
+
+    return occupiedSeats[(currentIndex + 1) % occupiedSeats.length]?.id ?? null;
   }
 
   private getAuthorizedSeat(code: string, roomSessionToken: string) {
@@ -3358,6 +3552,10 @@ export class RoomStoreService {
             handTrickWins: room.match.handTrickWins,
             currentHandPoints: room.match.currentHandPoints,
             trickResults: room.match.trickResults,
+            pendingCanto: room.match.pendingCanto,
+            suspendedCanto: room.match.suspendedCanto,
+            pendingWildcardSelection: room.match.pendingWildcardSelection,
+            pendingEnvidoSinging: room.match.pendingEnvidoSinging,
             recentEvents: room.match.recentEvents,
             statusText: room.match.statusText,
             summary: room.match.summary,
@@ -3535,7 +3733,7 @@ export class RoomStoreService {
 
   private scheduleTurnTimeout(
     roomCode: string,
-    options?: { preserveDeadline?: boolean },
+    _options?: { preserveDeadline?: boolean },
   ) {
     this.clearTurnTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
@@ -3547,6 +3745,11 @@ export class RoomStoreService {
     ) {
       return;
     }
+
+    room.match.turnDeadlineAt = null;
+    return;
+
+    /*
 
     const timeoutMs = this.resolveTimeoutDelay(
       options?.preserveDeadline ? room.match.turnDeadlineAt : null,
@@ -3590,6 +3793,7 @@ export class RoomStoreService {
     }, timeoutMs);
     timeout.unref?.();
     this.turnTimeouts.set(roomCode, timeout);
+    */
   }
 
   private clearTurnTimeout(roomCode: string) {

@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
   AvatarId,
+  CardSuit,
+  CardView,
   CantoOpenPayload,
   CantoResolvePayload,
   CantoType,
@@ -98,6 +100,48 @@ function getFanTransform(index: number, total: number) {
   const absOffset = Math.abs(offset);
 
   return `translateX(calc(${offset} * clamp(6px, 1.8vw, 10px))) translateY(calc(${absOffset} * clamp(5px, 1.3vw, 10px))) rotate(calc(${offset} * clamp(2.5deg, 0.9vw, 6deg)))`;
+}
+
+function getRelativeSeatOffset(seatIndex: number, anchorSeatIndex: number | null, totalSeats: number) {
+  if (anchorSeatIndex === null || totalSeats <= 0) {
+    return seatIndex;
+  }
+
+  return (seatIndex - anchorSeatIndex + totalSeats) % totalSeats;
+}
+
+function getSeatPositionClass(totalSeats: number, relativeOffset: number) {
+  if (totalSeats === 2) {
+    return relativeOffset === 0
+      ? "left-1/2 bottom-6 -translate-x-1/2"
+      : "left-1/2 top-6 -translate-x-1/2";
+  }
+
+  const positions = [
+    "left-1/2 bottom-6 -translate-x-1/2",
+    "left-6 top-1/2 -translate-y-1/2",
+    "left-1/2 top-6 -translate-x-1/2",
+    "right-6 top-1/2 -translate-y-1/2",
+  ];
+
+  return positions[relativeOffset] ?? positions[0];
+}
+
+function getTableCardStyle(totalSeats: number, relativeOffset: number) {
+  if (totalSeats === 2) {
+    return relativeOffset === 0
+      ? { left: "50%", bottom: "23%", transform: "translateX(-50%) rotate(-3deg)" }
+      : { left: "50%", top: "23%", transform: "translateX(-50%) rotate(3deg)" };
+  }
+
+  const positions = [
+    { left: "50%", bottom: "20%", transform: "translateX(-50%) rotate(-2deg)" },
+    { left: "26%", top: "50%", transform: "translateY(-50%) rotate(-7deg)" },
+    { left: "50%", top: "20%", transform: "translateX(-50%) rotate(2deg)" },
+    { right: "26%", top: "50%", transform: "translateY(-50%) rotate(7deg)" },
+  ];
+
+  return positions[relativeOffset] ?? positions[0];
 }
 
 type RealtimePayload = {
@@ -208,47 +252,139 @@ function AvatarCircle({
   );
 }
 
-function AlienCardSprite({
-  label,
+type CardArtMode = "watermark" | "hologram";
+
+type SuitVisual = {
+  iconPath: string;
+  fallback: string;
+  edge: string;
+  glow: string;
+  miniGlow: string;
+  miniSizeClass: string;
+  centerSizeWatermarkClass: string;
+  centerSizeHologramClass: string;
+};
+
+const SUIT_VISUALS: Record<CardSuit, SuitVisual> = {
+  oro: {
+    iconPath: "/cards/suits/oro.png",
+    fallback: "O",
+    edge: "border-lime-300/55",
+    glow: "shadow-[0_0_26px_rgba(196,255,92,0.26)]",
+    miniGlow: "drop-shadow-[0_0_8px_rgba(224,255,132,0.9)]",
+    miniSizeClass: "h-6 w-6",
+    centerSizeWatermarkClass: "h-24 w-24",
+    centerSizeHologramClass: "h-16 w-16",
+  },
+  copa: {
+    iconPath: "/cards/suits/copa.png",
+    fallback: "C",
+    edge: "border-violet-300/55",
+    glow: "shadow-[0_0_26px_rgba(182,113,255,0.3)]",
+    miniGlow: "drop-shadow-[0_0_8px_rgba(212,168,255,0.9)]",
+    miniSizeClass: "h-5 w-5",
+    centerSizeWatermarkClass: "h-20 w-20",
+    centerSizeHologramClass: "h-14 w-14",
+  },
+  espada: {
+    iconPath: "/cards/suits/espada.png",
+    fallback: "E",
+    edge: "border-cyan-300/55",
+    glow: "shadow-[0_0_26px_rgba(73,226,255,0.28)]",
+    miniGlow: "drop-shadow-[0_0_8px_rgba(142,248,255,0.9)]",
+    miniSizeClass: "h-6 w-6",
+    centerSizeWatermarkClass: "h-24 w-24",
+    centerSizeHologramClass: "h-16 w-16",
+  },
+  basto: {
+    iconPath: "/cards/suits/basto.png",
+    fallback: "B",
+    edge: "border-emerald-300/55",
+    glow: "shadow-[0_0_26px_rgba(91,255,142,0.28)]",
+    miniGlow: "drop-shadow-[0_0_8px_rgba(147,255,181,0.9)]",
+    miniSizeClass: "h-6 w-6",
+    centerSizeWatermarkClass: "h-23 w-23",
+    centerSizeHologramClass: "h-15 w-15",
+  },
+};
+
+function SuitIcon({
+  suit,
+  alt,
+  className,
+}: {
+  suit: CardSuit;
+  alt: string;
+  className: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const visual = SUIT_VISUALS[suit];
+
+  if (failed) {
+    return (
+      <span className={`inline-flex items-center justify-center font-bold text-white ${className}`}>
+        {visual.fallback}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={visual.iconPath}
+      alt={alt}
+      className={className}
+      onError={() => setFailed(true)}
+      loading="lazy"
+    />
+  );
+}
+
+function TrucoCardSprite({
+  card,
   subtitle,
-  avatarId = null,
-  tone,
+  artMode = "watermark",
   disabled = false,
   active = false,
   onClick,
 }: {
-  label: string;
+  card: CardView;
   subtitle: string;
-  avatarId?: AvatarId | null;
-  tone: AlienTone;
+  artMode?: CardArtMode;
   disabled?: boolean;
   active?: boolean;
   onClick?: () => void;
 }) {
-  const palette = toneClasses(tone);
+  const visual = SUIT_VISUALS[card.suit];
+  const cornerRank = card.isWildcard ? "W" : `${card.rank}`;
+  const centerLabel = card.isWildcard ? "WILDCARD" : card.label;
+  const centerArtClass =
+    artMode === "hologram"
+      ? `${visual.centerSizeHologramClass} opacity-95 drop-shadow-[0_0_16px_rgba(255,255,255,0.52)]`
+      : `${visual.centerSizeWatermarkClass} opacity-20 grayscale`;
 
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`group relative overflow-hidden rounded-[1.35rem] border border-white/10 bg-[#0d1326] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:bg-[#111936] disabled:cursor-not-allowed disabled:opacity-60 ${active ? `border-cyan-200/40 ring-2 ring-cyan-300/20 ${palette.glow}` : ""}`}
+      className={`group relative h-full min-h-[184px] w-full overflow-hidden rounded-[1rem] border bg-[rgba(12,17,34,0.86)] px-3 pb-3 pt-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${visual.edge} ${active ? `${visual.glow} ring-2 ring-white/15` : "shadow-[inset_0_0_16px_rgba(0,0,0,0.5)]"} ${!disabled ? "hover:-translate-y-0.5 hover:bg-[rgba(15,23,46,0.9)]" : ""}`}
     >
-      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/10 to-transparent" />
-      <div className={`absolute inset-x-3 bottom-2 h-8 rounded-full blur-xl ${tone === "red" ? "bg-rose-300/15" : tone === "green" ? "bg-lime-300/15" : tone === "white" ? "bg-white/10" : "bg-cyan-300/15"}`} />
-      <div className="relative flex items-start justify-between gap-3">
-        <div>
-          <p className="text-lg font-semibold text-white">{label}</p>
-          <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
-        </div>
-        <div className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] ${palette.ring}`}>
-          Sprite
+      <div className="absolute inset-0 bg-[linear-gradient(165deg,rgba(255,255,255,0.12),transparent_35%)]" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="relative grid place-items-center rounded-full border border-white/10 bg-white/[0.02] p-4">
+          <SuitIcon suit={card.suit} alt={card.suit} className={centerArtClass} />
         </div>
       </div>
-      <div className="relative mt-4 flex items-end justify-between">
-        <AvatarCircle avatarId={avatarId} tone={tone} size={42} />
-        <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-slate-300">
-          Carta
+      <div className="relative flex h-full flex-col justify-between">
+        <div className="inline-flex w-fit flex-col items-center rounded-xl border border-white/10 bg-black/25 px-2.5 py-1.5">
+          <span className="text-[1.65rem] font-black leading-none text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.8)]">
+            {cornerRank}
+          </span>
+          <SuitIcon suit={card.suit} alt={card.suit} className={`${visual.miniSizeClass} ${visual.miniGlow}`} />
+        </div>
+        <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-1">
+          <p className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-200">{centerLabel}</p>
+          <p className="mt-0.5 truncate text-[10px] uppercase tracking-[0.12em] text-slate-400">{subtitle}</p>
         </div>
       </div>
     </button>
@@ -313,6 +449,7 @@ export function LobbyClient({ code }: { code: string }) {
   const [chatInput, setChatInput] = useState("");
   const [recentReactions, setRecentReactions] = useState<ActiveReaction[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const refreshRoomStateRef = useRef<(() => Promise<void>) | null>(null);
 
   const turnCountdown = useCountdown(
     (matchState?.phase ?? snapshot?.phase) === "action_turn"
@@ -398,6 +535,7 @@ export function LobbyClient({ code }: { code: string }) {
         session: result.session,
       });
     };
+    refreshRoomStateRef.current = refreshRoomState;
 
     const hydrateRoom = async () => {
       try {
@@ -437,16 +575,6 @@ export function LobbyClient({ code }: { code: string }) {
           setConnectionLabel("En vivo");
           syncRoomState(payload);
         });
-        activeSocket.on("action:submitted", handleRealtimePayload);
-        activeSocket.on("action:rejected", handleRealtimePayload);
-        activeSocket.on("canto:opened", handleRealtimePayload);
-        activeSocket.on("canto:resolved", handleRealtimePayload);
-        activeSocket.on("wildcard:selection-required", handleRealtimePayload);
-        activeSocket.on("wildcard:selected", handleRealtimePayload);
-        activeSocket.on("trick:resolved", handleRealtimePayload);
-        activeSocket.on("hand:scored", handleRealtimePayload);
-        activeSocket.on("summary:started", handleRealtimePayload);
-
         activeSocket.on("chat:received", (event: ChatReceivedEvent) => {
           if (!event.accepted) return;
           setChatMessages((prev) => [
@@ -472,6 +600,7 @@ export function LobbyClient({ code }: { code: string }) {
     void hydrateRoom();
 
     return () => {
+      refreshRoomStateRef.current = null;
       setSocket(null);
       activeSocket?.disconnect();
     };
@@ -515,6 +644,7 @@ export function LobbyClient({ code }: { code: string }) {
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "La acción falló.");
       setActionPending(false);
+      void refreshRoomStateRef.current?.();
       return false;
     }
   };
@@ -588,6 +718,7 @@ export function LobbyClient({ code }: { code: string }) {
         roomSessionToken: session.roomSessionToken,
       }
     : null;
+  const anchorSeatIndex = currentSeat?.seatIndex ?? null;
 
   const handleToggleReady = async () => {
     if (!actorPayload) {
@@ -729,10 +860,12 @@ export function LobbyClient({ code }: { code: string }) {
     snapshot.statusText ??
     "Esperando la próxima jugada.";
   const activeSeatId =
-    transition?.activeActionSeatId ??
-    matchView?.currentTurnSeatId ??
-    matchState?.currentTurnSeatId ??
-    null;
+    phase === "response_pending"
+      ? transition?.activeActionSeatId ?? null
+      : matchView?.currentTurnSeatId ??
+        matchState?.currentTurnSeatId ??
+        transition?.activeActionSeatId ??
+        null;
   const isLobby = phase === "lobby" || phase === "ready_check";
   const isLive = connectionLabel === "En vivo";
   const isMyTurn = phase === "action_turn" && activeSeatId === currentSeat?.id && isLive;
@@ -821,21 +954,14 @@ export function LobbyClient({ code }: { code: string }) {
                 const tone = getAlienTone(seat, seat.seatIndex);
                 const palette = toneClasses(tone);
                 const isCurrentSeat = seat.id === currentSeat?.id;
-                const positions =
-                  snapshot.maxPlayers === 2
-                    ? [
-                        "left-1/2 top-6 -translate-x-1/2",
-                        "left-1/2 bottom-6 -translate-x-1/2",
-                      ]
-                    : [
-                        "left-1/2 top-6 -translate-x-1/2",
-                        "right-6 top-1/2 -translate-y-1/2",
-                        "left-1/2 bottom-6 -translate-x-1/2",
-                        "left-6 top-1/2 -translate-y-1/2",
-                      ];
+                const relativeOffset = getRelativeSeatOffset(
+                  seat.seatIndex,
+                  anchorSeatIndex,
+                  snapshot.maxPlayers,
+                );
 
                 return (
-                  <div key={seat.id} className={`absolute ${positions[seat.seatIndex] ?? ""}`}>
+                  <div key={seat.id} className={`absolute ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)}`}>
                     {isCurrentSeat ? <div className="alien-beam absolute left-1/2 top-12 h-28 w-20 -translate-x-1/2 rounded-full bg-cyan-300/12 blur-xl" /> : null}
                     <div className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 ${palette.panel} ${palette.glow}`}>
                       <div className="flex items-center gap-3">
@@ -1043,21 +1169,14 @@ export function LobbyClient({ code }: { code: string }) {
                   const palette = toneClasses(tone);
                   const isCurrentSeat = seat.id === currentSeat?.id;
                   const isActiveSeat = seat.id === activeSeatId;
-                  const positions =
-                    snapshot.maxPlayers === 2
-                      ? [
-                          "left-1/2 top-6 -translate-x-1/2",
-                          "left-1/2 bottom-6 -translate-x-1/2",
-                        ]
-                      : [
-                          "left-1/2 top-6 -translate-x-1/2",
-                          "right-6 top-1/2 -translate-y-1/2",
-                          "left-1/2 bottom-6 -translate-x-1/2",
-                          "left-6 top-1/2 -translate-y-1/2",
-                        ];
+                  const relativeOffset = getRelativeSeatOffset(
+                    seat.seatIndex,
+                    anchorSeatIndex,
+                    snapshot.maxPlayers,
+                  );
 
                   return (
-                    <div key={seat.id} className={`absolute ${positions[seat.seatIndex] ?? ""}`}>
+                    <div key={seat.id} className={`absolute ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)}`}>
                       {isActiveSeat ? <div className="alien-beam absolute left-1/2 top-12 h-32 w-24 -translate-x-1/2 rounded-full bg-cyan-300/14 blur-xl" /> : null}
                       <div className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 ${palette.panel} ${palette.glow}`}>
                         <div className="flex items-center gap-3">
@@ -1084,31 +1203,29 @@ export function LobbyClient({ code }: { code: string }) {
                 })}
 
                 {(matchView?.tableCards ?? []).length > 0 ? (
-                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center gap-4">
+                  <div className="absolute inset-0">
                     {(matchView?.tableCards ?? []).map((play, index) => {
                       const seat = snapshot.seats.find((item) => item.id === play.seatId);
-                      const tone = seat ? getAlienTone(seat, seat.seatIndex) : "cyan";
-                      const total = (matchView?.tableCards ?? []).length;
-                      const center = (total - 1) / 2;
-                      const offset = index - center;
-                      const rot = offset * 5;
-                      const ty = Math.abs(offset) * 8;
+                      const relativeOffset = getRelativeSeatOffset(
+                        seat?.seatIndex ?? index,
+                        anchorSeatIndex,
+                        snapshot.maxPlayers,
+                      );
 
                       return (
                         <div
                           key={`${play.seatId}-${play.card.id}-${index}`}
-                          className="relative shrink-0"
+                          className="absolute shrink-0"
                           style={{
-                            transform: `rotate(${rot}deg) translateY(${ty}px)`,
+                            ...getTableCardStyle(snapshot.maxPlayers, relativeOffset),
                             width: "clamp(120px, 22vw, 160px)",
                           }}
                         >
                           <div className="absolute inset-x-5 bottom-0 h-6 rounded-full bg-black/45 blur-xl" />
-                          <AlienCardSprite
-                            label={play.card.label}
+                          <TrucoCardSprite
+                            card={play.card}
                             subtitle={play.displayName ?? "Mesa"}
-                            avatarId={seat?.avatarId ?? null}
-                            tone={tone}
+                            artMode="hologram"
                             active
                             disabled
                           />
@@ -1151,11 +1268,10 @@ export function LobbyClient({ code }: { code: string }) {
                           width: "clamp(132px, 34vw, 190px)",
                         }}
                       >
-                        <AlienCardSprite
-                          label={card.label}
-                          subtitle={card.isWildcard ? "Comodín alien" : `${card.rank} de ${card.suit}`}
-                          avatarId={currentSeat?.avatarId ?? null}
-                          tone={getAlienTone(currentSeat ?? snapshot.seats[0], index)}
+                        <TrucoCardSprite
+                          card={card}
+                          subtitle={card.isWildcard ? "Comodin alien" : `${card.rank} de ${card.suit}`}
+                          artMode={isMyTurn ? "hologram" : "watermark"}
                           active={isMyTurn}
                           disabled={actionPending || !isMyTurn}
                           onClick={() => handlePlayCard(card.id)}
