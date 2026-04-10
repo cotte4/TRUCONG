@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -230,12 +231,15 @@ export function HomeClient() {
                   }`}
                   aria-label={`Elegir avatar ${avatar.label}`}
                 >
-                  <img
-                    src={avatar.imagePath}
-                    alt={avatar.label}
-                    className="h-16 w-full rounded-xl object-cover"
-                    loading="lazy"
-                  />
+                  <div className="relative h-16 w-full overflow-hidden rounded-xl">
+                    <Image
+                      src={avatar.imagePath}
+                      alt={avatar.label}
+                      fill
+                      className="object-cover"
+                      loading="lazy"
+                    />
+                  </div>
                 </button>
               );
             })}
@@ -292,12 +296,15 @@ export function HomeClient() {
                   }`}
                   aria-label={`Elegir avatar ${avatar.label}`}
                 >
-                  <img
-                    src={avatar.imagePath}
-                    alt={avatar.label}
-                    className="h-16 w-full rounded-xl object-cover"
-                    loading="lazy"
-                  />
+                  <div className="relative h-16 w-full overflow-hidden rounded-xl">
+                    <Image
+                      src={avatar.imagePath}
+                      alt={avatar.label}
+                      fill
+                      className="object-cover"
+                      loading="lazy"
+                    />
+                  </div>
                 </button>
               );
             })}

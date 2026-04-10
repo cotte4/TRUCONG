@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
@@ -188,16 +189,17 @@ function AvatarCircle({
   return (
     <div className={`relative shrink-0 ${active ? "alien-bob" : ""}`} style={{ width: size, height: size }}>
       <div
-        className={`h-full w-full overflow-hidden rounded-full border-2 border-white/20 ${active ? "shadow-[0_0_28px_rgba(83,234,253,0.65)]" : "shadow-[0_0_18px_rgba(83,234,253,0.24)]"}`}
+        className={`relative h-full w-full overflow-hidden rounded-full border-2 border-white/20 ${active ? "shadow-[0_0_28px_rgba(83,234,253,0.65)]" : "shadow-[0_0_18px_rgba(83,234,253,0.24)]"}`}
         style={{
           background: imagePath ? undefined : fallbackBackground,
         }}
       >
         {imagePath ? (
-          <img
+          <Image
             src={imagePath}
             alt="Avatar"
-            className="h-full w-full object-cover"
+            fill
+            className="object-cover"
             loading="lazy"
           />
         ) : null}
