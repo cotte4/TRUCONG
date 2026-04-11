@@ -364,7 +364,7 @@ function TrucoCardSprite({
   const centerIconClass =
     artMode === "hologram"
       ? `${centerSizeClass} opacity-95 drop-shadow-[0_0_16px_rgba(255,255,255,0.52)]`
-      : `${centerSizeClass} opacity-[0.15] grayscale`;
+      : `${centerSizeClass} opacity-40`;
 
   return (
     <button
