@@ -72,7 +72,11 @@ type PersistedSnapshotState = {
     lastHandWinnerTeamSide?: TeamSide | null;
     turnDeadlineAt: string | null;
     reconnectDeadlineAt: string | null;
-    activeBongBet?: { betterSeatId: string; targetSeatId: string } | null;
+    activeBongBet?: {
+      betterSeatId: string;
+      targetSeatId: string;
+      settlesOnEnvido?: boolean;
+    } | null;
     bongBalance?: Record<string, number>;
   } | null;
 };
@@ -206,7 +210,11 @@ type MutableMatchState = {
   lastHandWinnerTeamSide: TeamSide | null;
   turnDeadlineAt: string | null;
   reconnectDeadlineAt: string | null;
-  activeBongBet: { betterSeatId: string; targetSeatId: string } | null;
+  activeBongBet: {
+    betterSeatId: string;
+    targetSeatId: string;
+    settlesOnEnvido: boolean;
+  } | null;
   bongBalance: Record<string, number>;
 };
 
@@ -1197,7 +1205,9 @@ export class RoomStoreService {
       openedAt: new Date().toISOString(),
       responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
       hasBong:
-        (withBong ?? false) && room.allowBongs && this.isTrucoCanto(cantoType),
+        (withBong ?? false) &&
+        room.allowBongs &&
+        (this.isTrucoCanto(cantoType) || cantoType === 'falta_envido'),
     };
     room.match.turnDeadlineAt = null;
     room.match.reconnectDeadlineAt = null;
@@ -1356,6 +1366,7 @@ export class RoomStoreService {
           room.match.activeBongBet = {
             betterSeatId: pending.actorSeatId,
             targetSeatId: actorSeat.id,
+            settlesOnEnvido: false,
           };
           this.pushEvent(
             room,
@@ -1364,6 +1375,17 @@ export class RoomStoreService {
         }
       } else {
         // Envido accepted — enter the singing phase instead of scoring immediately
+        if (pending.hasBong) {
+          room.match.activeBongBet = {
+            betterSeatId: pending.actorSeatId,
+            targetSeatId: actorSeat.id,
+            settlesOnEnvido: true,
+          };
+          this.pushEvent(
+            room,
+            `BONG: ${room.seats.find((s) => s.id === pending.actorSeatId)?.displayName ?? 'Jugador'} apostó un BONG al falta envido — se define con el envido.`,
+          );
+        }
         this.pushEvent(
           room,
           `${actorSeat.displayName ?? 'Jugador'} quiso el ${pending.cantoType}. Comienza el canto.`,
@@ -2049,7 +2071,14 @@ export class RoomStoreService {
           lastHandWinnerTeamSide: state.match.lastHandWinnerTeamSide ?? null,
           turnDeadlineAt: state.match.turnDeadlineAt,
           reconnectDeadlineAt: state.match.reconnectDeadlineAt,
-          activeBongBet: state.match.activeBongBet ?? null,
+          activeBongBet: state.match.activeBongBet
+            ? {
+                betterSeatId: state.match.activeBongBet.betterSeatId,
+                targetSeatId: state.match.activeBongBet.targetSeatId,
+                settlesOnEnvido:
+                  state.match.activeBongBet.settlesOnEnvido ?? false,
+              }
+            : null,
           bongBalance: state.match.bongBalance ?? {},
         }
       : null;
@@ -3080,6 +3109,11 @@ export class RoomStoreService {
       } else {
         this.pushEvent(room, `${name}: ${d.score} puntos de envido.`);
       }
+    }
+
+    // Settle a faltaEnvidoBONG: tied to the envido winner, not the hand winner
+    if (room.match?.activeBongBet?.settlesOnEnvido) {
+      this.settleBongBet(room, winnerTeam);
     }
 
     return scoreDelta;

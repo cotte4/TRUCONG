@@ -957,6 +957,7 @@ export function LobbyClient({ code }: { code: string }) {
   const [isDealAnimActive, setIsDealAnimActive] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [pendingCantoHasBong, setPendingCantoHasBong] = useState(false);
+  const [bongFlash, setBongFlash] = useState<{ id: string; callerName: string; settlesOnEnvido: boolean } | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const refreshRoomStateRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -1001,6 +1002,14 @@ export function LobbyClient({ code }: { code: string }) {
     }, RESOLVED_CANTO_TTL_MS);
     return () => window.clearTimeout(id);
   }, [resolvedCantoBanner]);
+
+  useEffect(() => {
+    if (!bongFlash) return;
+    const id = window.setTimeout(() => {
+      setBongFlash((current) => (current?.id === bongFlash.id ? null : current));
+    }, 2600);
+    return () => window.clearTimeout(id);
+  }, [bongFlash]);
 
   // Clear saved trick cards when live cards appear (new trick started)
   const liveCardCount = (matchView?.tableCards ?? matchState?.tableCards ?? []).length;
@@ -1177,6 +1186,11 @@ export function LobbyClient({ code }: { code: string }) {
             { id: `${event.seatId}-${event.openedAt}`, seatId: event.seatId, cantoType: event.cantoType, sentAt: Date.now() },
           ]);
           setPendingCantoHasBong(event.hasBong ?? false);
+          if (event.hasBong) {
+            const callerName = event.snapshot?.seats?.find((s) => s.id === event.seatId)?.displayName ?? event.snapshot?.seats?.find((s) => s.id === event.actorSeatId)?.displayName ?? "Jugador";
+            const settlesOnEnvido = event.cantoType === "falta_envido";
+            setBongFlash({ id: `${event.seatId}-${event.openedAt}`, callerName, settlesOnEnvido });
+          }
           syncRoomState(event);
         });
 
@@ -2160,15 +2174,28 @@ export function LobbyClient({ code }: { code: string }) {
                       >
                         Real Envido
                       </button>
-                      <button
-                        type="button"
-                        disabled={actionPending}
-                        onClick={() => handleOpenCanto("falta_envido")}
-                        className="canto-action-btn canto-action-btn-envido"
-                        title="Vale lo que le falta al rival para ganar"
-                      >
-                        Falta Envido
-                      </button>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() => handleOpenCanto("falta_envido")}
+                          className="canto-action-btn canto-action-btn-envido"
+                          title="Vale lo que le falta al rival para ganar"
+                        >
+                          Falta Envido
+                        </button>
+                        {snapshot.allowBongs ? (
+                          <button
+                            type="button"
+                            disabled={actionPending}
+                            onClick={() => handleOpenCanto("falta_envido", true)}
+                            className="canto-action-btn canto-action-btn-bong"
+                            title="Falta Envido + BONG — el BONG se define con el envido"
+                          >
+                            BONG
+                          </button>
+                        ) : null}
+                      </div>
                     </>
                   ) : null}
                 </div>
@@ -2522,6 +2549,38 @@ export function LobbyClient({ code }: { code: string }) {
           </aside>
         </div>
       )}
+
+      {/* BONG slam overlay — fires when any BONG is called */}
+      {bongFlash ? (
+        <div
+          key={bongFlash.id}
+          className="bong-flash-bg pointer-events-none fixed inset-0 z-50 flex items-center justify-center"
+        >
+          <div className="bong-drop flex flex-col items-center gap-3 text-center">
+            <span
+              className="font-brand-display leading-none text-amber-300"
+              style={{
+                fontSize: "clamp(5rem, 18vw, 10rem)",
+                textShadow: "0 0 60px rgba(255,160,0,0.9), 0 0 120px rgba(255,100,0,0.6), 0 4px 0 rgba(0,0,0,0.6)",
+              }}
+            >
+              BONG
+            </span>
+            <span className="text-sm font-bold uppercase tracking-[0.3em] text-amber-100/90">
+              {bongFlash.callerName} apostó
+            </span>
+            {bongFlash.settlesOnEnvido ? (
+              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/70">
+                Se define con el envido
+              </span>
+            ) : (
+              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-300/70">
+                Se define con la mano
+              </span>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
