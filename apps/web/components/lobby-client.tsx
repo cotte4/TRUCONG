@@ -43,6 +43,7 @@ import type {
 } from "@dimadong/contracts";
 import { apiBaseUrl, socketBaseUrl } from "@/lib/config";
 import { AVATAR_OPTIONS } from "@/lib/avatar-catalog";
+import { TrucoScoreboard } from "@/components/surfaces/truco-scoreboard";
 
 function getSessionStorageKey(code: string) {
   return `dimadong:${code}:session`;
@@ -926,6 +927,195 @@ function HandSummaryOverlay({
   );
 }
 
+function ReconnectOverlay({
+  code,
+  seatLabel,
+  countdown,
+  onRetry,
+}: {
+  code: string;
+  seatLabel: string | null;
+  countdown: number | null;
+  onRetry: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.18),rgba(2,6,23,0.95)_42%,rgba(2,6,23,0.98)_100%)] px-4 backdrop-blur-md">
+      <div className="w-full max-w-xl rounded-[2rem] border border-amber-300/25 bg-slate-950/88 p-6 shadow-[0_0_120px_rgba(251,191,36,0.12)]">
+        <div className="flex items-center justify-between gap-3">
+          <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.26em] text-amber-100">
+            Reconexion
+          </span>
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">
+            Sala {code}
+          </span>
+        </div>
+
+        <h2 className="mt-5 font-brand-display text-3xl text-white sm:text-4xl">
+          Estamos recuperando tu asiento.
+        </h2>
+        <p className="mt-3 max-w-lg text-sm leading-7 text-slate-300">
+          {seatLabel
+            ? `${seatLabel}, la partida quedo en pausa corta mientras el servidor intenta reengancharte a la mesa.`
+            : "La partida quedo en pausa corta mientras el servidor intenta reenganchar tu sesion a la mesa."}
+        </p>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">Estado</p>
+            <p className="mt-2 text-sm font-semibold text-white">Buscando sesion valida</p>
+          </div>
+          <div className="rounded-2xl border border-amber-300/20 bg-amber-300/8 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-amber-100/75">Ventana</p>
+            <p className="mt-2 text-sm font-semibold text-amber-50">
+              {countdown !== null ? `${countdown}s restantes` : "Recuperando"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">Consejo</p>
+            <p className="mt-2 text-sm font-semibold text-white">No cierres esta pestaña</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+          >
+            Reintentar ahora
+          </button>
+          <Link
+            href="/"
+            className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+          >
+            Volver al inicio
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinalSummaryScreen({
+  code,
+  snapshot,
+  finalSummary,
+}: {
+  code: string;
+  snapshot: RoomSnapshot;
+  finalSummary: NonNullable<MatchView["summary"]>;
+}) {
+  const winnerLabel = finalSummary.winnerTeamSide === "A" ? "Cyan" : "Verde";
+  const recentEvents = snapshot.recentEvents.slice(0, 8);
+
+  return (
+    <section className="relative overflow-hidden rounded-[2.4rem] border border-emerald-300/20 bg-[linear-gradient(160deg,rgba(7,12,25,0.98),rgba(7,18,31,0.98))] px-6 py-8 shadow-[0_0_120px_rgba(16,185,129,0.08)]">
+      <div className="absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.2),transparent_65%)]" />
+      <div className="relative mx-auto flex max-w-5xl flex-col gap-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-emerald-200/75">Pantalla final</p>
+            <h1 className="mt-3 font-brand-display text-4xl text-white sm:text-5xl">
+              Ganó el equipo {winnerLabel}.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
+              La partida terminó y el resumen ya quedó congelado. Acá queda el cierre limpio de la mesa, con marcador,
+              tripulación y huella BONG.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100">
+              Sala {code}
+            </span>
+            <Link
+              href="/"
+              className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+            >
+              Volver al inicio
+            </Link>
+          </div>
+        </div>
+
+        <TrucoScoreboard
+          teamA={finalSummary.finalScore.A}
+          teamB={finalSummary.finalScore.B}
+          targetScore={snapshot.targetScore}
+        />
+
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {(["A", "B"] as const).map((side) => {
+              const teamSeats = snapshot.seats.filter((seat) => seat.teamSide === side && seat.displayName);
+              const isWinner = finalSummary.winnerTeamSide === side;
+              const borderColor = side === "A" ? "border-cyan-300/25" : "border-emerald-300/25";
+              const bgColor = side === "A" ? "bg-cyan-300/6" : "bg-emerald-300/6";
+              const labelColor = side === "A" ? "text-cyan-200/70" : "text-emerald-200/70";
+              const score = side === "A" ? finalSummary.finalScore.A : finalSummary.finalScore.B;
+              const bongTotal = teamSeats.reduce((sum, seat) => sum + Math.max(0, seat.bongBalance), 0);
+
+              return (
+                <div key={side} className={`rounded-[1.8rem] border ${borderColor} ${bgColor} p-4`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${labelColor}`}>
+                        Equipo {side === "A" ? "Cyan" : "Verde"}
+                      </p>
+                      <p className="mt-2 text-3xl font-semibold text-white">{score} pts</p>
+                    </div>
+                    {isWinner ? (
+                      <span className="rounded-full border border-emerald-300/30 bg-emerald-300/12 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-200">
+                        Ganador
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {teamSeats.map((seat) => (
+                      <div key={seat.id} className="flex min-w-[64px] flex-col items-center gap-1.5">
+                        <AvatarCircle avatarId={seat.avatarId} tone={getAlienTone(seat, seat.seatIndex)} size={40} />
+                        <span className="max-w-[64px] truncate text-center text-[11px] text-slate-200">
+                          {seat.displayName}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {snapshot.allowBongs ? (
+                    <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/8 px-3 py-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-100/75">BONGS efectivos</p>
+                      <p className="mt-1 text-lg font-semibold text-amber-50">{bongTotal}</p>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-[1.8rem] border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-slate-400">Ultimos eventos</p>
+            <div className="mt-4 space-y-2">
+              {recentEvents.length > 0 ? (
+                recentEvents.map((event) => (
+                  <div
+                    key={event}
+                    className="rounded-2xl border border-white/10 bg-slate-950/55 px-4 py-3 text-sm text-slate-200"
+                  >
+                    {event}
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-4 text-sm text-slate-400">
+                  No quedaron eventos visibles para mostrar en el cierre.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function LobbyClient({ code }: { code: string }) {
   const normalizedCode = useMemo(() => code.toUpperCase(), [code]);
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
@@ -944,6 +1134,8 @@ export function LobbyClient({ code }: { code: string }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [recentReactions, setRecentReactions] = useState<ActiveReaction[]>([]);
+  const [mobileFeedOpen, setMobileFeedOpen] = useState(false);
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [recentCantos, setRecentCantos] = useState<ActiveCanto[]>([]);
   const [resolvedCantoBanner, setResolvedCantoBanner] = useState<ResolvedCantoBanner | null>(null);
   const [lastTrickCards, setLastTrickCards] = useState<TablePlayView[]>([]);
@@ -1592,6 +1784,7 @@ export function LobbyClient({ code }: { code: string }) {
   const liveTableCards = matchView?.tableCards ?? matchState?.tableCards ?? [];
   const displayTableCards = liveTableCards.length > 0 ? liveTableCards : lastTrickCards;
   const isShowingLastTrick = liveTableCards.length === 0 && lastTrickCards.length > 0;
+  const showReconnectOverlay = phase === "reconnect_hold";
 
   const finalSummary =
     matchView?.summary ??
@@ -1602,8 +1795,24 @@ export function LobbyClient({ code }: { code: string }) {
         }
       : null);
 
+  if (phase === "post_match_summary" && finalSummary) {
+    return (
+      <div className="space-y-6">
+        <FinalSummaryScreen code={snapshot.code} snapshot={snapshot} finalSummary={finalSummary} />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
+      {showReconnectOverlay ? (
+        <ReconnectOverlay
+          code={snapshot.code}
+          seatLabel={currentSeat?.displayName ?? null}
+          countdown={reconnectCountdown}
+          onRetry={handleManualResync}
+        />
+      ) : null}
       {/* Collapsable nav — auto-hides when game starts */}
       {navVisible ? (
         <nav className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-white/10 bg-slate-950/72 px-5 py-3 backdrop-blur">
@@ -1938,8 +2147,13 @@ export function LobbyClient({ code }: { code: string }) {
                   <p className="mt-2 max-w-2xl text-sm text-slate-300">{statusText}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white">
-                    {score.A} - {score.B}
+                  <div className="w-[15.5rem] max-w-full">
+                    <TrucoScoreboard
+                      teamA={score.A}
+                      teamB={score.B}
+                      targetScore={snapshot.targetScore}
+                      compact
+                    />
                   </div>
                   {isMyTurn && turnCountdown !== null ? (
                     <div className={`rounded-full border px-4 py-2 text-sm font-semibold tabular-nums ${turnCountdown <= 3 ? "border-rose-300/40 bg-rose-300/12 text-rose-50" : "border-cyan-300/40 bg-cyan-300/12 text-cyan-50"}`}>
@@ -2086,6 +2300,31 @@ export function LobbyClient({ code }: { code: string }) {
           </section>
 
           <aside className="order-1 space-y-6 lg:order-2">
+            <div className="flex flex-wrap gap-2 lg:hidden">
+              <button
+                type="button"
+                onClick={() => setMobileFeedOpen((current) => !current)}
+                className={`rounded-full border px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] transition ${
+                  mobileFeedOpen
+                    ? "border-cyan-300/40 bg-cyan-300/12 text-cyan-100"
+                    : "border-white/10 bg-white/[0.03] text-slate-300"
+                }`}
+              >
+                {mobileFeedOpen ? "Ocultar eventos" : "Ver eventos"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileChatOpen((current) => !current)}
+                className={`rounded-full border px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] transition ${
+                  mobileChatOpen
+                    ? "border-violet-300/40 bg-violet-300/12 text-violet-100"
+                    : "border-white/10 bg-white/[0.03] text-slate-300"
+                }`}
+              >
+                {mobileChatOpen ? "Ocultar chat" : "Abrir chat"}
+              </button>
+            </div>
+
             <div className={`${panelClass()} border-cyan-300/20 bg-[#11172b]/90`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -2495,7 +2734,7 @@ export function LobbyClient({ code }: { code: string }) {
               </div>
             ) : null}
 
-            <div className={panelClass()}>
+            <div className={`${panelClass()} ${mobileFeedOpen ? "block" : "hidden"} lg:block`}>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Eventos recientes</p>
               <div className="mt-4 space-y-2">
                 {(matchView?.recentEvents ?? snapshot.recentEvents).slice(0, 6).map((event) => (
@@ -2545,7 +2784,7 @@ export function LobbyClient({ code }: { code: string }) {
               </div>
             ) : null}
 
-            <div className={panelClass("flex flex-col gap-0")}>
+            <div className={`${panelClass("flex flex-col gap-0")} ${mobileChatOpen ? "flex" : "hidden"} lg:flex`}>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Chat</p>
               <div className="mt-4 max-h-52 overflow-y-auto space-y-2 pr-1">
                 {chatMessages.length === 0 ? (

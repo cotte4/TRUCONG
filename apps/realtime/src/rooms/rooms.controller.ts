@@ -124,8 +124,12 @@ export class RoomsController {
     }
 
     if (typeof body.targetScore !== 'undefined') {
-      if (body.targetScore !== 15 && body.targetScore !== 30) {
-        throw new BadRequestException('targetScore must be 15 or 30.');
+      if (
+        body.targetScore !== 11 &&
+        body.targetScore !== 15 &&
+        body.targetScore !== 30
+      ) {
+        throw new BadRequestException('targetScore must be 11, 15, or 30.');
       }
       parsed.targetScore = body.targetScore;
     }

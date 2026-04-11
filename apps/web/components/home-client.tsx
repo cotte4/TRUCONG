@@ -1,8 +1,25 @@
 "use client";
 
+import type {
+  CreateRoomRequest,
+  JoinRoomRequest,
+  RoomEntryResponse,
+} from "@dimadong/contracts";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AVATAR_OPTIONS, DEFAULT_AVATAR_ID, isAvatarId } from "@/lib/avatar-catalog";
+import { apiBaseUrl } from "@/lib/config";
+
+const INITIAL_REQUEST_TIMEOUT_MS = 15000;
+const RETRY_REQUEST_TIMEOUT_MS = 30000;
+
+class RequestTimeoutError extends Error {
+  constructor() {
+    super("Request timed out.");
+    this.name = "RequestTimeoutError";
+  }
+}
 
 function usePersistentInput(key: string, initial = "") {
   const [value, setValue] = useState(initial);
@@ -21,40 +38,92 @@ function usePersistentInput(key: string, initial = "") {
 
   return [value, set] as const;
 }
-import type { CreateRoomRequest, JoinRoomRequest, RoomEntryResponse } from "@dimadong/contracts";
-import { apiBaseUrl } from "@/lib/config";
-import { AVATAR_OPTIONS, DEFAULT_AVATAR_ID, isAvatarId } from "@/lib/avatar-catalog";
 
-async function postJson<TBody, TResult>(url: string, body: TBody, timeoutMs = 15000): Promise<TResult> {
+async function fetchJsonWithTimeout<TResult>(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<TResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      ...init,
       signal: controller.signal,
     });
 
     if (!response.ok) {
       const text = await response.text();
       let message = text;
+
       try {
         const json = JSON.parse(text) as { message?: string };
-        if (typeof json?.message === 'string') message = json.message;
-      } catch { /* not JSON, use raw text */ }
-      throw new Error(message || "La solicitud falló.");
+        if (typeof json.message === "string") {
+          message = json.message;
+        }
+      } catch {
+        // Not JSON; keep the raw response text.
+      }
+
+      throw new Error(message || "La solicitud fallo.");
     }
 
     return response.json() as Promise<TResult>;
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
-      throw new Error("El servidor tardó demasiado. Puede estar iniciando — intentá de nuevo en unos segundos.");
+      throw new RequestTimeoutError();
     }
+
     throw err;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function warmUpServer(baseUrl: string) {
+  try {
+    await fetch(baseUrl, { method: "GET", cache: "no-store" });
+  } catch {
+    // Best effort only. The retry below is what matters.
+  }
+}
+
+async function postJson<TBody, TResult>(url: string, body: TBody): Promise<TResult> {
+  const requestInit: RequestInit = {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+
+  try {
+    return await fetchJsonWithTimeout<TResult>(
+      url,
+      requestInit,
+      INITIAL_REQUEST_TIMEOUT_MS,
+    );
+  } catch (err) {
+    if (!(err instanceof RequestTimeoutError)) {
+      throw err;
+    }
+
+    await warmUpServer(apiBaseUrl);
+
+    try {
+      return await fetchJsonWithTimeout<TResult>(
+        url,
+        requestInit,
+        RETRY_REQUEST_TIMEOUT_MS,
+      );
+    } catch (retryError) {
+      if (retryError instanceof RequestTimeoutError) {
+        throw new Error(
+          "El servidor tardo demasiado. Puede estar iniciando; intenta de nuevo en unos segundos.",
+        );
+      }
+
+      throw retryError;
+    }
   }
 }
 
@@ -64,16 +133,26 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
   const [createName, setCreateName] = usePersistentInput("home:createName");
   const [joinName, setJoinName] = usePersistentInput("home:joinName");
   const [roomCode, setRoomCode] = usePersistentInput("home:roomCode");
-  const [createAvatarId, setCreateAvatarIdRaw] = usePersistentInput("home:createAvatarId", DEFAULT_AVATAR_ID);
-  const [joinAvatarId, setJoinAvatarIdRaw] = usePersistentInput("home:joinAvatarId", DEFAULT_AVATAR_ID);
-  const [maxPlayers, setMaxPlayers] = useState<2 | 4>(4);
-  const [targetScore, setTargetScore] = useState<15 | 30>(30);
+  const [createAvatarId, setCreateAvatarIdRaw] = usePersistentInput(
+    "home:createAvatarId",
+    DEFAULT_AVATAR_ID,
+  );
+  const [joinAvatarId, setJoinAvatarIdRaw] = usePersistentInput(
+    "home:joinAvatarId",
+    DEFAULT_AVATAR_ID,
+  );
+  const [maxPlayers, setMaxPlayers] = useState<2 | 4>(2);
+  const [targetScore, setTargetScore] = useState<11 | 15 | 30>(15);
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const isBusy = isCreating || isJoining;
-  const selectedCreateAvatarId = isAvatarId(createAvatarId) ? createAvatarId : DEFAULT_AVATAR_ID;
-  const selectedJoinAvatarId = isAvatarId(joinAvatarId) ? joinAvatarId : DEFAULT_AVATAR_ID;
+  const selectedCreateAvatarId = isAvatarId(createAvatarId)
+    ? createAvatarId
+    : DEFAULT_AVATAR_ID;
+  const selectedJoinAvatarId = isAvatarId(joinAvatarId)
+    ? joinAvatarId
+    : DEFAULT_AVATAR_ID;
 
   useEffect(() => {
     const sharedRoomCode = searchParams.get("room")?.trim().toUpperCase() ?? "";
@@ -86,8 +165,14 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
   }, [roomCode, searchParams, setRoomCode]);
 
   const enterRoom = (result: RoomEntryResponse) => {
-    window.localStorage.setItem(`dimadong:${result.snapshot.code}:session`, result.session.roomSessionToken);
-    window.localStorage.setItem(`dimadong:${result.snapshot.code}:seat`, result.session.seatId);
+    window.localStorage.setItem(
+      `dimadong:${result.snapshot.code}:session`,
+      result.session.roomSessionToken,
+    );
+    window.localStorage.setItem(
+      `dimadong:${result.snapshot.code}:seat`,
+      result.session.seatId,
+    );
     sessionStorage.removeItem("home:createName");
     sessionStorage.removeItem("home:joinName");
     sessionStorage.removeItem("home:roomCode");
@@ -104,12 +189,13 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
     }
 
     if (!trimmedName) {
-      setError("Escribí tu nombre para crear la sala.");
+      setError("Escribi tu nombre para crear la sala.");
       return;
     }
 
     void (async () => {
       setIsCreating(true);
+
       try {
         const payload: CreateRoomRequest = {
           displayName: trimmedName,
@@ -118,10 +204,17 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
           targetScore,
           allowBongs: bongUnlocked,
         };
-        const result = await postJson<CreateRoomRequest, RoomEntryResponse>(`${apiBaseUrl}/rooms`, payload);
+        const result = await postJson<CreateRoomRequest, RoomEntryResponse>(
+          `${apiBaseUrl}/rooms`,
+          payload,
+        );
         enterRoom(result);
       } catch (caughtError) {
-        setError(caughtError instanceof Error ? caughtError.message : "No se pudo crear la sala.");
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "No se pudo crear la sala.",
+        );
       } finally {
         setIsCreating(false);
       }
@@ -139,17 +232,18 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
     }
 
     if (!normalizedCode) {
-      setError("Ingresá el código de sala.");
+      setError("Ingresa el codigo de sala.");
       return;
     }
 
     if (!trimmedName) {
-      setError("Escribí tu nombre para unirte.");
+      setError("Escribi tu nombre para unirte.");
       return;
     }
 
     void (async () => {
       setIsJoining(true);
+
       try {
         const payload: JoinRoomRequest = {
           displayName: trimmedName,
@@ -161,7 +255,11 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         );
         enterRoom(result);
       } catch (caughtError) {
-        setError(caughtError instanceof Error ? caughtError.message : "No se pudo entrar a la sala.");
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "No se pudo entrar a la sala.",
+        );
       } finally {
         setIsJoining(false);
       }
@@ -174,7 +272,9 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         onSubmit={handleCreate}
         className="rounded-[1.75rem] border border-white/10 bg-slate-950/72 p-6 backdrop-blur"
       >
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Crear sala</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">
+          Crear sala
+        </p>
         <label className="mt-6 block text-sm text-slate-200/78">
           Tu nombre
           <input
@@ -207,19 +307,22 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
           </div>
           <div>
             <p className="text-sm text-slate-200/78">Puntaje objetivo</p>
+            <p className="mt-1 text-xs text-cyan-200/75">
+              11 es el numero verdadero de DIMADONG.
+            </p>
             <div className="mt-2 flex gap-2">
-              {[15, 30].map((value) => (
+              {[11, 15, 30].map((value) => (
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setTargetScore(value as 15 | 30)}
+                  onClick={() => setTargetScore(value as 11 | 15 | 30)}
                   className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
                     targetScore === value
                       ? "bg-cyan-300 text-slate-950"
                       : "border border-white/10 bg-slate-900/90 text-slate-200"
                   }`}
                 >
-                  {value} puntos
+                  {value === 11 ? "11 · DIMADONG" : `${value} puntos`}
                 </button>
               ))}
             </div>
@@ -230,6 +333,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
           <div className="mt-2 grid grid-cols-4 gap-2">
             {AVATAR_OPTIONS.map((avatar) => {
               const active = selectedCreateAvatarId === avatar.id;
+
               return (
                 <button
                   key={avatar.id}
@@ -272,7 +376,11 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
           disabled={isBusy}
           className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isCreating ? "Creando..." : bongUnlocked ? "Crear sala infectada" : "Crear sala"}
+          {isCreating
+            ? "Creando..."
+            : bongUnlocked
+              ? "Crear sala infectada"
+              : "Crear sala"}
         </button>
       </form>
 
@@ -280,9 +388,11 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         onSubmit={handleJoin}
         className="rounded-[1.75rem] border border-white/10 bg-slate-950/72 p-6 backdrop-blur"
       >
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">Unirse a sala</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">
+          Unirse a sala
+        </p>
         <label className="mt-6 block text-sm text-slate-200/78">
-          Código de sala
+          Codigo de sala
           <input
             className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 uppercase text-white outline-none ring-0 placeholder:text-slate-400"
             value={roomCode}
@@ -306,6 +416,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
           <div className="mt-2 grid grid-cols-4 gap-2">
             {AVATAR_OPTIONS.map((avatar) => {
               const active = selectedJoinAvatarId === avatar.id;
+
               return (
                 <button
                   key={avatar.id}

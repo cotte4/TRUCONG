@@ -365,7 +365,7 @@ export class RoomStoreService {
     }
 
     const maxPlayers = input.maxPlayers ?? 4;
-    const targetScore = input.targetScore ?? 30;
+    const targetScore = input.targetScore ?? 15;
     const allowBongs = input.allowBongs ?? true;
     const roomId = randomUUID();
     const code = this.generateRoomCode();

@@ -165,7 +165,7 @@ export interface CreateRoomRequest {
   displayName: string;
   avatarId?: AvatarId;
   maxPlayers?: 2 | 4;
-  targetScore?: 15 | 30;
+  targetScore?: 11 | 15 | 30;
   allowBongs?: boolean;
 }
 
