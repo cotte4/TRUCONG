@@ -453,6 +453,7 @@ export function LobbyClient({ code }: { code: string }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [recentReactions, setRecentReactions] = useState<ActiveReaction[]>([]);
+  const [navVisible, setNavVisible] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const refreshRoomStateRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -479,6 +480,13 @@ export function LobbyClient({ code }: { code: string }) {
     }, 1_000);
     return () => clearInterval(id);
   }, [recentReactions.length]);
+
+  const currentPhaseForNav = matchState?.phase ?? snapshot?.phase ?? "lobby";
+  useEffect(() => {
+    if (!["lobby", "ready_check"].includes(currentPhaseForNav)) {
+      setNavVisible(false);
+    }
+  }, [currentPhaseForNav]);
 
   useEffect(() => {
     const token = window.localStorage.getItem(getSessionStorageKey(normalizedCode));
@@ -914,6 +922,45 @@ export function LobbyClient({ code }: { code: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Collapsable nav — auto-hides when game starts */}
+      {navVisible ? (
+        <nav className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-white/10 bg-slate-950/72 px-5 py-3 backdrop-blur">
+          <div className="flex items-center gap-3">
+            <span className="text-xl ufo-pulse inline-block">🛸</span>
+            <p className="font-brand-display text-xs text-slate-300">Dimadong</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100">
+              {normalizedCode}
+            </span>
+            <Link
+              href="/manual"
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
+            >
+              Cómo se juega
+            </Link>
+            <Link
+              href="/"
+              className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+            >
+              Inicio
+            </Link>
+          </div>
+        </nav>
+      ) : (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setNavVisible(true)}
+            className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/72 px-4 py-2 text-sm font-semibold text-slate-300 backdrop-blur transition hover:bg-white/10"
+          >
+            <span className="ufo-pulse inline-block">🛸</span>
+            <span>{normalizedCode}</span>
+            <span className="text-xs text-slate-500">▾</span>
+          </button>
+        </div>
+      )}
+
       <section className={panelClass()}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
