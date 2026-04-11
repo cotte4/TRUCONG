@@ -105,14 +105,6 @@ function panelClass(extra = "") {
   return `rounded-[1.75rem] border border-white/10 bg-slate-950/78 p-5 shadow-[0_20px_80px_rgba(2,6,23,0.28)] ${extra}`.trim();
 }
 
-function getFanTransform(index: number, total: number) {
-  const center = (total - 1) / 2;
-  const offset = index - center;
-  const absOffset = Math.abs(offset);
-
-  return `translateX(calc(${offset} * clamp(6px, 1.8vw, 10px))) translateY(calc(${absOffset} * clamp(5px, 1.3vw, 10px))) rotate(calc(${offset} * clamp(2.5deg, 0.9vw, 6deg)))`;
-}
-
 function getRelativeSeatOffset(seatIndex: number, anchorSeatIndex: number | null, totalSeats: number) {
   if (anchorSeatIndex === null || totalSeats <= 0) {
     return seatIndex;
@@ -375,9 +367,9 @@ const SUIT_VISUALS: Record<NormalCardSuit, SuitVisual> = {
     edge: "border-lime-300/55",
     glow: "shadow-[0_0_26px_rgba(196,255,92,0.26)]",
     miniGlow: "drop-shadow-[0_0_8px_rgba(224,255,132,0.9)]",
-    miniSizeClass: "h-7 w-7",
-    centerSizeWatermarkClass: "h-28 w-28",
-    centerSizeHologramClass: "h-20 w-20",
+    miniSizeClass: "h-8 w-8",
+    centerSizeWatermarkClass: "h-32 w-32",
+    centerSizeHologramClass: "h-24 w-24",
   },
   copa: {
     iconPath: "/cards/suits/copa.png",
@@ -385,9 +377,9 @@ const SUIT_VISUALS: Record<NormalCardSuit, SuitVisual> = {
     edge: "border-violet-300/55",
     glow: "shadow-[0_0_26px_rgba(182,113,255,0.3)]",
     miniGlow: "drop-shadow-[0_0_8px_rgba(212,168,255,0.9)]",
-    miniSizeClass: "h-6 w-6",
-    centerSizeWatermarkClass: "h-24 w-24",
-    centerSizeHologramClass: "h-18 w-18",
+    miniSizeClass: "h-7 w-7",
+    centerSizeWatermarkClass: "h-28 w-28",
+    centerSizeHologramClass: "h-22 w-22",
   },
   espada: {
     iconPath: "/cards/suits/espada.png",
@@ -395,9 +387,9 @@ const SUIT_VISUALS: Record<NormalCardSuit, SuitVisual> = {
     edge: "border-cyan-300/55",
     glow: "shadow-[0_0_26px_rgba(73,226,255,0.28)]",
     miniGlow: "drop-shadow-[0_0_8px_rgba(142,248,255,0.9)]",
-    miniSizeClass: "h-7 w-7",
-    centerSizeWatermarkClass: "h-28 w-28",
-    centerSizeHologramClass: "h-20 w-20",
+    miniSizeClass: "h-8 w-8",
+    centerSizeWatermarkClass: "h-32 w-32",
+    centerSizeHologramClass: "h-24 w-24",
   },
   basto: {
     iconPath: "/cards/suits/basto.png",
@@ -405,9 +397,9 @@ const SUIT_VISUALS: Record<NormalCardSuit, SuitVisual> = {
     edge: "border-emerald-300/55",
     glow: "shadow-[0_0_26px_rgba(91,255,142,0.28)]",
     miniGlow: "drop-shadow-[0_0_8px_rgba(147,255,181,0.9)]",
-    miniSizeClass: "h-7 w-7",
-    centerSizeWatermarkClass: "h-27 w-27",
-    centerSizeHologramClass: "h-19 w-19",
+    miniSizeClass: "h-8 w-8",
+    centerSizeWatermarkClass: "h-31 w-31",
+    centerSizeHologramClass: "h-23 w-23",
   },
 };
 
@@ -470,6 +462,7 @@ function WildcardIcon({
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function TrucoCardSprite({
   card,
   artMode = "watermark",
@@ -568,6 +561,136 @@ function TrucoCardSprite({
   );
 }
 
+function ReadableTrucoCardSprite({
+  card,
+  subtitle,
+  artMode = "watermark",
+  disabled = false,
+  active = false,
+  onClick,
+}: {
+  card: CardView;
+  subtitle: string;
+  artMode?: CardArtMode;
+  disabled?: boolean;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  const normalSuit: NormalCardSuit | null = card.suit === "comodin" ? null : card.suit;
+  const visual = normalSuit ? SUIT_VISUALS[normalSuit] : WILDCARD_VISUAL;
+  const isWildcardCard = card.isWildcard;
+  const cornerRank = isWildcardCard ? "★" : `${card.rank}`;
+
+  const centerSizeClass =
+    artMode === "hologram"
+      ? visual.centerSizeHologramClass
+      : visual.centerSizeWatermarkClass;
+
+  const centerIconClass =
+    artMode === "hologram"
+      ? `${centerSizeClass} opacity-95 drop-shadow-[0_0_24px_rgba(255,255,255,0.24)]`
+      : `${centerSizeClass} opacity-88 drop-shadow-[0_2px_12px_rgba(0,0,0,0.18)]`;
+
+  const suitFaceGradient: Record<NormalCardSuit, string> = {
+    oro: "bg-[linear-gradient(180deg,#fffdf0_0%,#fef9e0_55%,#fbedbb_100%)]",
+    copa: "bg-[linear-gradient(180deg,#fdf0ff_0%,#f3e6ff_55%,#e5d0f7_100%)]",
+    espada: "bg-[linear-gradient(180deg,#f0f9ff_0%,#e4f1ff_55%,#cfe0f5_100%)]",
+    basto: "bg-[linear-gradient(180deg,#f0fff5_0%,#e4f7ec_55%,#cfeedd_100%)]",
+  };
+
+  const suitAccentBar: Record<NormalCardSuit, string> = {
+    oro: "bg-[linear-gradient(90deg,#f5c518,#ffe066,#f5c518)]",
+    copa: "bg-[linear-gradient(90deg,#a855f7,#d8b4fe,#a855f7)]",
+    espada: "bg-[linear-gradient(90deg,#06b6d4,#a5f3fc,#06b6d4)]",
+    basto: "bg-[linear-gradient(90deg,#10b981,#6ee7b7,#10b981)]",
+  };
+
+  const cardFaceClass = isWildcardCard
+    ? "bg-[radial-gradient(circle_at_top,rgba(107,66,255,0.65),rgba(21,26,58,0.98)_42%,rgba(10,13,31,1)_100%)] text-white"
+    : `${normalSuit ? suitFaceGradient[normalSuit] : "bg-white"} text-slate-950`;
+  const cardBorderClass = isWildcardCard
+    ? `${visual.edge} shadow-[0_0_28px_rgba(205,88,255,0.26)]`
+    : `${visual.edge} border-white/80 shadow-[0_20px_34px_rgba(2,6,23,0.28)]`;
+  const cornerToneClass = isWildcardCard
+    ? "text-cyan-50"
+    : normalSuit === "copa" || normalSuit === "oro"
+      ? "text-rose-700"
+      : "text-slate-800";
+  const labelToneClass = isWildcardCard
+    ? "border-white/10 bg-slate-950/35 text-cyan-50"
+    : "border-slate-900/10 bg-white/72 text-slate-700";
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`group relative h-full min-h-[224px] w-full overflow-hidden rounded-[1.3rem] border transition disabled:cursor-not-allowed disabled:opacity-55 ${cardFaceClass} ${cardBorderClass} ${active ? `${visual.glow} ring-2 ring-cyan-200/30` : ""} ${!disabled ? "hover:-translate-y-1 hover:shadow-[0_24px_40px_rgba(15,23,42,0.26)]" : ""}`}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgba(255,255,255,0.42),transparent_26%,rgba(255,255,255,0.06)_70%,rgba(15,23,42,0.12)_100%)]" />
+      <div className="pointer-events-none absolute inset-[10px] rounded-[1rem] border border-black/8" />
+      <div className="pointer-events-none absolute inset-x-3 top-3 h-8 rounded-full bg-white/40 blur-2xl" />
+
+      {/* Suit accent bar */}
+      {!isWildcardCard && normalSuit ? (
+        <div className={`pointer-events-none absolute inset-x-0 top-0 h-1.5 ${suitAccentBar[normalSuit]} opacity-80`} />
+      ) : null}
+
+      {isWildcardCard ? (
+        <>
+          <div className="absolute left-3 top-3 z-10 rounded-full border border-cyan-300/55 bg-slate-950/72 px-2 py-1 text-[0.68rem] font-black uppercase tracking-[0.22em] text-cyan-100 shadow-[0_0_12px_rgba(73,226,255,0.28)]">
+            *
+          </div>
+          <div className="absolute right-2 top-2 z-10 rounded-full border border-fuchsia-300/40 bg-fuchsia-500/12 px-2 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-fuchsia-100">
+            Wild
+          </div>
+        </>
+      ) : (
+        <div className="absolute left-3 top-3 z-10 flex flex-col items-center gap-1">
+          <span className={`text-[2.1rem] font-black leading-none [text-shadow:0_1px_4px_rgba(0,0,0,0.15)] ${cornerToneClass}`}>
+            {cornerRank}
+          </span>
+          <SuitIcon
+            suit={normalSuit!}
+            alt={normalSuit!}
+            className={`${visual.miniSizeClass} object-contain ${visual.miniGlow}`}
+          />
+        </div>
+      )}
+
+      {!isWildcardCard ? (
+        <div className="absolute bottom-3 right-3 z-10 flex rotate-180 flex-col items-center gap-1">
+          <span className={`text-[2.1rem] font-black leading-none [text-shadow:0_1px_4px_rgba(0,0,0,0.15)] ${cornerToneClass}`}>
+            {cornerRank}
+          </span>
+          <SuitIcon
+            suit={normalSuit!}
+            alt={normalSuit!}
+            className={`${visual.miniSizeClass} object-contain ${visual.miniGlow}`}
+          />
+        </div>
+      ) : null}
+
+      <div className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2">
+        {isWildcardCard ? (
+          <WildcardIcon alt="DIMADONG alien" className={`${centerIconClass} object-contain`} />
+        ) : (
+          <SuitIcon suit={normalSuit!} alt={normalSuit!} className={centerIconClass} />
+        )}
+      </div>
+
+      <div className={`absolute inset-x-3 bottom-3 z-10 rounded-2xl border px-3 py-2 text-center backdrop-blur-sm ${labelToneClass}`}>
+        <p className={`text-[0.62rem] font-semibold uppercase tracking-[0.28em] ${isWildcardCard ? "text-cyan-200/84" : "text-slate-500"}`}>
+          {isWildcardCard ? "DIMADONG" : subtitle}
+        </p>
+        <p className={`mt-1 text-[0.95rem] font-black tracking-[0.14em] ${isWildcardCard ? "text-white" : "text-slate-950"}`}>
+          {card.label}
+        </p>
+      </div>
+    </button>
+  );
+}
+
 type ChatMessage = {
   id: string;
   seatId: string | null;
@@ -600,6 +723,18 @@ const REACTION_TTL_MS = 4_000;
 const CANTO_TTL_MS = 7_000;
 const RESOLVED_CANTO_TTL_MS = 4_000;
 const SOCKET_ACK_TIMEOUT_MS = 18_000;
+
+function getReactionBubbleClass(relativeOffset: number) {
+  if (relativeOffset === 1) {
+    return "right-[-0.4rem] top-1/2 -translate-y-1/2 translate-x-full";
+  }
+
+  if (relativeOffset === 3) {
+    return "left-[-0.4rem] top-1/2 -translate-x-full -translate-y-1/2";
+  }
+
+  return "left-1/2 top-[-0.55rem] -translate-x-1/2 -translate-y-full";
+}
 
 function getCantoResolutionLabel(event: CantoResolvedEvent) {
   const cantoLabel = getCantoLabel(event.cantoType);
@@ -1298,20 +1433,43 @@ export function LobbyClient({ code }: { code: string }) {
         </div>
       )}
 
-      <section className={panelClass()}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Sala</p>
-            <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">{snapshot.code}</h1>
-            <p className="max-w-2xl text-sm text-slate-300">{statusText}</p>
+      <section className={panelClass(isLobby ? "" : "overflow-hidden border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,15,32,0.98),rgba(11,19,40,0.94)_55%,rgba(7,12,24,0.98)_100%)]")}>
+        <div className={`flex flex-wrap gap-4 ${isLobby ? "items-start justify-between" : "items-center justify-between"}`}>
+          <div className={isLobby ? "space-y-2" : "flex flex-wrap items-center gap-3"}>
+            {isLobby ? (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Sala</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">{snapshot.code}</h1>
+              </>
+            ) : (
+              <>
+                <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/80">
+                  Sala
+                </span>
+                <h1 className="font-brand-display text-xl text-white sm:text-2xl">{snapshot.code}</h1>
+                <span className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${badgeClass()}`}>
+                  {connectionLabel}
+                </span>
+                <span className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${badgeClass()}`}>
+                  {phaseLabel}
+                </span>
+              </>
+            )}
+            <p className={`${isLobby ? "max-w-2xl text-sm text-slate-300" : "max-w-2xl text-sm text-slate-300 sm:min-w-[280px]"}`}>
+              {statusText}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${badgeClass()}`}>
-              {connectionLabel}
-            </span>
-            <span className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${badgeClass()}`}>
-              {phaseLabel}
-            </span>
+            {isMyTurn && turnCountdown !== null ? (
+              <span className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${turnCountdown <= 3 ? "border-rose-300/40 bg-rose-300/12 text-rose-50" : "border-cyan-300/40 bg-cyan-300/12 text-cyan-50"}`}>
+                {turnCountdown}s
+              </span>
+            ) : null}
+            {phase === "reconnect_hold" && reconnectCountdown !== null ? (
+              <span className="rounded-full border border-amber-300/40 bg-amber-300/12 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-amber-50">
+                Reconectando {reconnectCountdown}s
+              </span>
+            ) : null}
             <button
               type="button"
               onClick={handleManualResync}
@@ -1574,8 +1732,16 @@ export function LobbyClient({ code }: { code: string }) {
               </div>
 
               <div className="ovni-table-surface relative mt-8 min-h-[560px] overflow-hidden rounded-[2rem] border border-white/10">
-                <div className="ufo-pulse absolute left-1/2 top-1/2 h-[310px] w-[310px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(83,234,253,0.22),rgba(12,18,38,0.96)_55%,rgba(8,13,29,1)_100%)] shadow-[0_0_90px_rgba(83,234,253,0.2)]" />
-                <div className="absolute left-1/2 top-1/2 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/20 bg-[radial-gradient(circle_at_center,rgba(255,210,54,0.12),rgba(8,13,29,0.1)_70%,transparent_100%)]" />
+                <div className="absolute inset-[7%] rounded-[2.4rem] border border-cyan-300/8" />
+                <div className="absolute inset-x-[14%] top-[11%] h-[72%] rounded-[50%] border border-white/6" />
+                <div className="ufo-pulse absolute left-1/2 top-1/2 h-[330px] w-[330px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(83,234,253,0.26),rgba(12,18,38,0.98)_52%,rgba(8,13,29,1)_100%)] shadow-[0_0_110px_rgba(83,234,253,0.24)]" />
+                <div className="absolute left-1/2 top-1/2 h-[248px] w-[248px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/20 bg-[radial-gradient(circle_at_center,rgba(255,210,54,0.16),rgba(8,13,29,0.08)_70%,transparent_100%)]" />
+                <div className="absolute left-1/2 top-6 -translate-x-1/2 rounded-full border border-white/10 bg-slate-950/70 px-4 py-2 text-center backdrop-blur">
+                  <p className="text-[0.62rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/70">Ronda actual</p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    Mano {matchView?.handNumber ?? "-"} · Baza {matchView?.trickNumber ?? "-"}
+                  </p>
+                </div>
                 {displayTableCards.length === 0 ? (
                   <div className="absolute left-1/2 top-1/2 flex w-[240px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
                     <p className="font-brand-display text-2xl text-white">
@@ -1598,10 +1764,23 @@ export function LobbyClient({ code }: { code: string }) {
                     snapshot.maxPlayers,
                   );
 
+                  const seatReactions = visibleReactions.filter((r) => r.seatId === seat.id).slice(-2);
                   const seatCantos = visibleCantos.filter((c) => c.seatId === seat.id).slice(-2);
 
                   return (
-                    <div key={seat.id} className={`absolute ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)}`}>
+                    <div key={seat.id} className={`absolute z-20 ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)}`}>
+                      {seatReactions.length > 0 ? (
+                        <div className={`pointer-events-none absolute z-30 flex gap-2 ${getReactionBubbleClass(relativeOffset)}`}>
+                          {seatReactions.map((r) => (
+                            <span
+                              key={r.id}
+                              className="reaction-pop flex h-14 w-14 items-center justify-center rounded-full border border-cyan-200/50 bg-slate-950/88 text-3xl shadow-[0_0_24px_rgba(83,234,253,0.34)] backdrop-blur-sm"
+                            >
+                              {r.reaction}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                       {isActiveSeat ? <div className="alien-beam absolute left-1/2 top-12 h-32 w-24 -translate-x-1/2 rounded-full bg-cyan-300/18 blur-xl" /> : null}
                       <div className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 transition-all duration-300 ${palette.panel} ${isActiveSeat ? "shadow-[0_0_0_3px_rgba(83,234,253,0.55),0_0_32px_rgba(83,234,253,0.3)] scale-[1.04]" : palette.glow}`}>
                         {isActiveSeat ? (
@@ -1663,11 +1842,11 @@ export function LobbyClient({ code }: { code: string }) {
                           className="absolute shrink-0"
                           style={{
                             ...getTableCardStyle(snapshot.maxPlayers, relativeOffset),
-                            width: "clamp(120px, 22vw, 160px)",
+                            width: "clamp(132px, 22vw, 170px)",
                           }}
                         >
-                          <div className="absolute inset-x-5 bottom-0 h-6 rounded-full bg-black/45 blur-xl" />
-                          <TrucoCardSprite
+                          <div className="absolute inset-x-4 bottom-0 h-8 rounded-full bg-black/45 blur-xl" />
+                          <ReadableTrucoCardSprite
                             card={play.card}
                             subtitle={play.displayName ?? "Mesa"}
                             artMode="hologram"
@@ -1691,6 +1870,11 @@ export function LobbyClient({ code }: { code: string }) {
                   <h2 className="mt-2 text-2xl font-semibold text-white">
                     {matchView?.yourTeamSide ? `Equipo ${matchView.yourTeamSide}` : "Esperando asiento"}
                   </h2>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {matchView?.yourHand.length
+                      ? "Tus cartas están separadas y listas para jugar."
+                      : "Todavía no llegaron cartas a tu mano."}
+                  </p>
                 </div>
                 {isMyTurn ? (
                   <span className="rounded-full border border-cyan-300/40 bg-cyan-300/12 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
@@ -1701,19 +1885,18 @@ export function LobbyClient({ code }: { code: string }) {
 
               <div className="mt-5 overflow-x-auto overflow-y-hidden rounded-[1.7rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-3 pb-6 pt-4 sm:px-4">
                 {matchView?.yourHand.length ? (
-                  <div className="relative flex min-h-[280px] min-w-max items-end justify-center sm:min-h-[300px]">
+                  <div className="relative flex min-h-[300px] min-w-max items-end gap-4 px-2 sm:min-h-[320px] sm:justify-center">
                     <div className="absolute inset-x-8 bottom-0 h-10 rounded-full bg-black/40 blur-2xl" />
                     {matchView.yourHand.map((card, index) => (
                       <div
                         key={card.id}
-                        className="relative -mx-2 sm:-mx-3 shrink-0 transition md:hover:z-20 md:hover:-translate-y-4"
+                        className="relative shrink-0 transition md:hover:z-20 md:hover:-translate-y-4"
                         style={{
-                          transform: getFanTransform(index, matchView.yourHand.length),
                           zIndex: index + 1,
-                          width: "clamp(132px, 34vw, 190px)",
+                          width: "clamp(148px, 30vw, 220px)",
                         }}
                       >
-                        <TrucoCardSprite
+                        <ReadableTrucoCardSprite
                           card={card}
                           subtitle={card.isWildcard ? "DIMADONG alien" : `${card.rank} de ${card.suit}`}
                           artMode={isMyTurn ? "hologram" : "watermark"}
@@ -2040,7 +2223,7 @@ export function LobbyClient({ code }: { code: string }) {
                       {visibleReactions.slice(-5).map((r) => {
                         const seatName = snapshot.seats.find((s) => s.id === r.seatId)?.displayName;
                         return (
-                          <span key={r.id} title={seatName ?? undefined} className="text-xl leading-none">
+                          <span key={r.id} title={seatName ?? undefined} className="text-base leading-none opacity-70">
                             {r.reaction}
                           </span>
                         );
@@ -2048,6 +2231,7 @@ export function LobbyClient({ code }: { code: string }) {
                     </div>
                   ) : null}
                 </div>
+                <p className="mt-2 text-xs text-slate-500">Ahora salen arriba del asiento que las manda.</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {REACTIONS.map((emoji) => (
                     <button

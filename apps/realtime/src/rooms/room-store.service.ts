@@ -546,7 +546,11 @@ export class RoomStoreService {
       throw new NotFoundException('Session not found.');
     }
 
-    if (seat.status === 'occupied' && seat.socketId && seat.socketId !== socketId) {
+    if (
+      seat.status === 'occupied' &&
+      seat.socketId &&
+      seat.socketId !== socketId
+    ) {
       // Allow same session token to take over with a fresh socket after network churn.
       // The stale socket (if still alive) becomes orphaned and will be ignored on disconnect.
       this.logger.debug(
@@ -1152,7 +1156,10 @@ export class RoomStoreService {
     const raisedEnvidoFromCanto = isRaisingEnvido
       ? (room.match.pendingCanto ?? null)
       : null;
-    if (raisedEnvidoFromCanto && !this.isTrucoCanto(raisedEnvidoFromCanto.cantoType)) {
+    if (
+      raisedEnvidoFromCanto &&
+      !this.isTrucoCanto(raisedEnvidoFromCanto.cantoType)
+    ) {
       room.match.pendingCanto = null;
     }
 
@@ -1662,7 +1669,7 @@ export class RoomStoreService {
     );
     this.pushEvent(
       room,
-        `${actorSeat.displayName ?? 'Jugador'} eligió ${selectedLabel} para el DIMADONG.`,
+      `${actorSeat.displayName ?? 'Jugador'} eligió ${selectedLabel} para el DIMADONG.`,
     );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(
@@ -2408,7 +2415,9 @@ export class RoomStoreService {
   }
 
   private getPendingCantoCallChain(pending: MutablePendingCanto) {
-    return pending.callChain.length > 0 ? [...pending.callChain] : [pending.cantoType];
+    return pending.callChain.length > 0
+      ? [...pending.callChain]
+      : [pending.cantoType];
   }
 
   private getAllowedNextEnvidoCalls(
@@ -2422,7 +2431,9 @@ export class RoomStoreService {
     }
 
     if (lastCall === 'real_envido') {
-      return ['falta_envido'] as Array<'envido' | 'real_envido' | 'falta_envido'>;
+      return ['falta_envido'] as Array<
+        'envido' | 'real_envido' | 'falta_envido'
+      >;
     }
 
     const nextCalls: Array<'envido' | 'real_envido' | 'falta_envido'> = [];
@@ -2463,7 +2474,7 @@ export class RoomStoreService {
       this.getPendingCantoCallChain(pending) as Array<
         'envido' | 'real_envido' | 'falta_envido'
       >,
-    ).includes(newCantoType as 'envido' | 'real_envido' | 'falta_envido');
+    ).includes(newCantoType);
   }
 
   private validateCantoOpen(
@@ -2696,7 +2707,9 @@ export class RoomStoreService {
         1,
         this.getAcceptedEnvidoPointsForChain(
           room,
-          callChain.slice(0, -1) as Array<'envido' | 'real_envido' | 'falta_envido'>,
+          callChain.slice(0, -1) as Array<
+            'envido' | 'real_envido' | 'falta_envido'
+          >,
         ),
       );
     }
@@ -2978,7 +2991,10 @@ export class RoomStoreService {
       }
     }
 
-    const points = this.getAcceptedEnvidoPointsForChain(room, singing.callChain);
+    const points = this.getAcceptedEnvidoPointsForChain(
+      room,
+      singing.callChain,
+    );
 
     const scoreDelta: TeamScoreView = {
       A: winnerTeam === 'A' ? points : 0,

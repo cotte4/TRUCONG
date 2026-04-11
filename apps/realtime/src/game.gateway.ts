@@ -105,9 +105,9 @@ export class GameGateway implements OnGatewayDisconnect {
   >(
     roomCode: string,
     eventName: TEventName,
-    buildPayload: (seatId: string | null) => Parameters<
-      RealtimeServerToClientEvents[TEventName]
-    >[0],
+    buildPayload: (
+      seatId: string | null,
+    ) => Parameters<RealtimeServerToClientEvents[TEventName]>[0],
     fallbackPayload?: Parameters<RealtimeServerToClientEvents[TEventName]>[0],
   ) {
     void this.server
@@ -119,7 +119,9 @@ export class GameGateway implements OnGatewayDisconnect {
             (
               this.server.to(roomCode).emit as (
                 event: TEventName,
-                payload: Parameters<RealtimeServerToClientEvents[TEventName]>[0],
+                payload: Parameters<
+                  RealtimeServerToClientEvents[TEventName]
+                >[0],
               ) => void
             )(eventName, fallbackPayload);
           }
