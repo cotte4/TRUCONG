@@ -1,0 +1,30 @@
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigHostModule dependencies initialized[39m[38;5;3m +22ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPersistenceModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "room:join" message[39m[38;5;3m +89ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "session:resume" message[39m[38;5;3m +1ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "ping" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "lobby:toggle-ready" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "lobby:set-team" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "match:start" message[39m[38;5;3m +1ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "summary:start" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "game:play-card" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "wildcard:request" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "canto:open" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "canto:resolve" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "wildcard:select" message[39m[38;5;3m +1ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "action:submit" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "chat:send" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "reaction:send" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "seat:free" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mGameGateway subscribed to the "room:destroy" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAppController {/}:[39m[38;5;3m +2ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mRoomsController {/rooms}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/rooms, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/rooms/:code/join, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/rooms/:code/resume, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/rooms/:code, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +2ms[39m

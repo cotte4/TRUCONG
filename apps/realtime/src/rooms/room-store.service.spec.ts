@@ -119,6 +119,36 @@ describe('RoomStoreService', () => {
     );
   });
 
+  it('allows reconnect takeover when the same session token gets a new socket id', async () => {
+    const created = service.createRoom({
+      displayName: 'Host',
+      maxPlayers: 2,
+    });
+
+    await service.connectSession(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+      'socket-1',
+    );
+
+    await expect(
+      service.connectSession(
+        created.snapshot.code,
+        created.session.roomSessionToken,
+        'socket-2',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        session: expect.objectContaining({
+          roomSessionToken: created.session.roomSessionToken,
+        }),
+      }),
+    );
+
+    const snapshot = service.getSnapshot(created.snapshot.code);
+    expect(snapshot.seats[0]?.status).toBe('occupied');
+  });
+
   it('requires all players to be ready before the host can start the match', async () => {
     const created = service.createRoom({
       displayName: 'Host',

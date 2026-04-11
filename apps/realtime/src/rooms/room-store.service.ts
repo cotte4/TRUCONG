@@ -320,6 +320,7 @@ type WildcardSelectionResult = {
 @Injectable()
 export class RoomStoreService {
   private readonly logger = new Logger(RoomStoreService.name);
+  private static readonly RECONNECT_GRACE_MS = 20_000;
   private readonly roomsByCode = new Map<string, MutableRoom>();
   private readonly roomCodeByToken = new Map<string, string>();
   private readonly turnTimeouts = new Map<string, NodeJS.Timeout>();
@@ -540,12 +541,12 @@ export class RoomStoreService {
       throw new NotFoundException('Session not found.');
     }
 
-    if (
-      seat.status === 'occupied' &&
-      seat.socketId &&
-      seat.socketId !== socketId
-    ) {
-      throw new BadRequestException('Session is already connected.');
+    if (seat.status === 'occupied' && seat.socketId && seat.socketId !== socketId) {
+      // Allow same session token to take over with a fresh socket after network churn.
+      // The stale socket (if still alive) becomes orphaned and will be ignored on disconnect.
+      this.logger.debug(
+        `Replacing stale socket ${seat.socketId} with ${socketId} for seat ${seat.id}`,
+      );
     }
 
     seat.socketId = socketId;
@@ -598,7 +599,7 @@ export class RoomStoreService {
         ) {
           room.phase = 'reconnect_hold';
           room.match.reconnectDeadlineAt = new Date(
-            Date.now() + 10_000,
+            Date.now() + RoomStoreService.RECONNECT_GRACE_MS,
           ).toISOString();
           room.match.turnDeadlineAt = null;
           this.clearTurnTimeout(room.code);
@@ -3932,7 +3933,7 @@ export class RoomStoreService {
 
     const timeoutMs = this.resolveTimeoutDelay(
       options?.preserveDeadline ? room.match.reconnectDeadlineAt : null,
-      10_000,
+      RoomStoreService.RECONNECT_GRACE_MS,
     );
 
     const timeout = setTimeout(() => {

@@ -1,0 +1,22 @@
+[31m[Nest] 23376  - [39m04/10/2026, 7:42:12 PM [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4001[39m[38;5;3m +1ms[39m
+node:net:1939
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4001
+    at Server.setupListenHandle [as _listen2] (node:net:1939:16)
+    at listenInCluster (node:net:1996:12)
+    at Server.listen (node:net:2101:7)
+    at ExpressAdapter.listen (C:\Users\fran-\OneDrive\Escritorio\TRUCONG\node_modules\.pnpm\@nestjs+platform-express@11_9a64a854a209f3b7257ed2c4c8d40945\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\fran-\OneDrive\Escritorio\TRUCONG\node_modules\.pnpm\@nestjs+core@11.1.18_@nestj_5f6c84f19e088a281aa84e6c5de985be\node_modules\@nestjs\core\nest-application.js:188:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\fran-\OneDrive\Escritorio\TRUCONG\node_modules\.pnpm\@nestjs+core@11.1.18_@nestj_5f6c84f19e088a281aa84e6c5de985be\node_modules\@nestjs\core\nest-application.js:178:16)
+    at async bootstrap (C:\Users\fran-\OneDrive\Escritorio\TRUCONG\apps\realtime\dist\apps\realtime\src\main.js:12:5) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4001
+}
+
+Node.js v22.16.0

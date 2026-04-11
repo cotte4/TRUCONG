@@ -1,0 +1,13 @@
+
+> dimadong@0.1.0 dev:realtime C:\Users\fran-\OneDrive\Escritorio\TRUCONG
+> pnpm --filter @dimadong/realtime start:dev
+
+apps/web                                 |  WARN  Unsupported engine: wanted: {"node":"20.x"} (current: {"node":"v22.16.0","pnpm":"10.33.0"})
+
+> @dimadong/realtime@0.0.1 start:dev C:\Users\fran-\OneDrive\Escritorio\TRUCONG\apps\realtime
+> nest start --watch
+
+[2J[3J[H[[90m7:18:20 PM[0m] Starting compilation in watch mode...
+
+[[90m7:18:23 PM[0m] Found 0 errors. Watching for file changes.
+
