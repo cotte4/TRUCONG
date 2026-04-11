@@ -7,6 +7,7 @@ import { io, type Socket } from "socket.io-client";
 import type {
   AvatarId,
   CantoOpenedEvent,
+  CantoResolvedEvent,
   CardSuit,
   CardView,
   CantoOpenPayload,
@@ -18,6 +19,7 @@ import type {
   EnvidoSeatDeclaredEvent,
   EnvidoSingingState,
   EnvidoWildcardCommitRequestedEvent,
+  HandScoredEvent,
   LobbyActionPayload,
   LobbyTeamPayload,
   MatchProgressState,
@@ -30,11 +32,14 @@ import type {
   RoomSession,
   RoomSnapshot,
   SeatFreePayload,
+  SummaryStartedEvent,
   SummaryStartPayload,
   TablePlayView,
   TeamSide,
   TrickResolvedEvent,
   WildcardSelectPayload,
+  WildcardSelectedEvent,
+  WildcardSelectionRequiredEvent,
 } from "@dimadong/contracts";
 import { apiBaseUrl, socketBaseUrl } from "@/lib/config";
 import { AVATAR_OPTIONS } from "@/lib/avatar-catalog";
@@ -679,6 +684,42 @@ export function LobbyClient({ code }: { code: string }) {
 
         activeSocket.on("envido:wildcard-commit-required", (event: EnvidoWildcardCommitRequestedEvent) => {
           setEnvidoSinging(event.singingState);
+          syncRoomState(event);
+        });
+
+        // Critical: canto:resolve does NOT emit room:updated — only canto:resolved.
+        // Without this, the game freezes after any quiero/no_quiero (truco, envido, etc.).
+        activeSocket.on("canto:resolved", (event: CantoResolvedEvent) => {
+          // Clear envido singing once canto is fully resolved
+          if (!["envido", "real_envido", "falta_envido"].includes(event.cantoType)) {
+            setEnvidoSinging(null);
+          }
+          syncRoomState(event);
+        });
+
+        // Critical: wildcard:request emits only wildcard:selection-required (no room:updated).
+        // Without this, the wildcard panel never appears for the requesting player.
+        activeSocket.on("wildcard:selection-required", (event: WildcardSelectionRequiredEvent) => {
+          setWildcardSelection(event.selection);
+          syncRoomState({ ...event, wildcardSelection: event.selection });
+        });
+
+        // Critical: wildcard:select emits only wildcard:selected (no room:updated).
+        // Without this, state doesn't update after wildcard selection.
+        activeSocket.on("wildcard:selected", (event: WildcardSelectedEvent) => {
+          syncRoomState({ ...event, wildcardSelection: event.selection });
+        });
+
+        // Supplementary: hand:scored fires AFTER room:updated (from play-card), but
+        // clear envidoSinging panel when a new hand starts.
+        activeSocket.on("hand:scored", (event: HandScoredEvent) => {
+          setEnvidoSinging(null);
+          syncRoomState(event);
+        });
+
+        // Supplementary: summary:started from canto:resolve path has no prior room:updated.
+        activeSocket.on("summary:started", (event: SummaryStartedEvent) => {
+          setEnvidoSinging(null);
           syncRoomState(event);
         });
       } catch (caughtError) {
