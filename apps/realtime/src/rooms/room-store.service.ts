@@ -98,6 +98,7 @@ type MutableCard = {
   rank: number;
   label: string;
   isWildcard: boolean;
+  envidoLock?: { rank: number; suit: CardSuit; label: string } | null;
 };
 
 type WildcardChoice = {
@@ -1095,8 +1096,12 @@ export class RoomStoreService {
       ? (room.match?.pendingCanto ?? null)
       : null;
 
+    const isRaisingTruco = this.canRaiseTruco(room, actorSeat.id, cantoType);
+
     if (
-      (!interruptedPendingTruco && room.phase !== 'action_turn') ||
+      (!interruptedPendingTruco &&
+        !isRaisingTruco &&
+        room.phase !== 'action_turn') ||
       !room.match
     ) {
       throw new BadRequestException(
@@ -1106,15 +1111,32 @@ export class RoomStoreService {
 
     if (
       !interruptedPendingTruco &&
+      !isRaisingTruco &&
       room.match.currentTurnSeatId !== actorSeat.id
     ) {
       throw new BadRequestException('Only the active player can open a canto.');
     }
 
-    if (room.match.pendingCanto && !interruptedPendingTruco) {
+    if (
+      room.match.pendingCanto &&
+      !interruptedPendingTruco &&
+      !isRaisingTruco
+    ) {
       throw new BadRequestException(
         'There is already a pending canto response.',
       );
+    }
+
+    // When raising truco, implicitly accept the previous call so validation passes
+    const raisedFromCanto = isRaisingTruco
+      ? (room.match.pendingCanto ?? null)
+      : null;
+    if (raisedFromCanto && this.isTrucoCanto(raisedFromCanto.cantoType)) {
+      room.match.currentHandPoints = Math.max(
+        room.match.currentHandPoints,
+        this.getAcceptedTrucoPoints(raisedFromCanto.cantoType),
+      );
+      room.match.pendingCanto = null;
     }
 
     this.validateCantoOpen(room, cantoType, actorSeat.id);
@@ -1129,7 +1151,10 @@ export class RoomStoreService {
       cantoType,
       actorSeatId: actorSeat.id,
       targetSeatId:
-        interruptedPendingTruco?.actorSeatId ?? targetSeatId ?? null,
+        raisedFromCanto?.actorSeatId ??
+        interruptedPendingTruco?.actorSeatId ??
+        targetSeatId ??
+        null,
       openedAt: new Date().toISOString(),
       responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
     };
@@ -1465,6 +1490,32 @@ export class RoomStoreService {
 
     if (!card?.isWildcard) {
       throw new BadRequestException('Selected card is not a wildcard.');
+    }
+
+    // If the wildcard was committed for envido, it must keep that value for truco — no free choice.
+    if (card.envidoLock) {
+      card.label = card.envidoLock.label;
+      card.rank = card.envidoLock.rank;
+      card.suit = card.envidoLock.suit;
+      card.isWildcard = false;
+      card.envidoLock = null;
+      this.setStatus(
+        room,
+        `${actorSeat.displayName ?? 'Jugador'} juega comodín fijado como ${card.label} (comprometido en envido).`,
+      );
+      this.pushEvent(
+        room,
+        `${actorSeat.displayName ?? 'Jugador'} juega el comodín como ${card.label} (fijado por envido).`,
+      );
+      this.persistSnapshot(room);
+      const snapshot = this.buildSnapshot(room);
+      const lifecycle = this.getRoomLifecycleState(room.code, actorSeat.id);
+      return {
+        snapshot,
+        lifecycle,
+        selectionPending: false,
+        selectionResolved: true,
+      };
     }
 
     const availableLabels = this.getLegalWildcardChoices(room, cardId).map(
@@ -2288,6 +2339,42 @@ export class RoomStoreService {
     );
   }
 
+  private canRaiseTruco(
+    room: MutableRoom,
+    actorSeatId: string | null,
+    newCantoType: MutablePendingCanto['cantoType'],
+  ) {
+    if (!room.match || !this.isTrucoCanto(newCantoType)) {
+      return false;
+    }
+
+    const pending = room.match.pendingCanto;
+
+    if (
+      room.phase !== 'response_pending' ||
+      !pending ||
+      !this.isTrucoCanto(pending.cantoType)
+    ) {
+      return false;
+    }
+
+    // Only the target of the pending canto can raise
+    if (pending.targetSeatId !== actorSeatId) {
+      return false;
+    }
+
+    // New call must be strictly higher in the ladder
+    const ladder: MutablePendingCanto['cantoType'][] = [
+      'truco',
+      'retruco',
+      'vale_cuatro',
+    ];
+    const oldIdx = ladder.indexOf(pending.cantoType);
+    const newIdx = ladder.indexOf(newCantoType);
+
+    return newIdx === oldIdx + 1;
+  }
+
   private validateCantoOpen(
     room: MutableRoom,
     cantoType: MutablePendingCanto['cantoType'],
@@ -2869,12 +2956,15 @@ export class RoomStoreService {
       throw new BadRequestException('Carta dimadong no encontrada en la mano.');
     }
 
-    // Store the override
+    // Store the override for envido calculation
     singing.wildcardOverridesBySeatId[actorSeat.id] = {
       cardId: wildcardCardId,
       rank,
       suit,
     };
+
+    // Lock the wildcard card so it must be played as this value for truco too
+    wildcardCard.envidoLock = { rank, suit, label: `${rank} de ${suit}` };
 
     // Remove from pending
     singing.pendingWildcardCommits = singing.pendingWildcardCommits.filter(
@@ -3664,12 +3754,12 @@ export class RoomStoreService {
 
   private getCardStrength(card: MutableCard) {
     if (card.isWildcard) {
-      return 100;
+      return 99;
     }
 
     const trucoStrength = `${card.rank}-${card.suit}`;
     const ranking: Record<string, number> = {
-      '1-espada': 99,
+      '1-espada': 100,
       '1-basto': 98,
       '7-espada': 97,
       '7-oro': 96,

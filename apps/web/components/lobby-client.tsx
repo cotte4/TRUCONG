@@ -378,6 +378,14 @@ function TrucoCardSprite({
       ? `${centerSizeClass} opacity-95 drop-shadow-[0_0_16px_rgba(255,255,255,0.52)]`
       : `${centerSizeClass} opacity-40`;
 
+  // Emojis para las 4 cartas especiales (las más fuertes del mazo)
+  const specialEmoji: string | null =
+    card.rank === 1 && card.suit === "espada" ? "⚔️" :
+    card.rank === 1 && card.suit === "basto" ? "🪄" :
+    card.rank === 7 && card.suit === "espada" ? "⚡" :
+    card.rank === 7 && card.suit === "oro" ? "💰" :
+    null;
+
   return (
     <button
       type="button"
@@ -399,6 +407,13 @@ function TrucoCardSprite({
           className={`h-5 w-5 object-contain ${visual.miniGlow}`}
         />
       </div>
+
+      {/* Emoji badge para cartas especiales */}
+      {specialEmoji ? (
+        <div className="absolute bottom-2 right-2 z-10 text-xl leading-none drop-shadow-[0_1px_6px_rgba(0,0,0,0.9)]">
+          {specialEmoji}
+        </div>
+      ) : null}
 
       {/* Center: watermark / hologram suit art */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -1643,6 +1658,34 @@ export function LobbyClient({ code }: { code: string }) {
                     No Quiero
                   </button>
                 </div>
+                {/* Raise options for truco */}
+                {(pendingCantoType === "truco" || pendingCantoType === "retruco") ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <p className="w-full text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Subir a</p>
+                    {pendingCantoType === "truco" ? (
+                      <button
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto("retruco")}
+                        className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
+                        title="Retruco vale 3 puntos"
+                      >
+                        Retruco →3
+                      </button>
+                    ) : null}
+                    {pendingCantoType === "retruco" ? (
+                      <button
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto("vale_cuatro")}
+                        className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
+                        title="Vale Cuatro vale 4 puntos"
+                      >
+                        Vale 4 →4
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
                 {/* Raise options for envido */}
                 {(pendingCantoType === "envido" || pendingCantoType === "real_envido") ? (
                   <div className="mt-3 flex flex-wrap gap-2">
