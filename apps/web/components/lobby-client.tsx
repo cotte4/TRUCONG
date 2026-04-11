@@ -15,6 +15,9 @@ import type {
   ChatReceivedEvent,
   ChatSendPayload,
   DetailedWildcardSelectionState,
+  EnvidoSeatDeclaredEvent,
+  EnvidoSingingState,
+  EnvidoWildcardCommitRequestedEvent,
   LobbyActionPayload,
   LobbyTeamPayload,
   MatchProgressState,
@@ -153,6 +156,7 @@ type RealtimePayload = {
   state: MatchProgressState | null;
   transition?: MatchTransitionState | null;
   wildcardSelection?: DetailedWildcardSelectionState | null;
+  envidoSinging?: EnvidoSingingState | null;
   session?: RoomSession | null;
 };
 
@@ -465,6 +469,7 @@ export function LobbyClient({ code }: { code: string }) {
   const [recentReactions, setRecentReactions] = useState<ActiveReaction[]>([]);
   const [recentCantos, setRecentCantos] = useState<ActiveCanto[]>([]);
   const [lastTrickCards, setLastTrickCards] = useState<TablePlayView[]>([]);
+  const [envidoSinging, setEnvidoSinging] = useState<EnvidoSingingState | null>(null);
   const [navVisible, setNavVisible] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const refreshRoomStateRef = useRef<(() => Promise<void>) | null>(null);
@@ -533,6 +538,7 @@ export function LobbyClient({ code }: { code: string }) {
       state: nextState,
       transition: nextTransition,
       wildcardSelection: nextWildcardSelection,
+      envidoSinging: nextEnvidoSinging,
       session: nextSession,
     }: RealtimePayload) => {
       setSnapshot(nextSnapshot);
@@ -541,6 +547,9 @@ export function LobbyClient({ code }: { code: string }) {
       setTransition(nextTransition ?? null);
       setActionPending(false);
       setWildcardSelection(nextWildcardSelection ?? null);
+      if (typeof nextEnvidoSinging !== "undefined") {
+        setEnvidoSinging(nextEnvidoSinging ?? null);
+      }
       if (typeof nextSession !== "undefined") {
         setSession(nextSession);
       }
@@ -658,6 +667,18 @@ export function LobbyClient({ code }: { code: string }) {
           if (event.tableCards?.length) {
             setLastTrickCards(event.tableCards);
           }
+          syncRoomState(event);
+        });
+
+        // Critical: these fire after envido is accepted and carry the updated state.
+        // Without these listeners the game freezes after envido is resolved.
+        activeSocket.on("envido:seat-declared", (event: EnvidoSeatDeclaredEvent) => {
+          setEnvidoSinging(event.singingState);
+          syncRoomState(event);
+        });
+
+        activeSocket.on("envido:wildcard-commit-required", (event: EnvidoWildcardCommitRequestedEvent) => {
+          setEnvidoSinging(event.singingState);
           syncRoomState(event);
         });
       } catch (caughtError) {
@@ -1471,6 +1492,52 @@ export function LobbyClient({ code }: { code: string }) {
                 </div>
               ) : null}
             </div>
+
+            {envidoSinging ? (
+              <div className={panelClass("border-violet-400/25 bg-violet-950/40")}>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-violet-300/80">Canto del Envido</p>
+                <h2 className="mt-1 text-xl font-semibold text-white capitalize">
+                  {envidoSinging.cantoType === "falta_envido" ? "Falta Envido" : envidoSinging.cantoType === "real_envido" ? "Real Envido" : "Envido"}
+                </h2>
+                <div className="mt-4 space-y-2">
+                  {envidoSinging.declarations.length === 0 ? (
+                    <p className="text-sm text-slate-400">Esperando declaraciones…</p>
+                  ) : (
+                    envidoSinging.declarations.map((decl) => {
+                      const seat = snapshot.seats.find((s) => s.id === decl.seatId);
+                      const isMe = decl.seatId === currentSeat?.id;
+                      return (
+                        <div
+                          key={decl.seatId}
+                          className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
+                            isMe
+                              ? "border-cyan-300/25 bg-cyan-300/8"
+                              : "border-white/10 bg-white/[0.03]"
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-white">
+                              {seat?.displayName ?? "Jugador"}
+                              {isMe ? " (vos)" : ""}
+                            </p>
+                            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">
+                              Equipo {decl.teamSide}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            {decl.action === "son_buenas" ? (
+                              <span className="text-sm font-bold text-emerald-400">Son buenas</span>
+                            ) : (
+                              <span className="text-2xl font-black text-white">{decl.score}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             {needsWildcardSelection ? (
               <div className={panelClass("border-amber-300/20 bg-amber-300/8")}>
