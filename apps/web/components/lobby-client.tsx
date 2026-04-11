@@ -955,6 +955,7 @@ export function LobbyClient({ code }: { code: string }) {
   const [navVisible, setNavVisible] = useState(true);
   const [lastHandScoredEvent, setLastHandScoredEvent] = useState<HandScoredEvent | null>(null);
   const [isDealAnimActive, setIsDealAnimActive] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const refreshRoomStateRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -1026,6 +1027,12 @@ export function LobbyClient({ code }: { code: string }) {
     setLastHandScoredEvent(null);
     setIsDealAnimActive(true);
     setTimeout(() => setIsDealAnimActive(false), 1800);
+  }, []);
+
+  const handleCopyLink = useCallback(async () => {
+    await navigator.clipboard.writeText(window.location.href);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   }, []);
 
   useEffect(() => {
@@ -1615,7 +1622,20 @@ export function LobbyClient({ code }: { code: string }) {
             {isLobby ? (
               <>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Sala</p>
-                <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">{snapshot.code}</h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">{snapshot.code}</h1>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyLink()}
+                    className={`rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] transition ${
+                      linkCopied
+                        ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-300"
+                        : "border-white/15 bg-white/5 text-slate-300 hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-200"
+                    }`}
+                  >
+                    {linkCopied ? "✓ Copiado" : "Invitar"}
+                  </button>
+                </div>
               </>
             ) : (
               <>
