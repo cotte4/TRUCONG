@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 function usePersistentInput(key: string, initial = "") {
@@ -58,8 +58,9 @@ async function postJson<TBody, TResult>(url: string, body: TBody, timeoutMs = 15
   }
 }
 
-export function HomeClient() {
+export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [createName, setCreateName] = usePersistentInput("home:createName");
   const [joinName, setJoinName] = usePersistentInput("home:joinName");
   const [roomCode, setRoomCode] = usePersistentInput("home:roomCode");
@@ -73,6 +74,16 @@ export function HomeClient() {
   const isBusy = isCreating || isJoining;
   const selectedCreateAvatarId = isAvatarId(createAvatarId) ? createAvatarId : DEFAULT_AVATAR_ID;
   const selectedJoinAvatarId = isAvatarId(joinAvatarId) ? joinAvatarId : DEFAULT_AVATAR_ID;
+
+  useEffect(() => {
+    const sharedRoomCode = searchParams.get("room")?.trim().toUpperCase() ?? "";
+
+    if (!sharedRoomCode || sharedRoomCode === roomCode) {
+      return;
+    }
+
+    setRoomCode(sharedRoomCode);
+  }, [roomCode, searchParams, setRoomCode]);
 
   const enterRoom = (result: RoomEntryResponse) => {
     window.localStorage.setItem(`dimadong:${result.snapshot.code}:session`, result.session.roomSessionToken);
@@ -105,7 +116,7 @@ export function HomeClient() {
           avatarId: selectedCreateAvatarId,
           maxPlayers,
           targetScore,
-          allowBongs: true,
+          allowBongs: bongUnlocked,
         };
         const result = await postJson<CreateRoomRequest, RoomEntryResponse>(`${apiBaseUrl}/rooms`, payload);
         enterRoom(result);
@@ -245,12 +256,23 @@ export function HomeClient() {
             })}
           </div>
         </div>
+        <div
+          className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
+            bongUnlocked
+              ? "border-amber-300/30 bg-amber-300/10 text-amber-50"
+              : "border-white/10 bg-white/[0.03] text-slate-300"
+          }`}
+        >
+          {bongUnlocked
+            ? "Esta sala va a crearse con el protocolo BONG activo."
+            : "Las salas nuevas arrancan sin BONG. Si queres ese modo raro, primero encontra la senal alien en la landing."}
+        </div>
         <button
           type="submit"
           disabled={isBusy}
           className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isCreating ? "Creando..." : "Crear sala"}
+          {isCreating ? "Creando..." : bongUnlocked ? "Crear sala infectada" : "Crear sala"}
         </button>
       </form>
 

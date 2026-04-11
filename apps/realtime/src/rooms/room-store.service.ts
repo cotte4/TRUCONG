@@ -4204,10 +4204,7 @@ export class RoomStoreService {
     }
   }
 
-  private scheduleCantoTimeout(
-    roomCode: string,
-    options?: { preserveDeadline?: boolean },
-  ) {
+  private scheduleCantoTimeout(roomCode: string) {
     this.clearCantoTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
 
@@ -4216,10 +4213,8 @@ export class RoomStoreService {
     }
 
     const timeoutMs = this.resolveTimeoutDelay(
-      options?.preserveDeadline
-        ? room.match.pendingCanto.responseDeadlineAt
-        : null,
-      60_000,
+      room.match.pendingCanto.responseDeadlineAt,
+      12_000,
     );
 
     const timeout = setTimeout(() => {
@@ -4380,7 +4375,7 @@ export class RoomStoreService {
     }
 
     if (room.phase === 'response_pending' && room.match.pendingCanto) {
-      this.scheduleCantoTimeout(roomCode, { preserveDeadline: true });
+      this.scheduleCantoTimeout(roomCode);
       return;
     }
 

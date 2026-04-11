@@ -318,6 +318,67 @@ body {
   animation: bong-flash-backdrop 2.6s ease forwards;
 }
 
+@keyframes landing-glitch-svg {
+  0%   { transform: translate(0) skewX(0deg); filter: hue-rotate(0deg) drop-shadow(0 0 0 rgba(103,232,249,0)); }
+  12%  { transform: translate(-3px, 1px) skewX(-8deg); filter: hue-rotate(8deg) drop-shadow(4px 0 0 rgba(255,77,184,0.38)); }
+  24%  { transform: translate(3px, -1px) skewX(6deg); filter: hue-rotate(-8deg) drop-shadow(-4px 0 0 rgba(103,232,249,0.38)); }
+  36%  { transform: translate(-2px, 0) skewX(-4deg); filter: hue-rotate(12deg) drop-shadow(3px 0 0 rgba(74,222,128,0.32)); }
+  48%  { transform: translate(2px, 1px) skewX(3deg); filter: hue-rotate(-6deg) drop-shadow(-3px 0 0 rgba(251,191,36,0.32)); }
+  100% { transform: translate(0) skewX(0deg); filter: hue-rotate(0deg) drop-shadow(0 0 0 rgba(103,232,249,0)); }
+}
+
+@keyframes landing-glitch-panel {
+  0%   { opacity: 0.45; transform: translateX(-8px); }
+  20%  { opacity: 1; transform: translateX(7px); }
+  45%  { opacity: 0.82; transform: translateX(-4px); }
+  70%  { opacity: 1; transform: translateX(3px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes landing-glitch-ring {
+  0%   { opacity: 0; transform: scale(0.92); }
+  20%  { opacity: 1; transform: scale(1.04); }
+  55%  { opacity: 0.85; transform: scale(0.98); }
+  100% { opacity: 0; transform: scale(1.08); }
+}
+
+@keyframes landing-glitch-scanline {
+  0%   { opacity: 0; transform: translateY(-32%); }
+  18%  { opacity: 0.95; transform: translateY(-6%); }
+  70%  { opacity: 0.55; transform: translateY(36%); }
+  100% { opacity: 0; transform: translateY(60%); }
+}
+
+.landing-glitch-svg {
+  animation: landing-glitch-svg 0.72s steps(2, end) both;
+}
+
+.landing-glitch-panel {
+  animation: landing-glitch-panel 0.52s steps(2, end) both;
+}
+
+.landing-glitch-ring {
+  animation: landing-glitch-ring 0.65s ease-out both;
+  box-shadow:
+    0 0 20px rgba(103, 232, 249, 0.4),
+    0 0 42px rgba(251, 191, 36, 0.18);
+}
+
+.landing-glitch-button {
+  box-shadow:
+    0 0 0 1px rgba(251, 191, 36, 0.3) inset,
+    0 0 24px rgba(251, 191, 36, 0.28);
+  animation: landing-glitch-panel 0.42s steps(2, end) both;
+}
+
+.landing-glitch-scanline {
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(103, 232, 249, 0.16) 45%, rgba(251, 191, 36, 0.26) 52%, transparent 100%);
+  mix-blend-mode: screen;
+  animation: landing-glitch-scanline 0.58s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .canto-action-btn-truco:hover {
     animation: none;
@@ -338,6 +399,13 @@ body {
     animation: none;
   }
   .bong-flash-bg {
+    animation: none;
+  }
+  .landing-glitch-svg,
+  .landing-glitch-panel,
+  .landing-glitch-ring,
+  .landing-glitch-button,
+  .landing-glitch-scanline {
     animation: none;
   }
 }
