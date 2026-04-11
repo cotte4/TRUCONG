@@ -978,6 +978,7 @@ export function LobbyClient({ code }: { code: string }) {
                   anchorSeatIndex,
                   snapshot.maxPlayers,
                 );
+                const seatReactions = visibleReactions.filter((r) => r.seatId === seat.id).slice(-3);
 
                 return (
                   <div key={seat.id} className={`absolute ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)}`}>
@@ -1032,6 +1033,15 @@ export function LobbyClient({ code }: { code: string }) {
                         >
                           Liberar asiento
                         </button>
+                      ) : null}
+                      {seatReactions.length > 0 ? (
+                        <div className="mt-3 flex justify-center gap-1.5">
+                          {seatReactions.map((r) => (
+                            <span key={r.id} className="reaction-pop text-2xl leading-none">
+                              {r.reaction}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
                   </div>

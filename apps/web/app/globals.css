@@ -194,6 +194,19 @@ body {
   }
 }
 
+@keyframes reaction-pop {
+  0%   { opacity: 0; transform: scale(0.3) translateY(6px); }
+  12%  { opacity: 1; transform: scale(1.35) translateY(0); }
+  22%  { transform: scale(1); }
+  70%  { opacity: 1; transform: scale(1) translateY(0); }
+  100% { opacity: 0; transform: scale(0.85) translateY(-10px); }
+}
+
+.reaction-pop {
+  display: inline-block;
+  animation: reaction-pop 4s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .canto-action-btn-truco:hover {
     animation: none;
