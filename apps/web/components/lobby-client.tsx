@@ -1682,11 +1682,11 @@ export function LobbyClient({ code }: { code: string }) {
           <section className={`${panelClass()} overflow-hidden`}>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Previa</p>
-                <h2 className="mt-2 text-2xl font-semibold text-white">Mesa alien lista para despegar</h2>
+                <p className="text-xs font-bold uppercase tracking-[0.28em] text-slate-500">Previa</p>
+                <h2 className="mt-1.5 text-xl font-bold text-white">Mesa alien</h2>
               </div>
-              <span className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${badgeClass(everybodyReady)}`}>
-                {filledSeats.length}/{snapshot.maxPlayers} sentados
+              <span className={`rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] ${badgeClass(everybodyReady)}`}>
+                {filledSeats.length}/{snapshot.maxPlayers}
               </span>
             </div>
 
@@ -1694,11 +1694,9 @@ export function LobbyClient({ code }: { code: string }) {
               <div className="ufo-pulse absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(83,234,253,0.2),rgba(13,19,38,0.96)_58%,rgba(9,16,29,1)_100%)] shadow-[0_0_70px_rgba(83,234,253,0.18)]" />
               <div className="absolute left-1/2 top-1/2 h-[210px] w-[210px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/20 bg-[radial-gradient(circle_at_center,rgba(255,212,54,0.12),rgba(6,11,24,0.82)_62%,rgba(6,11,24,0)_100%)]" />
               <div className="absolute left-1/2 top-1/2 flex w-[220px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100/70">Sala {snapshot.code}</p>
-                <p className="font-brand-display mt-3 text-2xl text-white">Plato volador</p>
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-                  Acá van a caer las cartas cuando arranque la mano.
-                </p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.38em] text-cyan-300/50">{snapshot.code}</p>
+                <p className="font-brand-display mt-2 text-2xl text-white">Plato volador</p>
+                <p className="mt-3 text-xl text-cyan-200/20 select-none">⬡</p>
               </div>
 
               {snapshot.seats.map((seat) => {
@@ -1720,20 +1718,31 @@ export function LobbyClient({ code }: { code: string }) {
                           <AvatarCircle avatarId={seat.avatarId} tone={tone} active={isCurrentSeat} size={40} />
                         <div className="min-w-0">
                           <p className="truncate text-base font-semibold text-white">
-                            {seat.displayName ?? "Asiento libre"}
+                            {seat.displayName ?? "—"}
                           </p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
-                            {seat.teamSide ? `Equipo ${seat.teamSide}` : "Esperando"}
+                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
+                            {seat.teamSide ? `Equipo ${seat.teamSide}` : "Equipo ?"}
                           </p>
-                          <p className="mt-2 text-sm text-slate-300">
-                            {seat.displayName
-                              ? isCurrentSeat
-                                ? seat.isReady ? "Vos, listo para jugar." : "Vos, falta marcar listo."
-                                : seat.isReady
-                                  ? "Listo para arrancar."
-                                  : "Todavía no está listo."
-                              : "Disponible para entrar."}
-                          </p>
+                          {(() => {
+                            if (!seat.displayName) return (
+                              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                                <span className="h-1.5 w-1.5 rounded-full bg-slate-600" />
+                                libre
+                              </span>
+                            );
+                            if (seat.isReady) return (
+                              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-300">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                listo
+                              </span>
+                            );
+                            return (
+                              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-300/30 bg-amber-300/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.22em] text-amber-300">
+                                <span className={`h-1.5 w-1.5 rounded-full bg-amber-400 ${isCurrentSeat ? "pulse-dot" : ""}`} />
+                                {isCurrentSeat ? "falta vos" : "espera"}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
 
@@ -1784,25 +1793,21 @@ export function LobbyClient({ code }: { code: string }) {
 
           <aside className={`${panelClass("space-y-5")} border-amber-200/20 bg-[#121827]/88`}>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-100/70">Cabina</p>
-              <h2 className="mt-2 text-2xl font-semibold text-white">Chequeo previo al despegue</h2>
+              <p className="text-xs font-bold uppercase tracking-[0.28em] text-amber-300/60">Cabina</p>
             </div>
 
-            <div className="grid gap-3">
-              {[
-                `Modo: ${snapshot.maxPlayers === 2 ? "1 contra 1" : "2 contra 2"}`,
-                `A cuánto: ${snapshot.targetScore} puntos`,
-                `Equipos: ${teamsBalanced ? "balanceados" : "faltan acomodar"}`,
-                `BONGS: ${snapshot.allowBongs ? "encendidos" : "apagados"}`,
-              ].map((item) => (
-                <div key={item} className="rounded-[1.35rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-slate-200">
-                  {item}
+            <div className="grid gap-2">
+              {([
+                { label: "MODO", value: snapshot.maxPlayers === 2 ? "1×1" : "2×2", ok: true },
+                { label: "PUNTOS", value: `${snapshot.targetScore}`, ok: true },
+                { label: "EQUIPOS", value: teamsBalanced ? "OK" : "FALTA", ok: teamsBalanced },
+                { label: "BONGS", value: snapshot.allowBongs ? "ON" : "OFF", ok: snapshot.allowBongs },
+              ] as { label: string; value: string; ok: boolean }[]).map((item) => (
+                <div key={item.label} className="hud-row flex items-center justify-between rounded-[1.2rem] border border-white/8 bg-white/[0.03] px-4 py-3">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">{item.label}</span>
+                  <span className={`text-sm font-bold tracking-wide ${item.ok ? "text-cyan-200" : "text-amber-300"}`}>{item.value}</span>
                 </div>
               ))}
-            </div>
-
-            <div className="rounded-[1.5rem] border border-cyan-300/20 bg-cyan-300/10 px-4 py-4 text-sm text-cyan-50">
-              Cuando todos estén listos, el OVNI se abre y empieza la mano.
             </div>
 
             {currentSeat ? (
