@@ -39,14 +39,14 @@ export default function Home() {
               Truco con{" "}
               <span className="text-cyan-300">aliens,</span>
               <br />
-              comodines y<br />
+              DIMADONGS y<br />
               <span className="text-rose-400">caos</span> controlado.
             </h1>
             <p className="max-w-xl text-lg leading-8 text-slate-300">
               Armás la sala, pasás el código y arranca la mano — con las reglas de siempre y los BONGS que nunca estuvieron pero deberían haber estado.
             </p>
             <div className="flex flex-wrap gap-2">
-              {["👽 Aliens", "🃏 Comodines", "💥 BONG", "🔒 Sala privada", "⚡ Tiempo real"].map((chip) => (
+              {["?? Aliens", "?? DIMADONG", "?? BONG", "?? Sala privada", "? Tiempo real"].map((chip) => (
                 <span
                   key={chip}
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-300"
@@ -126,7 +126,7 @@ export default function Home() {
             </svg>
             {/* Card floating near UFO */}
             <div className="absolute bottom-4 -right-4 rounded-2xl border border-white/10 bg-slate-900/90 px-3 py-2 backdrop-blur text-xs text-slate-300 whitespace-nowrap shadow-xl">
-              🃏 Comodín activado
+              ?? DIMADONG activado
             </div>
           </div>
         </section>

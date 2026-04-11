@@ -1,4 +1,4 @@
-import type { CardSignature, CardView, CardSuit } from './types.js';
+import type { CardSignature, CardView, NormalCardSuit } from './types.js';
 
 const TRUCO_STRENGTHS: Record<string, number> = {
   '1-espada': 14,
@@ -100,6 +100,6 @@ export function getTrucoWinningCard(cards: CardSignature[]) {
   return isTie ? null : currentWinner;
 }
 
-export function createCardSignature(rank: number, suit: CardSuit): CardSignature {
+export function createCardSignature(rank: number, suit: NormalCardSuit): CardSignature {
   return { rank, suit };
 }

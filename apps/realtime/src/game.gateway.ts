@@ -100,6 +100,54 @@ export class GameGateway implements OnGatewayDisconnect {
   @WebSocketServer()
   server!: RealtimeServer;
 
+  private emitPersonalizedEvent<
+    TEventName extends keyof RealtimeServerToClientEvents,
+  >(
+    roomCode: string,
+    eventName: TEventName,
+    buildPayload: (seatId: string | null) => Parameters<
+      RealtimeServerToClientEvents[TEventName]
+    >[0],
+    fallbackPayload?: Parameters<RealtimeServerToClientEvents[TEventName]>[0],
+  ) {
+    void this.server
+      .in(roomCode)
+      .fetchSockets()
+      .then((clients) => {
+        if (clients.length === 0) {
+          if (typeof fallbackPayload !== 'undefined') {
+            (
+              this.server.to(roomCode).emit as (
+                event: TEventName,
+                payload: Parameters<RealtimeServerToClientEvents[TEventName]>[0],
+              ) => void
+            )(eventName, fallbackPayload);
+          }
+          return;
+        }
+
+        for (const client of clients) {
+          const payload = buildPayload(client.data.seatId ?? null);
+          (
+            this.server.to(client.id).emit as (
+              event: TEventName,
+              payload: Parameters<RealtimeServerToClientEvents[TEventName]>[0],
+            ) => void
+          )(eventName, payload);
+        }
+      })
+      .catch(() => {
+        if (typeof fallbackPayload !== 'undefined') {
+          (
+            this.server.to(roomCode).emit as (
+              event: TEventName,
+              payload: Parameters<RealtimeServerToClientEvents[TEventName]>[0],
+            ) => void
+          )(eventName, fallbackPayload);
+        }
+      });
+  }
+
   @SubscribeMessage('room:join')
   async handleRoomJoin(
     @MessageBody() payload: RoomJoinPayload,
@@ -241,7 +289,33 @@ export class GameGateway implements OnGatewayDisconnect {
         recoveredAt,
       };
 
-      this.server.to(roomCode).emit('session:recovered', recoveredEvent);
+      this.emitPersonalizedEvent(
+        roomCode,
+        'session:recovered',
+        (seatId) => {
+          const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+            roomCode,
+            seatId,
+          );
+
+          return {
+            ...recoveredEvent,
+            matchView: personalizedLifecycle.matchView,
+            state: this.getRoomProgressStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              result.snapshot,
+            ),
+            transition: this.getRoomTransitionStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              result.snapshot,
+            ),
+            wildcardSelection: personalizedLifecycle.wildcardSelectionState,
+          };
+        },
+        recoveredEvent,
+      );
 
       ack({
         ok: true,
@@ -490,7 +564,7 @@ export class GameGateway implements OnGatewayDisconnect {
         ),
         this.buildSeatUpdatedEvent(roomCode, roomSessionToken, snapshot),
       );
-      this.server.to(roomCode).emit('summary:started', {
+      const summaryEvent = {
         roomCode,
         summary,
         handNumber: matchView?.handNumber ?? 0,
@@ -501,7 +575,34 @@ export class GameGateway implements OnGatewayDisconnect {
         state,
         snapshot,
         matchView,
-      } satisfies SummaryStartedEvent);
+      } satisfies SummaryStartedEvent;
+
+      this.emitPersonalizedEvent(
+        roomCode,
+        'summary:started',
+        (seatId) => {
+          const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+            roomCode,
+            seatId,
+          );
+
+          return {
+            ...summaryEvent,
+            matchView: personalizedLifecycle.matchView,
+            transition: this.getRoomTransitionStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+            state: this.getRoomProgressStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+          };
+        },
+        summaryEvent,
+      );
 
       ack({
         ok: true,
@@ -618,14 +719,37 @@ export class GameGateway implements OnGatewayDisconnect {
         this.buildSeatUpdatedEvent(snapshot.code, roomSessionToken, snapshot),
       );
       if (result.trickResolved) {
-        this.server
-          .to(snapshot.code)
-          .emit('trick:resolved', trickResolvedEvent);
+        this.emitPersonalizedEvent(
+          snapshot.code,
+          'trick:resolved',
+          (seatId) => {
+            const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+              snapshot.code,
+              seatId,
+            );
+
+            return {
+              ...trickResolvedEvent,
+              matchView: personalizedLifecycle.matchView,
+              state: this.getRoomProgressStateOrFallback(
+                snapshot.code,
+                personalizedLifecycle,
+                snapshot,
+              ),
+              transition: this.getRoomTransitionStateOrFallback(
+                snapshot.code,
+                personalizedLifecycle,
+                snapshot,
+              ),
+            };
+          },
+          trickResolvedEvent,
+        );
       }
 
       if (result.handScored) {
         const scoredAt = resolvedAt;
-        this.server.to(snapshot.code).emit('hand:scored', {
+        const handScoredEvent = {
           roomCode: snapshot.code,
           handNumber: state.handNumber,
           dealerSeatId: state.dealerSeatId,
@@ -644,11 +768,40 @@ export class GameGateway implements OnGatewayDisconnect {
           snapshot,
           matchView,
           summary: matchView?.summary ?? null,
-        } satisfies HandScoredEvent);
+        } satisfies HandScoredEvent;
+
+        this.emitPersonalizedEvent(
+          snapshot.code,
+          'hand:scored',
+          (seatId) => {
+            const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+              snapshot.code,
+              seatId,
+            );
+            const personalizedMatchView = personalizedLifecycle.matchView;
+
+            return {
+              ...handScoredEvent,
+              matchView: personalizedMatchView,
+              summary: personalizedMatchView?.summary ?? null,
+              state: this.getRoomProgressStateOrFallback(
+                snapshot.code,
+                personalizedLifecycle,
+                snapshot,
+              ),
+              transition: this.getRoomTransitionStateOrFallback(
+                snapshot.code,
+                personalizedLifecycle,
+                snapshot,
+              ),
+            };
+          },
+          handScoredEvent,
+        );
       }
 
       if (result.summaryStarted && matchView?.summary) {
-        this.server.to(snapshot.code).emit('summary:started', {
+        const summaryEvent = {
           roomCode: snapshot.code,
           summary: matchView.summary,
           handNumber: state.handNumber,
@@ -659,7 +812,34 @@ export class GameGateway implements OnGatewayDisconnect {
           state,
           snapshot,
           matchView,
-        } satisfies SummaryStartedEvent);
+        } satisfies SummaryStartedEvent;
+
+        this.emitPersonalizedEvent(
+          snapshot.code,
+          'summary:started',
+          (seatId) => {
+            const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+              snapshot.code,
+              seatId,
+            );
+
+            return {
+              ...summaryEvent,
+              matchView: personalizedLifecycle.matchView,
+              transition: this.getRoomTransitionStateOrFallback(
+                snapshot.code,
+                personalizedLifecycle,
+                snapshot,
+              ),
+              state: this.getRoomProgressStateOrFallback(
+                snapshot.code,
+                personalizedLifecycle,
+                snapshot,
+              ),
+            };
+          },
+          summaryEvent,
+        );
       }
 
       ack({ ok: true });
@@ -732,7 +912,32 @@ export class GameGateway implements OnGatewayDisconnect {
         reason: snapshot.statusText,
       };
 
-      this.server.to(roomCode).emit('wildcard:selection-required', event);
+      this.emitPersonalizedEvent(
+        roomCode,
+        'wildcard:selection-required',
+        (seatId) => {
+          const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+            roomCode,
+            seatId,
+          );
+
+          return {
+            ...event,
+            matchView: personalizedLifecycle.matchView,
+            state: this.getRoomProgressStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+            transition: this.getRoomTransitionStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+          };
+        },
+        event,
+      );
 
       ack({
         ok: true,
@@ -844,7 +1049,32 @@ export class GameGateway implements OnGatewayDisconnect {
         matchView,
       };
 
-      this.server.to(roomCode).emit('canto:opened', event);
+      this.emitPersonalizedEvent(
+        roomCode,
+        'canto:opened',
+        (seatId) => {
+          const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+            roomCode,
+            seatId,
+          );
+
+          return {
+            ...event,
+            matchView: personalizedLifecycle.matchView,
+            state: this.getRoomProgressStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+            transition: this.getRoomTransitionStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+          };
+        },
+        event,
+      );
 
       ack({
         ok: true,
@@ -969,7 +1199,32 @@ export class GameGateway implements OnGatewayDisconnect {
         matchView,
       };
 
-      this.server.to(roomCode).emit('canto:resolved', event);
+      this.emitPersonalizedEvent(
+        roomCode,
+        'canto:resolved',
+        (seatId) => {
+          const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+            roomCode,
+            seatId,
+          );
+
+          return {
+            ...event,
+            matchView: personalizedLifecycle.matchView,
+            state: this.getRoomProgressStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+            transition: this.getRoomTransitionStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+          };
+        },
+        event,
+      );
 
       // If envido was accepted, handle the singing phase
       if (result.envidoSinging) {
@@ -999,9 +1254,25 @@ export class GameGateway implements OnGatewayDisconnect {
               snapshot,
               matchView,
             };
-            this.server
-              .to(roomCode)
-              .emit('envido:wildcard-commit-required', commitEvent);
+            this.emitPersonalizedEvent(
+              roomCode,
+              'envido:wildcard-commit-required',
+              (seatId) => {
+                const personalizedLifecycle =
+                  this.roomStore.getRoomLifecycleState(roomCode, seatId);
+
+                return {
+                  ...commitEvent,
+                  matchView: personalizedLifecycle.matchView,
+                  state: this.getRoomProgressStateOrFallback(
+                    roomCode,
+                    personalizedLifecycle,
+                    snapshot,
+                  ),
+                };
+              },
+              commitEvent,
+            );
           }
         } else {
           // No wildcards pending — emit all declarations sequentially with short delays
@@ -1017,7 +1288,7 @@ export class GameGateway implements OnGatewayDisconnect {
       }
 
       if (result.matchEnded && matchView?.summary) {
-        this.server.to(roomCode).emit('summary:started', {
+        const summaryEvent = {
           roomCode,
           summary: matchView.summary,
           handNumber: matchView.handNumber,
@@ -1029,7 +1300,34 @@ export class GameGateway implements OnGatewayDisconnect {
           state,
           snapshot,
           matchView,
-        } satisfies SummaryStartedEvent);
+        } satisfies SummaryStartedEvent;
+
+        this.emitPersonalizedEvent(
+          roomCode,
+          'summary:started',
+          (seatId) => {
+            const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+              roomCode,
+              seatId,
+            );
+
+            return {
+              ...summaryEvent,
+              matchView: personalizedLifecycle.matchView,
+              transition: this.getRoomTransitionStateOrFallback(
+                roomCode,
+                personalizedLifecycle,
+                snapshot,
+              ),
+              state: this.getRoomProgressStateOrFallback(
+                roomCode,
+                personalizedLifecycle,
+                snapshot,
+              ),
+            };
+          },
+          summaryEvent,
+        );
       }
 
       ack({
@@ -1171,7 +1469,32 @@ export class GameGateway implements OnGatewayDisconnect {
         matchView,
       };
 
-      this.server.to(roomCode).emit('wildcard:selected', event);
+      this.emitPersonalizedEvent(
+        roomCode,
+        'wildcard:selected',
+        (seatId) => {
+          const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+            roomCode,
+            seatId,
+          );
+
+          return {
+            ...event,
+            matchView: personalizedLifecycle.matchView,
+            state: this.getRoomProgressStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+            transition: this.getRoomTransitionStateOrFallback(
+              roomCode,
+              personalizedLifecycle,
+              snapshot,
+            ),
+          };
+        },
+        event,
+      );
 
       ack({
         ok: true,
@@ -2148,7 +2471,27 @@ export class GameGateway implements OnGatewayDisconnect {
           matchView,
         };
 
-        this.server.to(roomCode).emit('envido:seat-declared', event);
+        this.emitPersonalizedEvent(
+          roomCode,
+          'envido:seat-declared',
+          (seatId) => {
+            const personalizedLifecycle = this.roomStore.getRoomLifecycleState(
+              roomCode,
+              seatId,
+            );
+
+            return {
+              ...event,
+              matchView: personalizedLifecycle.matchView,
+              state: this.getRoomProgressStateOrFallback(
+                roomCode,
+                personalizedLifecycle,
+                snapshot,
+              ),
+            };
+          },
+          event,
+        );
       }, index * 600);
     });
   }

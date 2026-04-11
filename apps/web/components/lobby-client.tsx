@@ -8,7 +8,6 @@ import type {
   AvatarId,
   CantoOpenedEvent,
   CantoResolvedEvent,
-  CardSuit,
   CardView,
   CantoOpenPayload,
   CantoResolvePayload,
@@ -37,6 +36,7 @@ import type {
   TablePlayView,
   TeamSide,
   TrickResolvedEvent,
+  NormalCardSuit,
   WildcardSelectPayload,
   WildcardSelectedEvent,
   WildcardSelectionRequiredEvent,
@@ -63,7 +63,7 @@ function formatPhase(phase: RoomSnapshot["phase"]) {
     case "response_pending":
       return "Respuesta pendiente";
     case "wildcard_selection":
-      return "Comodín";
+      return "DIMADONG";
     case "trick_resolution":
       return "Resolviendo baza";
     case "hand_scoring":
@@ -346,6 +346,17 @@ function AvatarCircle({
 
 type CardArtMode = "watermark" | "hologram";
 
+const WILDCARD_VISUAL = {
+  iconPath: "/cards/wildcard/comodin-alien.png",
+  fallback: "★",
+  edge: "border-fuchsia-300/65",
+  glow: "shadow-[0_0_30px_rgba(205,88,255,0.38)]",
+  miniGlow: "drop-shadow-[0_0_10px_rgba(98,255,244,0.9)]",
+  miniSizeClass: "h-7 w-7",
+  centerSizeWatermarkClass: "h-34 w-34",
+  centerSizeHologramClass: "h-26 w-26",
+} as const;
+
 type SuitVisual = {
   iconPath: string;
   fallback: string;
@@ -357,16 +368,16 @@ type SuitVisual = {
   centerSizeHologramClass: string;
 };
 
-const SUIT_VISUALS: Record<CardSuit, SuitVisual> = {
+const SUIT_VISUALS: Record<NormalCardSuit, SuitVisual> = {
   oro: {
     iconPath: "/cards/suits/oro.png",
     fallback: "O",
     edge: "border-lime-300/55",
     glow: "shadow-[0_0_26px_rgba(196,255,92,0.26)]",
     miniGlow: "drop-shadow-[0_0_8px_rgba(224,255,132,0.9)]",
-    miniSizeClass: "h-6 w-6",
-    centerSizeWatermarkClass: "h-24 w-24",
-    centerSizeHologramClass: "h-16 w-16",
+    miniSizeClass: "h-7 w-7",
+    centerSizeWatermarkClass: "h-28 w-28",
+    centerSizeHologramClass: "h-20 w-20",
   },
   copa: {
     iconPath: "/cards/suits/copa.png",
@@ -374,9 +385,9 @@ const SUIT_VISUALS: Record<CardSuit, SuitVisual> = {
     edge: "border-violet-300/55",
     glow: "shadow-[0_0_26px_rgba(182,113,255,0.3)]",
     miniGlow: "drop-shadow-[0_0_8px_rgba(212,168,255,0.9)]",
-    miniSizeClass: "h-5 w-5",
-    centerSizeWatermarkClass: "h-20 w-20",
-    centerSizeHologramClass: "h-14 w-14",
+    miniSizeClass: "h-6 w-6",
+    centerSizeWatermarkClass: "h-24 w-24",
+    centerSizeHologramClass: "h-18 w-18",
   },
   espada: {
     iconPath: "/cards/suits/espada.png",
@@ -384,9 +395,9 @@ const SUIT_VISUALS: Record<CardSuit, SuitVisual> = {
     edge: "border-cyan-300/55",
     glow: "shadow-[0_0_26px_rgba(73,226,255,0.28)]",
     miniGlow: "drop-shadow-[0_0_8px_rgba(142,248,255,0.9)]",
-    miniSizeClass: "h-6 w-6",
-    centerSizeWatermarkClass: "h-24 w-24",
-    centerSizeHologramClass: "h-16 w-16",
+    miniSizeClass: "h-7 w-7",
+    centerSizeWatermarkClass: "h-28 w-28",
+    centerSizeHologramClass: "h-20 w-20",
   },
   basto: {
     iconPath: "/cards/suits/basto.png",
@@ -394,9 +405,9 @@ const SUIT_VISUALS: Record<CardSuit, SuitVisual> = {
     edge: "border-emerald-300/55",
     glow: "shadow-[0_0_26px_rgba(91,255,142,0.28)]",
     miniGlow: "drop-shadow-[0_0_8px_rgba(147,255,181,0.9)]",
-    miniSizeClass: "h-6 w-6",
-    centerSizeWatermarkClass: "h-23 w-23",
-    centerSizeHologramClass: "h-15 w-15",
+    miniSizeClass: "h-7 w-7",
+    centerSizeWatermarkClass: "h-27 w-27",
+    centerSizeHologramClass: "h-19 w-19",
   },
 };
 
@@ -405,7 +416,7 @@ function SuitIcon({
   alt,
   className,
 }: {
-  suit: CardSuit;
+  suit: NormalCardSuit;
   alt: string;
   className: string;
 }) {
@@ -431,6 +442,34 @@ function SuitIcon({
   );
 }
 
+function WildcardIcon({
+  alt,
+  className,
+}: {
+  alt: string;
+  className: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <span className={`inline-flex items-center justify-center font-black text-white ${className}`}>
+        {WILDCARD_VISUAL.fallback}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={WILDCARD_VISUAL.iconPath}
+      alt={alt}
+      className={className}
+      onError={() => setFailed(true)}
+      loading="lazy"
+    />
+  );
+}
+
 function TrucoCardSprite({
   card,
   artMode = "watermark",
@@ -445,7 +484,8 @@ function TrucoCardSprite({
   active?: boolean;
   onClick?: () => void;
 }) {
-  const visual = SUIT_VISUALS[card.suit];
+  const normalSuit: NormalCardSuit | null = card.suit === "comodin" ? null : card.suit;
+  const visual = normalSuit ? SUIT_VISUALS[normalSuit] : WILDCARD_VISUAL;
   const cornerRank = card.isWildcard ? "★" : `${card.rank}`;
 
   const centerSizeClass =
@@ -455,8 +495,8 @@ function TrucoCardSprite({
 
   const centerIconClass =
     artMode === "hologram"
-      ? `${centerSizeClass} opacity-95 drop-shadow-[0_0_16px_rgba(255,255,255,0.52)]`
-      : `${centerSizeClass} opacity-40`;
+      ? `${centerSizeClass} opacity-100 drop-shadow-[0_0_20px_rgba(255,255,255,0.62)]`
+      : `${centerSizeClass} opacity-52`;
 
   // Emojis para las 4 cartas especiales (las más fuertes del mazo)
   const specialEmoji: string | null =
@@ -476,17 +516,27 @@ function TrucoCardSprite({
       {/* Gloss overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(165deg,rgba(255,255,255,0.10),transparent_35%)] pointer-events-none" />
 
-      {/* Top-left corner: rank + mini suit icon */}
-      <div className="absolute top-2 left-2 flex flex-col items-center gap-1 z-10">
-        <span className="text-[1.5rem] font-black leading-none text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
-          {cornerRank}
-        </span>
-        <SuitIcon
-          suit={card.suit}
-          alt={card.suit}
-          className={`h-5 w-5 object-contain ${visual.miniGlow}`}
-        />
-      </div>
+      {card.isWildcard ? (
+        <>
+          <div className="absolute left-3 top-3 z-10 rounded-full border border-cyan-300/55 bg-slate-950/72 px-2 py-1 text-[0.68rem] font-black uppercase tracking-[0.22em] text-cyan-100 shadow-[0_0_12px_rgba(73,226,255,0.28)]">
+            *
+          </div>
+          <div className="absolute right-2 top-2 z-10 rounded-full border border-fuchsia-300/40 bg-fuchsia-500/12 px-2 py-1 text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-fuchsia-100">
+            Wild
+          </div>
+        </>
+      ) : (
+        <div className="absolute top-2 left-2 flex flex-col items-center gap-1 z-10">
+          <span className="text-[1.5rem] font-black leading-none text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
+            {cornerRank}
+          </span>
+          <SuitIcon
+            suit={normalSuit!}
+            alt={normalSuit!}
+            className={`${visual.miniSizeClass} object-contain ${visual.miniGlow}`}
+          />
+        </div>
+      )}
 
       {/* Emoji badge para cartas especiales */}
       {specialEmoji ? (
@@ -497,8 +547,23 @@ function TrucoCardSprite({
 
       {/* Center: watermark / hologram suit art */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-        <SuitIcon suit={card.suit} alt={card.suit} className={centerIconClass} />
+        {card.isWildcard ? (
+          <WildcardIcon alt="DIMADONG alien" className={`${centerIconClass} object-contain`} />
+        ) : (
+          <SuitIcon suit={normalSuit!} alt={normalSuit!} className={centerIconClass} />
+        )}
       </div>
+
+      {card.isWildcard ? (
+        <div className="absolute inset-x-3 bottom-3 z-10 rounded-2xl border border-white/10 bg-slate-950/55 px-3 py-2 text-center backdrop-blur-sm">
+          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.28em] text-cyan-200/84">
+            DIMADONG
+          </p>
+          <p className="mt-1 text-[0.9rem] font-black tracking-[0.18em] text-white">
+            {card.label}
+          </p>
+        </div>
+      ) : null}
     </button>
   );
 }
@@ -524,9 +589,33 @@ type ActiveCanto = {
   sentAt: number;
 };
 
+type ResolvedCantoBanner = {
+  id: string;
+  label: string;
+  sentAt: number;
+};
+
 const REACTIONS = ["👽", "🛸", "🔥", "💀", "⚡", "🌟"];
 const REACTION_TTL_MS = 4_000;
+const CANTO_TTL_MS = 7_000;
+const RESOLVED_CANTO_TTL_MS = 4_000;
 const SOCKET_ACK_TIMEOUT_MS = 18_000;
+
+function getCantoResolutionLabel(event: CantoResolvedEvent) {
+  const cantoLabel = getCantoLabel(event.cantoType);
+  switch (event.result) {
+    case "quiero":
+      return `${cantoLabel}: quiero`;
+    case "no_quiero":
+      return `${cantoLabel}: no quiero`;
+    case "accepted":
+      return `${cantoLabel} aceptado`;
+    case "rejected":
+      return `${cantoLabel} rechazado`;
+    default:
+      return cantoLabel;
+  }
+}
 
 function useCountdown(deadlineAt: string | null): number | null {
   const [seconds, setSeconds] = useState<number | null>(null);
@@ -568,6 +657,7 @@ export function LobbyClient({ code }: { code: string }) {
   const [chatInput, setChatInput] = useState("");
   const [recentReactions, setRecentReactions] = useState<ActiveReaction[]>([]);
   const [recentCantos, setRecentCantos] = useState<ActiveCanto[]>([]);
+  const [resolvedCantoBanner, setResolvedCantoBanner] = useState<ResolvedCantoBanner | null>(null);
   const [lastTrickCards, setLastTrickCards] = useState<TablePlayView[]>([]);
   const [envidoSinging, setEnvidoSinging] = useState<EnvidoSingingState | null>(null);
   const [navVisible, setNavVisible] = useState(true);
@@ -598,7 +688,6 @@ export function LobbyClient({ code }: { code: string }) {
     return () => clearInterval(id);
   }, [recentReactions.length]);
 
-  const CANTO_TTL_MS = 7_000;
   useEffect(() => {
     if (recentCantos.length === 0) return;
     const id = setInterval(() => {
@@ -606,6 +695,16 @@ export function LobbyClient({ code }: { code: string }) {
     }, 1_000);
     return () => clearInterval(id);
   }, [recentCantos.length]);
+
+  useEffect(() => {
+    if (!resolvedCantoBanner) return;
+    const id = window.setTimeout(() => {
+      setResolvedCantoBanner((current) =>
+        current?.id === resolvedCantoBanner.id ? null : current,
+      );
+    }, RESOLVED_CANTO_TTL_MS);
+    return () => window.clearTimeout(id);
+  }, [resolvedCantoBanner]);
 
   // Clear saved trick cards when live cards appear (new trick started)
   const liveCardCount = (matchView?.tableCards ?? matchState?.tableCards ?? []).length;
@@ -785,6 +884,11 @@ export function LobbyClient({ code }: { code: string }) {
         // Critical: canto:resolve does NOT emit room:updated — only canto:resolved.
         // Without this, the game freezes after any quiero/no_quiero (truco, envido, etc.).
         activeSocket.on("canto:resolved", (event: CantoResolvedEvent) => {
+          setResolvedCantoBanner({
+            id: `${event.cantoType}-${event.resolvedAt}`,
+            label: getCantoResolutionLabel(event),
+            sentAt: Date.now(),
+          });
           // Clear envido singing once canto is fully resolved
           if (!["envido", "real_envido", "falta_envido"].includes(event.cantoType)) {
             setEnvidoSinging(null);
@@ -879,6 +983,15 @@ export function LobbyClient({ code }: { code: string }) {
     setError(null);
     setLoading(true);
     setReloadNonce((value) => value + 1);
+  };
+
+  const handleManualResync = () => {
+    setError(null);
+    setConnectionLabel("Sincronizando...");
+    void refreshRoomStateRef.current?.().catch((caughtError) => {
+      setError(caughtError instanceof Error ? caughtError.message : "No se pudo resincronizar la sala.");
+      setConnectionLabel("Reconectando...");
+    });
   };
 
   if (loading) {
@@ -1199,8 +1312,22 @@ export function LobbyClient({ code }: { code: string }) {
             <span className={`rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] ${badgeClass()}`}>
               {phaseLabel}
             </span>
+            <button
+              type="button"
+              onClick={handleManualResync}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 transition hover:bg-white/10"
+            >
+              Resincronizar
+            </button>
           </div>
         </div>
+
+        {resolvedCantoBanner ? (
+          <div className="mt-5 rounded-2xl border border-violet-300/25 bg-violet-300/10 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-violet-200/80">Ultimo canto</p>
+            <p className="mt-1 text-sm font-semibold text-violet-50">{resolvedCantoBanner.label}</p>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-300/20 bg-rose-300/10 px-4 py-3">
@@ -1588,7 +1715,7 @@ export function LobbyClient({ code }: { code: string }) {
                       >
                         <TrucoCardSprite
                           card={card}
-                          subtitle={card.isWildcard ? "Comodin alien" : `${card.rank} de ${card.suit}`}
+                          subtitle={card.isWildcard ? "DIMADONG alien" : `${card.rank} de ${card.suit}`}
                           artMode={isMyTurn ? "hologram" : "watermark"}
                           active={isMyTurn}
                           disabled={actionPending || !isMyTurn}
@@ -1747,11 +1874,11 @@ export function LobbyClient({ code }: { code: string }) {
 
             {needsWildcardSelection ? (
               <div className={panelClass("border-amber-300/20 bg-amber-300/8")}>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-100/80">Comodín</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-100/80">DIMADONG</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Elegí cómo juega.</h2>
                 <p className="mt-2 text-sm text-slate-200">
                   {wildcardSelection.fixedForEnvido
-                    ? "Este comodín quedó fijado para el envido, así que elegí el valor que va a sostener durante la mano."
+                    ? "Este DIMADONG qued? fijado para el envido, as? que eleg? el valor que va a sostener durante la mano."
                     : "Elegí una de las lecturas habilitadas por el servidor."}
                 </p>
 

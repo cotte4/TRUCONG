@@ -8,14 +8,17 @@ export type EnvidoResponse = 'quiero' | 'no_quiero';
 
 export type TrucoResponse = 'quiero' | 'no_quiero';
 
-export type CardSuit = 'espada' | 'basto' | 'oro' | 'copa';
+export type NormalCardSuit = 'espada' | 'basto' | 'oro' | 'copa';
+export type CardSuit = NormalCardSuit | 'comodin';
 
 export interface CardSignature {
-  suit: CardSuit;
+  suit: NormalCardSuit;
   rank: number;
 }
 
-export interface CardView extends CardSignature {
+export interface CardView {
+  suit: CardSuit;
+  rank: number;
   id: string;
   label: string;
   isWildcard: boolean;

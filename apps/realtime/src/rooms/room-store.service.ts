@@ -19,6 +19,7 @@ import type {
   MatchProgressState,
   MatchSummaryView,
   MatchView,
+  NormalCardSuit,
   PlayCardPayload,
   RoomEntryResponse,
   RoomSession,
@@ -98,12 +99,12 @@ type MutableCard = {
   rank: number;
   label: string;
   isWildcard: boolean;
-  envidoLock?: { rank: number; suit: CardSuit; label: string } | null;
+  envidoLock?: { rank: number; suit: NormalCardSuit; label: string } | null;
 };
 
 type WildcardChoice = {
   rank: number;
-  suit: CardSuit;
+  suit: NormalCardSuit;
   label: string;
 };
 
@@ -171,7 +172,7 @@ type MutableEnvidoSinging = {
   pendingWildcardCommits: MutableEnvidoWildcardCommit[];
   wildcardOverridesBySeatId: Record<
     string,
-    { cardId: string; rank: number; suit: CardSuit }
+    { cardId: string; rank: number; suit: NormalCardSuit }
   >;
 };
 
@@ -1532,11 +1533,11 @@ export class RoomStoreService {
       card.envidoLock = null;
       this.setStatus(
         room,
-        `${actorSeat.displayName ?? 'Jugador'} juega comodín fijado como ${card.label} (comprometido en envido).`,
+        `${actorSeat.displayName ?? 'Jugador'} juega DIMADONG fijado como ${card.label} (comprometido en envido).`,
       );
       this.pushEvent(
         room,
-        `${actorSeat.displayName ?? 'Jugador'} juega el comodín como ${card.label} (fijado por envido).`,
+        `${actorSeat.displayName ?? 'Jugador'} juega el DIMADONG como ${card.label} (fijado por envido).`,
       );
       this.persistSnapshot(room);
       const snapshot = this.buildSnapshot(room);
@@ -1568,11 +1569,11 @@ export class RoomStoreService {
     this.scheduleWildcardTimeout(room.code);
     this.setStatus(
       room,
-      `${actorSeat.displayName ?? 'Jugador'} está eligiendo el valor del comodín.`,
+      `${actorSeat.displayName ?? 'Jugador'} está eligiendo el valor del DIMADONG.`,
     );
     this.pushEvent(
       room,
-      `${actorSeat.displayName ?? 'Jugador'} está eligiendo valor del comodín.`,
+      `${actorSeat.displayName ?? 'Jugador'} está eligiendo valor del DIMADONG.`,
     );
     this.persistAction(
       room,
@@ -1661,7 +1662,7 @@ export class RoomStoreService {
     );
     this.pushEvent(
       room,
-      `${actorSeat.displayName ?? 'Jugador'} eligió ${selectedLabel} para el comodín.`,
+        `${actorSeat.displayName ?? 'Jugador'} eligió ${selectedLabel} para el DIMADONG.`,
     );
     this.scheduleTurnTimeout(room.code);
     this.persistAction(
@@ -2308,12 +2309,12 @@ export class RoomStoreService {
       .filter((entry) => !entry.isWildcard)
       .map<WildcardChoice>((entry) => ({
         rank: entry.rank,
-        suit: entry.suit,
+        suit: entry.suit as NormalCardSuit,
         label: entry.label,
       }));
     const playedSignatures = new Set(
       (room.match?.tableCards ?? []).map((play) =>
-        this.getCardSignature(play.card.rank, play.card.suit),
+        this.getCardSignature(play.card.rank, play.card.suit as NormalCardSuit),
       ),
     );
 
@@ -2667,7 +2668,7 @@ export class RoomStoreService {
     return value;
   }
 
-  private requireCardSuit(value: unknown): CardSuit {
+  private requireCardSuit(value: unknown): NormalCardSuit {
     if (
       value === 'espada' ||
       value === 'basto' ||
@@ -2823,7 +2824,7 @@ export class RoomStoreService {
 
   private getSeatEnvidoScoreWithOverride(
     hand: MutableCard[],
-    override?: { cardId: string; rank: number; suit: CardSuit } | null,
+    override?: { cardId: string; rank: number; suit: NormalCardSuit } | null,
   ) {
     const effectiveHand = hand.map((card) => {
       if (override && card.isWildcard && card.id === override.cardId) {
@@ -3039,7 +3040,7 @@ export class RoomStoreService {
     roomSessionToken: string,
     wildcardCardId: string,
     rank: number,
-    suit: CardSuit,
+    suit: NormalCardSuit,
   ): {
     snapshot: RoomSnapshot;
     lifecycle: RoomLifecycleState;
@@ -3199,7 +3200,7 @@ export class RoomStoreService {
     return selectedChoice;
   }
 
-  private getCardSignature(rank: number, suit: CardSuit) {
+  private getCardSignature(rank: number, suit: NormalCardSuit) {
     return `${rank}-${suit}`;
   }
 
@@ -3844,7 +3845,7 @@ export class RoomStoreService {
   }
 
   private createDeck(): MutableCard[] {
-    const suits: CardSuit[] = ['espada', 'basto', 'oro', 'copa'];
+    const suits: NormalCardSuit[] = ['espada', 'basto', 'oro', 'copa'];
     const ranks = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12];
     const cards: MutableCard[] = [];
 
@@ -3863,9 +3864,9 @@ export class RoomStoreService {
     for (let wildcardIndex = 0; wildcardIndex < 2; wildcardIndex += 1) {
       cards.push({
         id: randomUUID(),
-        suit: 'copa',
+        suit: 'comodin',
         rank: 0,
-        label: 'Comodin',
+        label: 'DIMADONG',
         isWildcard: true,
       });
     }
@@ -4201,7 +4202,7 @@ export class RoomStoreService {
 
       this.pushEvent(
         latestRoom,
-        'Tiempo agotado. Comodín seleccionado automáticamente como 4 de copa.',
+        'Tiempo agotado. DIMADONG seleccionado automáticamente como 4 de copa.',
       );
       this.selectWildcard(
         roomCode,

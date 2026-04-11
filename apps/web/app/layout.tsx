@@ -20,7 +20,7 @@ const bungee = Bungee({
 
 export const metadata: Metadata = {
   title: "DIMADONG",
-  description: "Truco multijugador por salas privadas, con aliens, comodines y BONGS.",
+  description: "Truco multijugador por salas privadas, con aliens, DIMADONGS y BONGS.",
 };
 
 export default function RootLayout({

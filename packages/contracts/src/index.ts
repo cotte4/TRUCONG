@@ -16,7 +16,8 @@ export type MatchPhase =
 
 export type TeamSide = 'A' | 'B';
 export type SeatStatus = 'open' | 'occupied' | 'disconnected' | 'replaced';
-export type CardSuit = 'espada' | 'basto' | 'oro' | 'copa';
+export type NormalCardSuit = 'espada' | 'basto' | 'oro' | 'copa';
+export type CardSuit = NormalCardSuit | 'comodin';
 export const AVATAR_IDS = [
   'alien-neon-ace',
   'alien-beanie',

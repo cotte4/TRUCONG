@@ -4,10 +4,10 @@ import { ScorePanel } from "@/components/surfaces/score-panel";
 import { SummaryCard } from "@/components/surfaces/summary-card";
 
 const manualHighlights = [
-  "DIMADONG es una variante de Truco multijugador por salas privadas, con aliens, comodines y BONGS.",
+  "DIMADONG es una variante de Truco multijugador por salas privadas, con aliens, DIMADONGS y BONGS.",
   "El servidor manda: el cliente propone acciones, pero el servidor decide legalidad y estado.",
   "Las salas se organizan por asiento y no por cuenta, así que reconectar o reemplazar es más simple.",
-  "Los comodines tienen que respetar la regla de cartas ya jugadas y la fijación del envido.",
+  "Los DIMADONGS tienen que respetar la regla de cartas ya jugadas y la fijación del envido.",
   "Los BONGS son metadata social, no puntaje, y como mucho cuenta uno efectivo por mano.",
 ];
 
@@ -55,7 +55,7 @@ export default function ManualPage() {
         <SummaryCard
           eyebrow="Qué es DIMADONG"
           title="Una mesa web privada de Truco con estado en vivo por asiento."
-          description="Este manual es la versión para jugadores del PRD técnico. Explica la forma visible del producto, el comportamiento raro de los comodines y los BONGS, y qué garantiza la interfaz durante una partida."
+          description="Este manual es la versión para jugadores del PRD técnico. Explica la forma visible del producto, el comportamiento raro de los DIMADONGS y los BONGS, y qué garantiza la interfaz durante una partida."
           footer={
             <div className="flex flex-wrap gap-3">
               <span className="rounded-full border border-white/15 bg-white/8 px-4 py-2 text-xs uppercase tracking-[0.22em] text-white/80">
@@ -101,9 +101,9 @@ export default function ManualPage() {
             />
 
             <SummaryCard
-              eyebrow="Comodines"
-              title="Los comodines son potentes, pero tienen límites."
-              description="Un comodín puede representar muchas cartas, pero no una que ya se haya jugado antes en esa misma mano. Si queda fijado para el envido, esa lectura se mantiene hasta el final de la mano. Si chocan dos comodines en la misma baza, empatan."
+              eyebrow="DIMADONG"
+              title="Los DIMADONGS son potentes, pero tienen límites."
+              description="Un DIMADONG puede representar muchas cartas, pero no una que ya se haya jugado antes en esa misma mano. Si queda fijado para el envido, esa lectura se mantiene hasta el final de la mano. Si chocan dos DIMADONGS en la misma baza, empatan."
               accent="amber"
             />
 
