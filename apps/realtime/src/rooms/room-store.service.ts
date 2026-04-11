@@ -1092,7 +1092,7 @@ export class RoomStoreService {
       actorSeat.id,
       cantoType,
     )
-      ? room.match?.pendingCanto ?? null
+      ? (room.match?.pendingCanto ?? null)
       : null;
 
     if (
@@ -1128,7 +1128,8 @@ export class RoomStoreService {
     room.match.pendingCanto = {
       cantoType,
       actorSeatId: actorSeat.id,
-      targetSeatId: interruptedPendingTruco?.actorSeatId ?? targetSeatId ?? null,
+      targetSeatId:
+        interruptedPendingTruco?.actorSeatId ?? targetSeatId ?? null,
       openedAt: new Date().toISOString(),
       responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
     };
@@ -1221,6 +1222,9 @@ export class RoomStoreService {
 
     const normalizedResponse =
       response === 'quiero' || response === 'accepted' ? 'quiero' : 'no_quiero';
+    const declinedTruco =
+      normalizedResponse === 'no_quiero' &&
+      this.isTrucoCanto(pending.cantoType);
     let scoreDelta =
       normalizedResponse === 'no_quiero' && callerTeamSide
         ? {
@@ -1236,6 +1240,7 @@ export class RoomStoreService {
         : { A: 0, B: 0 };
 
     let envidoSinging: MutableEnvidoSinging | null = null;
+    let handEndedByDeclinedTruco = false;
 
     if (scoreDelta.A > 0 || scoreDelta.B > 0) {
       // no_quiero — caller earns declined points immediately
@@ -1247,6 +1252,19 @@ export class RoomStoreService {
         room,
         `${actorSeat.displayName ?? 'Jugador'} no quiso el ${pending.cantoType}.`,
       );
+      if (declinedTruco && callerTeamSide) {
+        handEndedByDeclinedTruco = true;
+        room.match.lastHandWinnerTeamSide = callerTeamSide;
+        room.match.lastHandScoredAt = new Date().toISOString();
+        room.match.currentTurnSeatId = null;
+        room.match.tableCards = [];
+        room.match.turnDeadlineAt = null;
+        room.match.reconnectDeadlineAt = null;
+        this.pushEvent(
+          room,
+          `El Equipo ${callerTeamSide} ganó la mano ${room.match.handNumber} por no quiero al ${pending.cantoType}.`,
+        );
+      }
     } else {
       if (this.isTrucoCanto(pending.cantoType)) {
         room.match.currentHandPoints = Math.max(
@@ -1320,7 +1338,9 @@ export class RoomStoreService {
         );
         this.persistMatchFinished(room, winningTeam);
       } else {
-        if (suspendedCanto) {
+        if (handEndedByDeclinedTruco) {
+          this.prepareNextHand(room);
+        } else if (suspendedCanto) {
           room.phase = 'response_pending';
           room.match.pendingCanto = {
             ...suspendedCanto,
@@ -1356,7 +1376,8 @@ export class RoomStoreService {
             scoreDelta,
             envidoSinging,
             matchEnded: Boolean(
-              afterTransition?.matchComplete && !beforeTransition?.matchComplete,
+              afterTransition?.matchComplete &&
+              !beforeTransition?.matchComplete,
             ),
             handValueChanged:
               (room.match?.currentHandPoints ?? beforeHandPoints) !==
@@ -2052,7 +2073,8 @@ export class RoomStoreService {
       return;
     }
 
-    const trickLeadSeatId = match.tableCards[0]?.seatId ?? match.currentTurnSeatId;
+    const trickLeadSeatId =
+      match.tableCards[0]?.seatId ?? match.currentTurnSeatId;
     const winningPlay = this.getWinningPlay(match.tableCards);
     const winningSeat = winningPlay
       ? (room.seats.find((seat) => seat.id === winningPlay.seatId) ?? null)
@@ -2157,7 +2179,10 @@ export class RoomStoreService {
     const occupiedSeats = this.getOccupiedSeats(room);
     const deck = this.shuffle(this.createDeck());
     const handsBySeatId: Record<string, MutableCard[]> = {};
-    const nextDealerSeatId = this.getNextOccupiedSeatId(room, match.dealerSeatId);
+    const nextDealerSeatId = this.getNextOccupiedSeatId(
+      room,
+      match.dealerSeatId,
+    );
 
     for (const seat of occupiedSeats) {
       handsBySeatId[seat.id] = deck.splice(0, 3);
@@ -3071,7 +3096,9 @@ export class RoomStoreService {
       return occupiedSeats[0]?.id ?? null;
     }
 
-    const currentIndex = occupiedSeats.findIndex((seat) => seat.id === fromSeatId);
+    const currentIndex = occupiedSeats.findIndex(
+      (seat) => seat.id === fromSeatId,
+    );
 
     if (currentIndex === -1) {
       return occupiedSeats[0]?.id ?? null;
@@ -3731,10 +3758,7 @@ export class RoomStoreService {
     return clone;
   }
 
-  private scheduleTurnTimeout(
-    roomCode: string,
-    _options?: { preserveDeadline?: boolean },
-  ) {
+  private scheduleTurnTimeout(roomCode: string) {
     this.clearTurnTimeout(roomCode);
     const room = this.roomsByCode.get(roomCode);
 
@@ -4008,7 +4032,7 @@ export class RoomStoreService {
     this.clearWildcardTimeout(roomCode);
 
     if (room.phase === 'action_turn' && room.match.currentTurnSeatId) {
-      this.scheduleTurnTimeout(roomCode, { preserveDeadline: true });
+      this.scheduleTurnTimeout(roomCode);
       return;
     }
 

@@ -1,6 +1,5 @@
 {
   "buildCommand": "pnpm --filter @dimadong/contracts build && pnpm --filter @dimadong/web build",
   "outputDirectory": "apps/web/.next",
-  "installCommand": "pnpm install",
-  "framework": "nextjs"
+  "installCommand": "pnpm install"
 }

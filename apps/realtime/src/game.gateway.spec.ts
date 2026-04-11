@@ -24,7 +24,8 @@ function createMockDependency(label: string) {
 
 async function createRoomStoreService() {
   const paramTypes: unknown[] =
-    Reflect.getMetadata('design:paramtypes', RoomStoreService) ?? [];
+    (Reflect.getMetadata('design:paramtypes', RoomStoreService) as unknown[]) ??
+    [];
 
   const providers = paramTypes
     .filter((dependency) => dependency && dependency !== Object)
@@ -101,7 +102,10 @@ describe('GameGateway', () => {
       snapshot,
     );
 
-    const emissions = new Map<string, Array<{ event: string; payload: unknown }>>();
+    const emissions = new Map<
+      string,
+      Array<{ event: string; payload: unknown }>
+    >();
     const fakeServer = {
       in: jest.fn().mockReturnValue({
         fetchSockets: jest.fn().mockResolvedValue([
@@ -120,12 +124,7 @@ describe('GameGateway', () => {
 
     gateway.server = fakeServer as never;
 
-    await gateway['emitRoomState'](
-      created.snapshot.code,
-      snapshot,
-      baseEvent,
-      null,
-    );
+    gateway['emitRoomState'](created.snapshot.code, snapshot, baseEvent, null);
     await Promise.resolve();
 
     const hostRoomUpdated = emissions

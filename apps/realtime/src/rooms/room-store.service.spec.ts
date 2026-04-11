@@ -484,6 +484,10 @@ describe('RoomStoreService', () => {
     );
     service.toggleReady(created.snapshot.code, joined.session.roomSessionToken);
     service.startMatch(created.snapshot.code, created.session.roomSessionToken);
+    const before = service.getMatchView(
+      created.snapshot.code,
+      created.session.seatId,
+    )!;
 
     service.openCanto(
       created.snapshot.code,
@@ -496,9 +500,15 @@ describe('RoomStoreService', () => {
       joined.session.roomSessionToken,
       'no_quiero',
     );
+    const after = service.getMatchView(
+      created.snapshot.code,
+      created.session.seatId,
+    )!;
 
     expect(snapshot.phase).toBe('action_turn');
     expect(snapshot.score.A + snapshot.score.B).toBe(1);
+    expect(after.handNumber).toBe(before.handNumber + 1);
+    expect(after.currentTurnSeatId).not.toBe(before.currentTurnSeatId);
   });
 
   it('finishes the match when truco is declined at the target score', async () => {
@@ -1166,7 +1176,7 @@ describe('RoomStoreService', () => {
       'no_quiero',
     );
 
-    expect(declined.handValueChanged).toBe(false);
+    expect(declined.handValueChanged).toBe(true);
     expect(declined.scoreDelta).toEqual({ A: 2, B: 0 });
   });
 
@@ -1458,7 +1468,9 @@ describe('RoomStoreService', () => {
     expect(afterTimeout.currentTurnSeatId).toBe(created.session.seatId);
     expect(afterTimeout.tableCards).toHaveLength(0);
     expect(afterTimeout.yourHand).toHaveLength(3);
-    expect(service.getSnapshot(created.snapshot.code).turnDeadlineAt).toBeNull();
+    expect(
+      service.getSnapshot(created.snapshot.code).turnDeadlineAt,
+    ).toBeNull();
   });
 
   it('auto-selects wildcard as 4 de copa on timeout', async () => {
@@ -1610,7 +1622,10 @@ describe('RoomStoreService', () => {
       displayName: 'Guest',
     });
 
-    service.toggleReady(created.snapshot.code, created.session.roomSessionToken);
+    service.toggleReady(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+    );
     service.toggleReady(created.snapshot.code, joined.session.roomSessionToken);
     service.startMatch(created.snapshot.code, created.session.roomSessionToken);
 
@@ -1671,7 +1686,10 @@ describe('RoomStoreService', () => {
       displayName: 'Guest',
     });
 
-    service.toggleReady(created.snapshot.code, created.session.roomSessionToken);
+    service.toggleReady(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+    );
     service.toggleReady(created.snapshot.code, joined.session.roomSessionToken);
     service.startMatch(created.snapshot.code, created.session.roomSessionToken);
 
@@ -1713,7 +1731,10 @@ describe('RoomStoreService', () => {
       displayName: 'Guest',
     });
 
-    service.toggleReady(created.snapshot.code, created.session.roomSessionToken);
+    service.toggleReady(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+    );
     service.toggleReady(created.snapshot.code, joined.session.roomSessionToken);
     service.startMatch(created.snapshot.code, created.session.roomSessionToken);
 
