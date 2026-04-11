@@ -3907,10 +3907,16 @@ export class RoomStoreService {
 
       const pending = latestRoom.match.pendingCanto;
       const targetSeatId = pending.targetSeatId;
+      const callerTeamSide = latestRoom.seats.find(
+        (seat) => seat.id === pending.actorSeatId,
+      )?.teamSide;
       const token = (
         targetSeatId
           ? latestRoom.seats.find((seat) => seat.id === targetSeatId)
-          : latestRoom.seats[0]
+          : latestRoom.seats.find(
+              (seat) =>
+                seat.teamSide !== callerTeamSide && seat.roomSessionToken,
+            )
       )?.roomSessionToken;
 
       if (!token) {
@@ -3921,7 +3927,12 @@ export class RoomStoreService {
         latestRoom,
         `Tiempo agotado. ${pending.cantoType} resuelto como no quiero.`,
       );
-      this.resolveCanto(roomCode, token, 'no_quiero');
+      try {
+        this.resolveCanto(roomCode, token, 'no_quiero');
+      } catch (err) {
+        // Auto-resolve failed (e.g. game state changed before timeout fired); log and continue.
+        console.error('[cantoTimeout] resolveCanto failed:', err);
+      }
     }, timeoutMs);
 
     timeout.unref?.();
