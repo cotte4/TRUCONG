@@ -141,7 +141,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
     "home:joinAvatarId",
     DEFAULT_AVATAR_ID,
   );
-  const [maxPlayers, setMaxPlayers] = useState<2 | 4>(2);
+  const [maxPlayers, setMaxPlayers] = useState<2 | 4 | 6>(2);
   const [targetScore, setTargetScore] = useState<11 | 15 | 30>(15);
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -289,21 +289,26 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
           <div>
             <p className="text-sm text-slate-200/78">Modo</p>
             <div className="mt-2 flex gap-2">
-              {[2, 4].map((value) => (
+              {([2, 4, 6] as const).map((value) => (
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setMaxPlayers(value as 2 | 4)}
+                  onClick={() => setMaxPlayers(value)}
                   className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
                     maxPlayers === value
                       ? "bg-cyan-300 text-slate-950"
                       : "border border-white/10 bg-slate-900/90 text-slate-200"
                   }`}
                 >
-                  {value === 2 ? "1 vs 1" : "2 vs 2"}
+                  {value === 2 ? "1 vs 1" : value === 4 ? "2 vs 2" : "3 vs 3"}
                 </button>
               ))}
             </div>
+            {maxPlayers === 6 ? (
+              <p className="mt-1 text-xs text-cyan-200/75">
+                Incluye PICA PICA cada dos rondas.
+              </p>
+            ) : null}
           </div>
           <div>
             <p className="text-sm text-slate-200/78">Puntaje objetivo</p>

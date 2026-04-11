@@ -117,8 +117,12 @@ export class RoomsController {
     };
 
     if (typeof body.maxPlayers !== 'undefined') {
-      if (body.maxPlayers !== 2 && body.maxPlayers !== 4) {
-        throw new BadRequestException('maxPlayers must be 2 or 4.');
+      if (
+        body.maxPlayers !== 2 &&
+        body.maxPlayers !== 4 &&
+        body.maxPlayers !== 6
+      ) {
+        throw new BadRequestException('maxPlayers must be 2, 4, or 6.');
       }
       parsed.maxPlayers = body.maxPlayers;
     }

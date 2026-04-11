@@ -164,7 +164,7 @@ export interface SocketAckResult<TData = Record<string, unknown>> {
 export interface CreateRoomRequest {
   displayName: string;
   avatarId?: AvatarId;
-  maxPlayers?: 2 | 4;
+  maxPlayers?: 2 | 4 | 6;
   targetScore?: 11 | 15 | 30;
   allowBongs?: boolean;
 }
@@ -503,6 +503,20 @@ export interface EnvidoSingingState {
   pendingWildcardCommits: EnvidoWildcardCommitView[];
 }
 
+export interface PicaPicaCompletedPair {
+  pairIndex: number;           // 0, 1, or 2
+  winnerTeamSide: TeamSide | null; // null = tie
+  pointsA: number;
+  pointsB: number;
+}
+
+export interface PicaPicaProgressState {
+  currentPairIndex: number;        // which sub-hand is active: 0, 1, or 2
+  totalPairs: number;              // always 3
+  activePairSeatIds: [string, string]; // [seatId teamA, seatId teamB]
+  completedPairs: PicaPicaCompletedPair[];
+}
+
 export interface MatchProgressState {
   phase: MatchPhase;
   handNumber: number;
@@ -517,6 +531,7 @@ export interface MatchProgressState {
   turnDeadlineAt: string | null;
   reconnectDeadlineAt: string | null;
   summary: MatchSummaryView | null;
+  picaPica?: PicaPicaProgressState | null;
 }
 
 export interface RoomUpdatedEvent {

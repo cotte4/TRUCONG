@@ -1,5 +1,5 @@
 import type { HandScoreAward } from './hand.js';
-import type { EnvidoCall, EnvidoResponse, EnvidoScoreContext, TeamScore, TeamSide } from './types.js';
+import type { CardSignature, EnvidoCall, EnvidoResponse, EnvidoScoreContext, TeamScore, TeamSide } from './types.js';
 
 export interface EnvidoCallStep {
   call: EnvidoCall;
@@ -246,6 +246,49 @@ export function getEnvidoScorePolicy(scoring: EnvidoScoringResolution): EnvidoSc
     award,
     scoreDeltaByTeam: getEnvidoScoreDeltaByTeam(scoring),
   };
+}
+
+/**
+ * Returns the envido point value of a single card rank.
+ * Face cards (rank >= 10) are worth 0; number cards are worth min(rank, 7).
+ */
+export function getEnvidoCardValue(rank: number): number {
+  return rank >= 10 ? 0 : Math.min(rank, 7);
+}
+
+/**
+ * Computes the envido score for a single player's hand.
+ * Envido score = 20 + two highest same-suit card values, or just the highest
+ * card value if no pair of same-suit cards exists.
+ */
+export function getSeatEnvidoScore(hand: CardSignature[]): number {
+  const bySuit = new Map<string, number[]>();
+
+  for (const card of hand) {
+    const current = bySuit.get(card.suit) ?? [];
+    current.push(getEnvidoCardValue(card.rank));
+    bySuit.set(card.suit, current);
+  }
+
+  let best = 0;
+  for (const values of bySuit.values()) {
+    const sorted = [...values].sort((a, b) => b - a);
+    if (sorted.length >= 2) {
+      best = Math.max(best, 20 + sorted[0] + sorted[1]);
+    } else if (sorted.length === 1) {
+      best = Math.max(best, sorted[0]);
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Returns the best (highest) envido score among all hands on a team.
+ * Used in 3v3 mode where the team's best individual score competes.
+ */
+export function getBestEnvidoScoreForTeam(hands: CardSignature[][]): number {
+  return hands.reduce((best, hand) => Math.max(best, getSeatEnvidoScore(hand)), 0);
 }
 
 export function getEnvidoScoreSnapshot(scoring: EnvidoScoringResolution): EnvidoScoreSnapshot {

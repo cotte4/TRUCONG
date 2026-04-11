@@ -20,6 +20,8 @@ import type {
   MatchSummaryView,
   MatchView,
   NormalCardSuit,
+  PicaPicaCompletedPair,
+  PicaPicaProgressState,
   PlayCardPayload,
   RoomEntryResponse,
   RoomSession,
@@ -78,6 +80,12 @@ type PersistedSnapshotState = {
       settlesOnEnvido?: boolean;
     } | null;
     bongBalance?: Record<string, number>;
+    picaPica?: {
+      currentPairIndex: number;
+      pairSeatIds: Array<[string, string]>;
+      pairPoints: Array<{ A: number; B: number }>;
+      pairEnvidoPoints?: { A: number; B: number };
+    } | null;
   } | null;
 };
 
@@ -216,6 +224,13 @@ type MutableMatchState = {
     settlesOnEnvido: boolean;
   } | null;
   bongBalance: Record<string, number>;
+  picaPica: {
+    currentPairIndex: number;
+    pairSeatIds: Array<[string, string]>;
+    pairPoints: Array<{ A: number; B: number }>;
+    /** Envido points accumulated for the current in-flight pair (not yet committed to teamScores). */
+    pairEnvidoPoints: { A: number; B: number };
+  } | null;
 };
 
 type MutableRoom = {
@@ -730,6 +745,29 @@ export class RoomStoreService {
       turnDeadlineAt: match.turnDeadlineAt,
       reconnectDeadlineAt: match.reconnectDeadlineAt,
       summary: match.summary,
+      picaPica: match.picaPica
+        ? this.buildPicaPicaProgressState(match.picaPica)
+        : null,
+    };
+  }
+
+  private buildPicaPicaProgressState(
+    picaPica: NonNullable<MutableMatchState['picaPica']>,
+  ): PicaPicaProgressState {
+    const activePair = picaPica.pairSeatIds[picaPica.currentPairIndex];
+    const completedPairs: PicaPicaCompletedPair[] = picaPica.pairPoints.map(
+      (pts, i) => ({
+        pairIndex: i,
+        winnerTeamSide: pts.A > pts.B ? 'A' : pts.B > pts.A ? 'B' : null,
+        pointsA: pts.A,
+        pointsB: pts.B,
+      }),
+    );
+    return {
+      currentPairIndex: picaPica.currentPairIndex,
+      totalPairs: 3,
+      activePairSeatIds: activePair,
+      completedPairs,
     };
   }
 
@@ -1148,6 +1186,15 @@ export class RoomStoreService {
       throw new BadRequestException('Only the active player can open a canto.');
     }
 
+    // In PICA PICA, only the active pair can act
+    if (room.match.picaPica) {
+      const [seatIdA, seatIdB] =
+        room.match.picaPica.pairSeatIds[room.match.picaPica.currentPairIndex];
+      if (actorSeat.id !== seatIdA && actorSeat.id !== seatIdB) {
+        throw new BadRequestException('No es tu turno en PICA PICA.');
+      }
+    }
+
     if (
       room.match.pendingCanto &&
       !interruptedPendingTruco &&
@@ -1327,30 +1374,57 @@ export class RoomStoreService {
 
     let envidoSinging: MutableEnvidoSinging | null = null;
     let handEndedByDeclinedTruco = false;
+    // Tracks whether finishPicaPicaSubHand already handled continuation
+    let picaPicaHandled = false;
 
     if (scoreDelta.A > 0 || scoreDelta.B > 0) {
-      // no_quiero — caller earns declined points immediately
-      room.match.teamScores = {
-        A: room.match.teamScores.A + scoreDelta.A,
-        B: room.match.teamScores.B + scoreDelta.B,
-      };
       this.pushEvent(
         room,
         `${actorSeat.displayName ?? 'Jugador'} no quiso el ${pending.cantoType}.`,
       );
       if (declinedTruco && callerTeamSide) {
         handEndedByDeclinedTruco = true;
-        room.match.lastHandWinnerTeamSide = callerTeamSide;
-        room.match.lastHandScoredAt = new Date().toISOString();
-        room.match.currentTurnSeatId = null;
-        room.match.tableCards = [];
-        room.match.turnDeadlineAt = null;
-        room.match.reconnectDeadlineAt = null;
-        this.pushEvent(
-          room,
-          `El Equipo ${callerTeamSide} ganó la mano ${room.match.handNumber} por no quiero al ${pending.cantoType}.`,
-        );
         this.settleBongBet(room, callerTeamSide);
+        if (room.match.picaPica) {
+          // In PICA PICA, route truco-fold points through pair accumulation
+          picaPicaHandled = true;
+          this.pushEvent(
+            room,
+            `El Equipo ${callerTeamSide} ganó la mano ${room.match.handNumber} por no quiero al ${pending.cantoType}.`,
+          );
+          this.finishPicaPicaSubHand(
+            room,
+            callerTeamSide,
+            scoreDelta.A > 0 ? scoreDelta.A : scoreDelta.B,
+          );
+        } else {
+          // Normal (non-PICA PICA): add directly to team scores
+          room.match.teamScores = {
+            A: room.match.teamScores.A + scoreDelta.A,
+            B: room.match.teamScores.B + scoreDelta.B,
+          };
+          room.match.lastHandWinnerTeamSide = callerTeamSide;
+          room.match.lastHandScoredAt = new Date().toISOString();
+          room.match.currentTurnSeatId = null;
+          room.match.tableCards = [];
+          room.match.turnDeadlineAt = null;
+          room.match.reconnectDeadlineAt = null;
+          this.pushEvent(
+            room,
+            `El Equipo ${callerTeamSide} ganó la mano ${room.match.handNumber} por no quiero al ${pending.cantoType}.`,
+          );
+        }
+      } else {
+        // Envido no_quiero: add points (in PICA PICA they go to pairEnvidoPoints)
+        if (room.match.picaPica) {
+          room.match.picaPica.pairEnvidoPoints.A += scoreDelta.A;
+          room.match.picaPica.pairEnvidoPoints.B += scoreDelta.B;
+        } else {
+          room.match.teamScores = {
+            A: room.match.teamScores.A + scoreDelta.A,
+            B: room.match.teamScores.B + scoreDelta.B,
+          };
+        }
       }
     } else {
       if (this.isTrucoCanto(pending.cantoType)) {
@@ -1420,11 +1494,12 @@ export class RoomStoreService {
     }
 
     // Only handle win/continue logic if we're not waiting for wildcard commits
-    if (room.phase !== 'envido_wildcard_commit') {
-      const winningTeam = this.getWinningTeamForScore(
-        room.match.teamScores,
-        room.targetScore,
-      );
+    // and if PICA PICA pair advancement wasn't already handled above
+    if (room.phase !== 'envido_wildcard_commit' && !picaPicaHandled) {
+      // During PICA PICA, match win is deferred until all 3 pairs complete
+      const winningTeam = room.match.picaPica
+        ? null
+        : this.getWinningTeamForScore(room.match.teamScores, room.targetScore);
 
       if (winningTeam) {
         room.phase = 'match_end';
@@ -1448,7 +1523,10 @@ export class RoomStoreService {
         this.persistMatchFinished(room, winningTeam);
       } else {
         if (handEndedByDeclinedTruco) {
-          this.prepareNextHand(room);
+          // In PICA PICA the pair was already advanced by finishPicaPicaSubHand; skip here
+          if (!picaPicaHandled) {
+            this.prepareNextHand(room);
+          }
         } else if (suspendedCanto) {
           room.phase = 'response_pending';
           room.match.pendingCanto = {
@@ -1795,6 +1873,15 @@ export class RoomStoreService {
       throw new BadRequestException('It is not your turn.');
     }
 
+    // In PICA PICA, only the active pair can act
+    if (room.match.picaPica) {
+      const [seatIdA, seatIdB] =
+        room.match.picaPica.pairSeatIds[room.match.picaPica.currentPairIndex];
+      if (actorSeat.id !== seatIdA && actorSeat.id !== seatIdB) {
+        throw new BadRequestException('No es tu turno en PICA PICA.');
+      }
+    }
+
     if (room.match.pendingCanto) {
       throw new BadRequestException(
         'Card play is blocked while a canto response is pending.',
@@ -1829,15 +1916,27 @@ export class RoomStoreService {
       actorSeat,
     );
 
-    const occupiedSeats = this.getOccupiedSeats(room);
-    const currentSeatIndex = occupiedSeats.findIndex(
-      (seat) => seat.id === actorSeat.id,
-    );
-    const nextSeat =
-      occupiedSeats[(currentSeatIndex + 1) % occupiedSeats.length] ?? null;
+    // In PICA PICA, trick resolves when both pair players have played (2 cards)
+    const picaPica = room.match.picaPica;
+    const trickPlayerCount = picaPica ? 2 : this.getOccupiedSeats(room).length;
+    // Compute next seat: in PICA PICA, alternate between the two pair players
+    let nextSeat: MutableSeat | null = null;
+    if (picaPica) {
+      const [seatIdA, seatIdB] =
+        picaPica.pairSeatIds[picaPica.currentPairIndex];
+      const otherId = actorSeat.id === seatIdA ? seatIdB : seatIdA;
+      nextSeat = room.seats.find((s) => s.id === otherId) ?? null;
+    } else {
+      const occupiedSeats = this.getOccupiedSeats(room);
+      const currentSeatIndex = occupiedSeats.findIndex(
+        (seat) => seat.id === actorSeat.id,
+      );
+      nextSeat =
+        occupiedSeats[(currentSeatIndex + 1) % occupiedSeats.length] ?? null;
+    }
     let resolvedTableCards: PlayCardResult['resolvedTableCards'] = null;
 
-    if (room.match.tableCards.length >= occupiedSeats.length) {
+    if (room.match.tableCards.length >= trickPlayerCount) {
       resolvedTableCards = room.match.tableCards.map((play) => ({
         seatId: play.seatId,
         card: {
@@ -2080,6 +2179,15 @@ export class RoomStoreService {
               }
             : null,
           bongBalance: state.match.bongBalance ?? {},
+          picaPica: state.match.picaPica
+            ? {
+                ...state.match.picaPica,
+                pairEnvidoPoints: state.match.picaPica.pairEnvidoPoints ?? {
+                  A: 0,
+                  B: 0,
+                },
+              }
+            : null,
         }
       : null;
 
@@ -2210,6 +2318,7 @@ export class RoomStoreService {
       reconnectDeadlineAt: null,
       activeBongBet: null,
       bongBalance: Object.fromEntries(occupiedSeats.map((s) => [s.id, 0])),
+      picaPica: null,
     };
   }
 
@@ -2258,6 +2367,20 @@ export class RoomStoreService {
       this.getHandStarterSeatId(room, match);
 
     if (handWinner) {
+      this.settleBongBet(room, handWinner);
+      this.persistAction(room, 'trick_resolved', {
+        trickNumber,
+        winnerSeatId: winningSeat?.id ?? null,
+        winnerTeamSide: winningTeamSide,
+        winningCardLabel: winningPlay?.card.label ?? null,
+      });
+
+      // PICA PICA: intercept scoring — store pair result, do not check match win yet
+      if (match.picaPica) {
+        this.finishPicaPicaSubHand(room, handWinner, match.currentHandPoints);
+        return;
+      }
+
       match.teamScores[handWinner] += match.currentHandPoints;
       match.lastHandWinnerTeamSide = handWinner;
       match.lastHandScoredAt = new Date().toISOString();
@@ -2269,13 +2392,6 @@ export class RoomStoreService {
         room,
         `El Equipo ${handWinner} ganó la mano ${match.handNumber} por ${match.currentHandPoints} punto${match.currentHandPoints === 1 ? '' : 's'}.`,
       );
-      this.settleBongBet(room, handWinner);
-      this.persistAction(room, 'trick_resolved', {
-        trickNumber,
-        winnerSeatId: winningSeat?.id ?? null,
-        winnerTeamSide: winningTeamSide,
-        winningCardLabel: winningPlay?.card.label ?? null,
-      });
 
       if (match.teamScores[handWinner] >= room.targetScore) {
         room.phase = 'match_end';
@@ -2354,16 +2470,149 @@ export class RoomStoreService {
     match.reconnectDeadlineAt = null;
     match.activeBongBet = null;
     room.phase = 'action_turn';
-    this.setStatus(room, `Mano ${match.handNumber} en juego.`);
-    this.pushEvent(
-      room,
-      `Nueva mano repartida. Arranca ${room.seats.find((seat) => seat.id === nextDealerSeatId)?.displayName ?? 'la mano'}.`,
-    );
-    this.scheduleTurnTimeout(room.code);
+
+    if (room.maxPlayers === 6 && match.handNumber % 2 === 0) {
+      this.initPicaPicaRound(room);
+    } else {
+      match.picaPica = null;
+      this.setStatus(room, `Mano ${match.handNumber} en juego.`);
+      this.pushEvent(
+        room,
+        `Nueva mano repartida. Arranca ${room.seats.find((seat) => seat.id === nextDealerSeatId)?.displayName ?? 'la mano'}.`,
+      );
+      this.scheduleTurnTimeout(room.code);
+    }
+
     this.persistAction(room, 'hand_prepared', {
       handNumber: match.handNumber,
       dealerSeatId: nextDealerSeatId,
     });
+  }
+
+  private initPicaPicaRound(room: MutableRoom) {
+    const match = room.match!;
+    const occupied = this.getOccupiedSeats(room);
+    // pairs: opposite seats (3 apart in a 6-seat layout)
+    const pairSeatIds: Array<[string, string]> = [
+      [occupied[0].id, occupied[3].id],
+      [occupied[1].id, occupied[4].id],
+      [occupied[2].id, occupied[5].id],
+    ];
+    match.picaPica = {
+      currentPairIndex: 0,
+      pairSeatIds,
+      pairPoints: [],
+      pairEnvidoPoints: { A: 0, B: 0 },
+    };
+    this.activatePicaPicaPair(room, 0);
+  }
+
+  private activatePicaPicaPair(room: MutableRoom, pairIndex: number) {
+    const match = room.match!;
+    const [seatIdA] = match.picaPica!.pairSeatIds[pairIndex];
+    match.picaPica!.currentPairIndex = pairIndex;
+    match.picaPica!.pairEnvidoPoints = { A: 0, B: 0 };
+    match.trickNumber = 1;
+    match.tableCards = [];
+    match.handTrickWins = { A: 0, B: 0 };
+    match.currentHandPoints = 1;
+    match.envidoResolved = false;
+    match.trucoOpened = false;
+    match.pendingCanto = null;
+    match.suspendedCanto = null;
+    match.pendingEnvidoSinging = null;
+    match.trickResults = [];
+    match.turnDeadlineAt = null;
+    match.activeBongBet = null;
+    // seatIdA is the lower-index seat = mano; use as pair dealer for tie-breaking
+    match.dealerSeatId = seatIdA;
+    match.currentTurnSeatId = seatIdA;
+    room.phase = 'action_turn';
+    const pairNum = pairIndex + 1;
+    this.setStatus(room, `PICA PICA — Par ${pairNum}/3 en juego.`);
+    this.pushEvent(room, `PICA PICA: par ${pairNum}/3 arranca.`);
+    this.scheduleTurnTimeout(room.code);
+  }
+
+  /**
+   * Called whenever a PICA PICA sub-hand ends (via trick resolution OR truco fold).
+   * Records the pair result (truco points + any envido points already accumulated),
+   * then either advances to the next pair or finalises the PICA PICA round.
+   */
+  private finishPicaPicaSubHand(
+    room: MutableRoom,
+    handWinner: TeamSide,
+    trucoPoints: number,
+  ) {
+    const match = room.match!;
+    const picaPica = match.picaPica!;
+
+    // Combine truco points with any envido points scored during this sub-hand
+    const envA = picaPica.pairEnvidoPoints.A;
+    const envB = picaPica.pairEnvidoPoints.B;
+    const pairPointsA = (handWinner === 'A' ? trucoPoints : 0) + envA;
+    const pairPointsB = (handWinner === 'B' ? trucoPoints : 0) + envB;
+
+    picaPica.pairPoints.push({ A: pairPointsA, B: pairPointsB });
+    match.lastHandWinnerTeamSide = handWinner;
+    match.lastHandScoredAt = new Date().toISOString();
+    match.currentTurnSeatId = null;
+    match.tableCards = [];
+    match.turnDeadlineAt = null;
+    match.reconnectDeadlineAt = null;
+
+    const pairLabel = picaPica.currentPairIndex + 1;
+    const envMsg =
+      envA > 0 || envB > 0 ? ` (envido: A+${envA}, B+${envB})` : '';
+    this.pushEvent(
+      room,
+      `PICA PICA par ${pairLabel}/3: Equipo ${handWinner} ganó ${trucoPoints} punto${trucoPoints === 1 ? '' : 's'} al truco${envMsg}.`,
+    );
+
+    if (picaPica.currentPairIndex < 2) {
+      // Move to next pair
+      this.activatePicaPicaPair(room, picaPica.currentPairIndex + 1);
+      this.persistSnapshot(room);
+      return;
+    }
+
+    // All 3 pairs done — credit accumulated points and check for match win
+    const totalA = picaPica.pairPoints.reduce((sum, p) => sum + p.A, 0);
+    const totalB = picaPica.pairPoints.reduce((sum, p) => sum + p.B, 0);
+    match.teamScores = {
+      A: match.teamScores.A + totalA,
+      B: match.teamScores.B + totalB,
+    };
+    match.picaPica = null;
+
+    this.pushEvent(
+      room,
+      `PICA PICA terminado. Equipo A +${totalA}, Equipo B +${totalB}. Total: A=${match.teamScores.A}, B=${match.teamScores.B}.`,
+    );
+
+    const picaWinner = this.getWinningTeamForScore(
+      match.teamScores,
+      room.targetScore,
+    );
+    if (picaWinner) {
+      room.phase = 'match_end';
+      match.summary = {
+        winnerTeamSide: picaWinner,
+        finalScore: { ...match.teamScores },
+      };
+      this.clearTurnTimeout(room.code);
+      this.clearReconnectTimeout(room.code);
+      this.setStatus(room, `El Equipo ${picaWinner} ganó la partida.`);
+      this.pushEvent(
+        room,
+        `¡Partida terminada! El Equipo ${picaWinner} llegó a ${room.targetScore} puntos.`,
+      );
+      this.persistMatchFinished(room, picaWinner);
+      this.persistSnapshot(room);
+      return;
+    }
+
+    this.prepareNextHand(room);
   }
 
   private settleBongBet(room: MutableRoom, handWinnerTeam: TeamSide): void {
@@ -2847,6 +3096,10 @@ export class RoomStoreService {
     >,
   ) {
     if (cantoType === 'falta_envido') {
+      // During PICA PICA, falta envido is worth a fixed 7 points
+      if (room.match?.picaPica) {
+        return 7;
+      }
       const leadingScore = Math.max(
         room.match?.teamScores.A ?? 0,
         room.match?.teamScores.B ?? 0,
@@ -2947,6 +3200,19 @@ export class RoomStoreService {
     callerSeatId: string,
     quieroSeatId: string,
   ): string[] {
+    // In PICA PICA, only the 2 active pair players sing
+    if (room.match?.picaPica) {
+      const [seatIdA, seatIdB] =
+        room.match.picaPica.pairSeatIds[room.match.picaPica.currentPairIndex];
+      // Caller sings first, quiero seat sings last
+      if (callerSeatId === seatIdA || callerSeatId === seatIdB) {
+        return callerSeatId === quieroSeatId
+          ? [callerSeatId]
+          : [callerSeatId, quieroSeatId];
+      }
+      return [callerSeatId, quieroSeatId];
+    }
+
     const callerTeam =
       room.seats.find((s) => s.id === callerSeatId)?.teamSide ?? null;
     const quieroTeam =
@@ -3095,10 +3361,16 @@ export class RoomStoreService {
       B: winnerTeam === 'B' ? points : 0,
     };
 
-    room.match!.teamScores = {
-      A: room.match!.teamScores.A + scoreDelta.A,
-      B: room.match!.teamScores.B + scoreDelta.B,
-    };
+    // During PICA PICA, envido points are deferred to pair accumulation
+    if (room.match!.picaPica) {
+      room.match!.picaPica.pairEnvidoPoints.A += scoreDelta.A;
+      room.match!.picaPica.pairEnvidoPoints.B += scoreDelta.B;
+    } else {
+      room.match!.teamScores = {
+        A: room.match!.teamScores.A + scoreDelta.A,
+        B: room.match!.teamScores.B + scoreDelta.B,
+      };
+    }
 
     // Add per-player events in singing order
     for (const d of declarations) {
@@ -3218,10 +3490,10 @@ export class RoomStoreService {
       scoreDelta = this.applyEnvidoDeclarations(room, singing, declarations);
       room.match.pendingEnvidoSinging = null;
 
-      const winningTeam = this.getWinningTeamForScore(
-        room.match.teamScores,
-        room.targetScore,
-      );
+      // During PICA PICA, match win is deferred until all 3 pairs complete
+      const winningTeam = room.match.picaPica
+        ? null
+        : this.getWinningTeamForScore(room.match.teamScores, room.targetScore);
 
       if (winningTeam) {
         matchEnded = true;
@@ -3470,6 +3742,10 @@ export class RoomStoreService {
 
     if (room.maxPlayers === 4) {
       return countA === 2 && countB === 2;
+    }
+
+    if (room.maxPlayers === 6) {
+      return countA === 3 && countB === 3;
     }
 
     return false;
@@ -3905,6 +4181,8 @@ export class RoomStoreService {
             teamScores: room.match.teamScores,
             handTrickWins: room.match.handTrickWins,
             currentHandPoints: room.match.currentHandPoints,
+            envidoResolved: room.match.envidoResolved,
+            trucoOpened: room.match.trucoOpened,
             trickResults: room.match.trickResults,
             pendingCanto: room.match.pendingCanto,
             suspendedCanto: room.match.suspendedCanto,
@@ -3918,6 +4196,9 @@ export class RoomStoreService {
             lastHandWinnerTeamSide: room.match.lastHandWinnerTeamSide,
             turnDeadlineAt: room.match.turnDeadlineAt,
             reconnectDeadlineAt: room.match.reconnectDeadlineAt,
+            activeBongBet: room.match.activeBongBet,
+            bongBalance: room.match.bongBalance,
+            picaPica: room.match.picaPica,
           }
         : null,
     });

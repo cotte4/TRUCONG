@@ -105,6 +105,19 @@ function getSeatPositionClass(totalSeats: number, relativeOffset: number) {
       : "left-1/2 top-6 -translate-x-1/2";
   }
 
+  if (totalSeats === 6) {
+    // Hexagonal layout: me at bottom-center, clockwise
+    const positions = [
+      "left-1/2 bottom-6 -translate-x-1/2",     // 0 — yo, abajo centro
+      "right-6 bottom-1/4",                       // 1 — abajo derecha
+      "right-6 top-1/4",                          // 2 — arriba derecha
+      "left-1/2 top-6 -translate-x-1/2",         // 3 — arriba centro
+      "left-6 top-1/4",                           // 4 — arriba izquierda
+      "left-6 bottom-1/4",                        // 5 — abajo izquierda
+    ];
+    return positions[relativeOffset] ?? positions[0];
+  }
+
   const positions = [
     "left-1/2 bottom-6 -translate-x-1/2",
     "left-6 top-1/2 -translate-y-1/2",
@@ -1574,8 +1587,8 @@ export function LobbyClient({ code }: { code: string }) {
   const everybodyReady = filledSeats.length === snapshot.maxPlayers && filledSeats.every((seat) => seat.isReady);
   const teamA = filledSeats.filter((seat) => seat.teamSide === "A").length;
   const teamB = filledSeats.filter((seat) => seat.teamSide === "B").length;
-  const teamsBalanced =
-    snapshot.maxPlayers === 2 ? teamA === 1 && teamB === 1 : teamA === 2 && teamB === 2;
+  const seatsPerTeam = snapshot.maxPlayers / 2;
+  const teamsBalanced = teamA === seatsPerTeam && teamB === seatsPerTeam;
 
   const actorPayload: LobbyActionPayload | null = session
       ? {
@@ -1776,6 +1789,19 @@ export function LobbyClient({ code }: { code: string }) {
       (canCallEnvido && canArmBongForCanto("falta_envido")) ||
       responseRaiseOptions.some(canArmBongForCanto));
   const bongArmedReady = bongArmed && canArmBongNow;
+
+  // PICA PICA: guard for action/card interactivity — non-pair players cannot act
+  const isActivePicaPicaPlayer =
+    !matchState?.picaPica ||
+    (currentSeat != null && matchState.picaPica.activePairSeatIds.includes(currentSeat.id));
+
+  // "Próx: PICA PICA" hint — show in HUD when match is in progress, NOT during active PICA PICA,
+  // only in 3v3 rooms where the *next* hand number (0-indexed) is a PICA PICA hand (every 2nd hand, 0-indexed odd)
+  const showNextRoundPicaPicaHint =
+    matchState != null &&
+    !matchState.picaPica &&
+    snapshot.maxPlayers === 6 &&
+    (matchState.handNumber + 1) % 2 === 0;
 
   const now = Date.now();
   const visibleReactions = recentReactions.filter((r) => now - r.sentAt < REACTION_TTL_MS);
@@ -2054,7 +2080,7 @@ export function LobbyClient({ code }: { code: string }) {
 
             <div className="grid gap-2">
               {([
-                { label: "MODO", value: snapshot.maxPlayers === 2 ? "1×1" : "2×2", ok: true },
+                { label: "MODO", value: snapshot.maxPlayers === 2 ? "1×1" : snapshot.maxPlayers === 6 ? "3×3" : "2×2", ok: true },
                 { label: "PUNTOS", value: `${snapshot.targetScore}`, ok: true },
                 { label: "EQUIPOS", value: teamsBalanced ? "OK" : "FALTA", ok: teamsBalanced },
                 { label: "BONGS", value: snapshot.allowBongs ? "ON" : "OFF", ok: snapshot.allowBongs },
@@ -2170,8 +2196,71 @@ export function LobbyClient({ code }: { code: string }) {
                       Reconectando… {reconnectCountdown}s
                     </div>
                   ) : null}
+                  {showNextRoundPicaPicaHint ? (
+                    <div className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.2em] text-amber-200/80">
+                      Próx: PICA PICA
+                    </div>
+                  ) : null}
                 </div>
               </div>
+
+              {/* PICA PICA banner — shown above table when 3v3 sub-hands are active */}
+              {matchState?.picaPica ? (
+                <div className="mt-5 rounded-[1.5rem] border border-amber-400/35 bg-[linear-gradient(135deg,rgba(251,191,36,0.12),rgba(245,158,11,0.06))] px-5 py-4 shadow-[0_0_40px_rgba(251,191,36,0.12)]">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="text-[0.6rem] font-black uppercase tracking-[0.38em] text-amber-300/70">Modo 3×3</p>
+                      <h3 className="font-brand-display mt-1 text-2xl text-amber-200 animate-pulse">PICA PICA</h3>
+                      <p className="mt-1 text-sm font-semibold text-amber-100/80">
+                        Par {matchState.picaPica.currentPairIndex + 1} de {matchState.picaPica.totalPairs}
+                      </p>
+                    </div>
+                    {/* Pair progress dots */}
+                    <div className="flex items-center gap-2">
+                      {Array.from({ length: matchState.picaPica.totalPairs }).map((_, i) => {
+                        const completed = matchState.picaPica!.completedPairs.find((p) => p.pairIndex === i);
+                        const isActive = i === matchState.picaPica!.currentPairIndex;
+                        return (
+                          <div
+                            key={i}
+                            className={`h-3 w-3 rounded-full border transition-all ${
+                              completed
+                                ? "border-amber-400/70 bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]"
+                                : isActive
+                                  ? "border-amber-300/80 bg-amber-300/40 animate-pulse"
+                                  : "border-white/20 bg-white/5"
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {/* Completed pair results */}
+                  {matchState.picaPica.completedPairs.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {matchState.picaPica.completedPairs.map((pair) => {
+                        const winner = pair.winnerTeamSide;
+                        const winnerColor = winner === "A" ? "text-cyan-300" : winner === "B" ? "text-emerald-300" : "text-slate-400";
+                        const winnerLabel = winner === "A" ? "Equipo A" : winner === "B" ? "Equipo B" : "Empate";
+                        return (
+                          <span
+                            key={pair.pairIndex}
+                            className="rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-[11px] font-semibold text-amber-100/80"
+                          >
+                            Par {pair.pairIndex + 1}:{" "}
+                            <span className={winnerColor}>{winnerLabel}</span>
+                            {winner ? (
+                              <span className="ml-1 text-slate-400">
+                                {winner === "A" ? `+${pair.pointsA}` : `+${pair.pointsB}`}pts
+                              </span>
+                            ) : null}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="ovni-table-surface relative mt-8 min-h-[560px] overflow-hidden rounded-[2rem] border border-white/10">
                 <div className="absolute inset-[7%] rounded-[2.4rem] border border-cyan-300/8" />
@@ -2205,12 +2294,16 @@ export function LobbyClient({ code }: { code: string }) {
                     anchorSeatIndex,
                     snapshot.maxPlayers,
                   );
+                  // Dim seats that are not part of the active PICA PICA pair
+                  const isPicaPicaDimmed =
+                    matchState?.picaPica != null &&
+                    !matchState.picaPica.activePairSeatIds.includes(seat.id);
 
                   const seatReactions = visibleReactions.filter((r) => r.seatId === seat.id).slice(-2);
                   const seatCantos = visibleCantos.filter((c) => c.seatId === seat.id).slice(-2);
 
                   return (
-                    <div key={seat.id} className={`absolute z-20 ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)}`}>
+                    <div key={seat.id} className={`absolute z-20 ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)} ${isPicaPicaDimmed ? "opacity-40" : ""}`}>
                       {seatReactions.length > 0 ? (
                         <div className={`pointer-events-none absolute z-30 flex gap-2 ${getReactionBubbleClass(relativeOffset)}`}>
                           {seatReactions.map((r) => (
@@ -2362,9 +2455,9 @@ export function LobbyClient({ code }: { code: string }) {
                         <ReadableTrucoCardSprite
                           card={card}
                           subtitle={card.isWildcard ? "DIMADONG alien" : `${card.rank} de ${card.suit}`}
-                          artMode={isMyTurn ? "hologram" : "watermark"}
-                          active={isMyTurn}
-                          disabled={actionPending || !isMyTurn}
+                          artMode={isMyTurn && isActivePicaPicaPlayer ? "hologram" : "watermark"}
+                          active={isMyTurn && isActivePicaPicaPlayer}
+                          disabled={actionPending || !isMyTurn || !isActivePicaPicaPlayer}
                           onClick={() => handlePlayCard(card.id)}
                         />
                       </div>
@@ -2377,7 +2470,7 @@ export function LobbyClient({ code }: { code: string }) {
                 )}
               </div>
 
-              {phase === "action_turn" && isMyTurn ? (
+              {phase === "action_turn" && isMyTurn && isActivePicaPicaPlayer ? (
                 <div className="mt-5 space-y-3">
                   {canArmBongNow ? (
                     <div
@@ -2554,7 +2647,7 @@ export function LobbyClient({ code }: { code: string }) {
               </div>
             ) : null}
 
-            {needsWildcardSelection ? (
+            {needsWildcardSelection && isActivePicaPicaPlayer ? (
               <div className={panelClass("border-amber-300/20 bg-amber-300/8")}>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-100/80">DIMADONG</p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">Elegí cómo juega.</h2>
@@ -2580,7 +2673,7 @@ export function LobbyClient({ code }: { code: string }) {
               </div>
             ) : null}
 
-            {isMyCantoResponse && pendingCantoType ? (
+            {isMyCantoResponse && pendingCantoType && isActivePicaPicaPlayer ? (
               <div className={panelClass("border-violet-300/20 bg-violet-300/8")}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-violet-100/80">Canto</p>
