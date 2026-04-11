@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
   AvatarId,
+  CantoOpenedEvent,
   CardSuit,
   CardView,
   CantoOpenPayload,
@@ -27,7 +28,9 @@ import type {
   RoomSnapshot,
   SeatFreePayload,
   SummaryStartPayload,
+  TablePlayView,
   TeamSide,
+  TrickResolvedEvent,
   WildcardSelectPayload,
 } from "@dimadong/contracts";
 import { apiBaseUrl, socketBaseUrl } from "@/lib/config";
@@ -410,6 +413,13 @@ type ActiveReaction = {
   sentAt: number;
 };
 
+type ActiveCanto = {
+  id: string;
+  seatId: string | null;
+  cantoType: CantoType;
+  sentAt: number;
+};
+
 const REACTIONS = ["👽", "🛸", "🔥", "💀", "⚡", "🌟"];
 const REACTION_TTL_MS = 4_000;
 const SOCKET_ACK_TIMEOUT_MS = 18_000;
@@ -453,6 +463,8 @@ export function LobbyClient({ code }: { code: string }) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [recentReactions, setRecentReactions] = useState<ActiveReaction[]>([]);
+  const [recentCantos, setRecentCantos] = useState<ActiveCanto[]>([]);
+  const [lastTrickCards, setLastTrickCards] = useState<TablePlayView[]>([]);
   const [navVisible, setNavVisible] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const refreshRoomStateRef = useRef<(() => Promise<void>) | null>(null);
@@ -480,6 +492,21 @@ export function LobbyClient({ code }: { code: string }) {
     }, 1_000);
     return () => clearInterval(id);
   }, [recentReactions.length]);
+
+  const CANTO_TTL_MS = 7_000;
+  useEffect(() => {
+    if (recentCantos.length === 0) return;
+    const id = setInterval(() => {
+      setRecentCantos((prev) => prev.filter((c) => Date.now() - c.sentAt < CANTO_TTL_MS));
+    }, 1_000);
+    return () => clearInterval(id);
+  }, [recentCantos.length]);
+
+  // Clear saved trick cards when live cards appear (new trick started)
+  const liveCardCount = (matchView?.tableCards ?? matchState?.tableCards ?? []).length;
+  useEffect(() => {
+    if (liveCardCount > 0) setLastTrickCards([]);
+  }, [liveCardCount]);
 
   const currentPhaseForNav = matchState?.phase ?? snapshot?.phase ?? "lobby";
   useEffect(() => {
@@ -617,6 +644,21 @@ export function LobbyClient({ code }: { code: string }) {
             ...prev.slice(-9),
             { id: event.clientReactionId, seatId: event.seatId, reaction: event.reaction, sentAt: Date.now() },
           ]);
+        });
+
+        activeSocket.on("canto:opened", (event: CantoOpenedEvent) => {
+          setRecentCantos((prev) => [
+            ...prev.slice(-4),
+            { id: `${event.seatId}-${event.openedAt}`, seatId: event.seatId, cantoType: event.cantoType, sentAt: Date.now() },
+          ]);
+          syncRoomState(event);
+        });
+
+        activeSocket.on("trick:resolved", (event: TrickResolvedEvent) => {
+          if (event.tableCards?.length) {
+            setLastTrickCards(event.tableCards);
+          }
+          syncRoomState(event);
         });
       } catch (caughtError) {
         setError(caughtError instanceof Error ? caughtError.message : "No se pudo cargar la sala.");
@@ -910,6 +952,11 @@ export function LobbyClient({ code }: { code: string }) {
 
   const now = Date.now();
   const visibleReactions = recentReactions.filter((r) => now - r.sentAt < REACTION_TTL_MS);
+  const visibleCantos = recentCantos.filter((c) => now - c.sentAt < CANTO_TTL_MS);
+  // Show last trick's cards when table is empty (between tricks)
+  const liveTableCards = matchView?.tableCards ?? matchState?.tableCards ?? [];
+  const displayTableCards = liveTableCards.length > 0 ? liveTableCards : lastTrickCards;
+  const isShowingLastTrick = liveTableCards.length === 0 && lastTrickCards.length > 0;
 
   const finalSummary =
     matchView?.summary ??
@@ -1225,18 +1272,14 @@ export function LobbyClient({ code }: { code: string }) {
               <div className="ovni-table-surface relative mt-8 min-h-[560px] overflow-hidden rounded-[2rem] border border-white/10">
                 <div className="ufo-pulse absolute left-1/2 top-1/2 h-[310px] w-[310px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(83,234,253,0.22),rgba(12,18,38,0.96)_55%,rgba(8,13,29,1)_100%)] shadow-[0_0_90px_rgba(83,234,253,0.2)]" />
                 <div className="absolute left-1/2 top-1/2 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/20 bg-[radial-gradient(circle_at_center,rgba(255,210,54,0.12),rgba(8,13,29,0.1)_70%,transparent_100%)]" />
-                {!(matchView?.tableCards?.length) ? (
+                {displayTableCards.length === 0 ? (
                   <div className="absolute left-1/2 top-1/2 flex w-[240px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100/70">Centro de mando</p>
-                    <p className="mt-3 text-3xl font-semibold text-white">{snapshot.code}</p>
-                    <p className="mt-2 text-sm text-slate-300">
-                      Mano {matchView?.handNumber ?? "-"} · Baza {matchView?.trickNumber ?? "-"}
+                    <p className="font-brand-display text-2xl text-white">
+                      Mano {matchView?.handNumber ?? "-"}
                     </p>
-                    {formatClock(matchView?.turnDeadlineAt ?? snapshot.turnDeadlineAt) ? (
-                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">
-                        Límite {formatClock(matchView?.turnDeadlineAt ?? snapshot.turnDeadlineAt)}
-                      </p>
-                    ) : null}
+                    <p className="mt-1 text-sm text-slate-400 uppercase tracking-[0.2em]">
+                      Baza {matchView?.trickNumber ?? "-"}
+                    </p>
                   </div>
                 ) : null}
 
@@ -1251,10 +1294,20 @@ export function LobbyClient({ code }: { code: string }) {
                     snapshot.maxPlayers,
                   );
 
+                  const seatCantos = visibleCantos.filter((c) => c.seatId === seat.id).slice(-2);
+
                   return (
                     <div key={seat.id} className={`absolute ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)}`}>
-                      {isActiveSeat ? <div className="alien-beam absolute left-1/2 top-12 h-32 w-24 -translate-x-1/2 rounded-full bg-cyan-300/14 blur-xl" /> : null}
-                      <div className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 ${palette.panel} ${palette.glow}`}>
+                      {isActiveSeat ? <div className="alien-beam absolute left-1/2 top-12 h-32 w-24 -translate-x-1/2 rounded-full bg-cyan-300/18 blur-xl" /> : null}
+                      <div className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 transition-all duration-300 ${palette.panel} ${isActiveSeat ? "shadow-[0_0_0_3px_rgba(83,234,253,0.55),0_0_32px_rgba(83,234,253,0.3)] scale-[1.04]" : palette.glow}`}>
+                        {isActiveSeat ? (
+                          <div className="mb-2 flex items-center gap-1.5 rounded-full border border-cyan-300/30 bg-cyan-300/10 px-2 py-0.5 w-fit">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan-300 animate-pulse" />
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-200">
+                              {seat.id === currentSeat?.id ? "Tu turno" : "Jugando"}
+                            </span>
+                          </div>
+                        ) : null}
                         <div className="flex items-center gap-3">
                           <AvatarCircle avatarId={seat.avatarId} tone={tone} active={isCurrentSeat || isActiveSeat} size={40} />
                           <div className="min-w-0">
@@ -1264,23 +1317,35 @@ export function LobbyClient({ code }: { code: string }) {
                             <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
                               {seat.teamSide ? `Equipo ${seat.teamSide}` : "Libre"}
                             </p>
-                            <p className="mt-2 text-sm text-slate-300">
+                            <p className="mt-1 text-sm text-slate-300">
                               {isActiveSeat
-                                ? "Está jugando ahora."
-                                : isCurrentSeat
-                                  ? "Tu cabina."
-                                  : `${seat.handCount} carta(s) en mano.`}
+                                ? isCurrentSeat ? "Jugá tu carta." : "Pensando..."
+                                : `${seat.handCount} carta(s)`}
                             </p>
                           </div>
                         </div>
+                        {seatCantos.length > 0 ? (
+                          <div className="mt-2 space-y-1">
+                            {seatCantos.map((c) => (
+                              <div key={c.id} className="reaction-pop flex items-center gap-1.5 rounded-xl border border-violet-300/30 bg-violet-300/10 px-2.5 py-1">
+                                <span className="text-base leading-none">
+                                  {c.cantoType === "truco" ? "⚔️" : c.cantoType === "retruco" ? "⚔️⚔️" : c.cantoType === "vale_cuatro" ? "⚔️⚔️⚔️" : "🃏"}
+                                </span>
+                                <span className="text-xs font-bold uppercase tracking-[0.12em] text-violet-200">
+                                  {c.cantoType === "truco" ? "Truco" : c.cantoType === "retruco" ? "Retruco" : c.cantoType === "vale_cuatro" ? "Vale 4" : c.cantoType === "envido" ? "Envido" : c.cantoType === "real_envido" ? "Real Envido" : "Falta Envido"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   );
                 })}
 
-                {(matchView?.tableCards ?? []).length > 0 ? (
-                  <div className="absolute inset-0">
-                    {(matchView?.tableCards ?? []).map((play, index) => {
+                {displayTableCards.length > 0 ? (
+                  <div className={`absolute inset-0 transition-opacity duration-500 ${isShowingLastTrick ? "opacity-40" : "opacity-100"}`}>
+                    {displayTableCards.map((play, index) => {
                       const seat = snapshot.seats.find((item) => item.id === play.seatId);
                       const relativeOffset = getRelativeSeatOffset(
                         seat?.seatIndex ?? index,
@@ -1302,7 +1367,7 @@ export function LobbyClient({ code }: { code: string }) {
                             card={play.card}
                             subtitle={play.displayName ?? "Mesa"}
                             artMode="hologram"
-                            active
+                            active={!isShowingLastTrick}
                             disabled
                           />
                         </div>
@@ -1370,17 +1435,38 @@ export function LobbyClient({ code }: { code: string }) {
                     onClick={() => handleOpenCanto("truco")}
                     className="canto-action-btn canto-action-btn-truco"
                   >
-                    Cantar truco
+                    Truco
                   </button>
                   {canCallEnvido ? (
-                    <button
-                      type="button"
-                      disabled={actionPending}
-                      onClick={() => handleOpenCanto("envido")}
-                      className="canto-action-btn canto-action-btn-envido"
-                    >
-                      Cantar envido
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto("envido")}
+                        className="canto-action-btn canto-action-btn-envido"
+                        title="Vale 2 puntos"
+                      >
+                        Envido
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto("real_envido")}
+                        className="canto-action-btn canto-action-btn-envido"
+                        title="Vale 3 puntos"
+                      >
+                        Real Envido
+                      </button>
+                      <button
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto("falta_envido")}
+                        className="canto-action-btn canto-action-btn-envido"
+                        title="Vale lo que le falta al rival para ganar"
+                      >
+                        Falta Envido
+                      </button>
+                    </>
                   ) : null}
                 </div>
               ) : null}
@@ -1426,11 +1512,11 @@ export function LobbyClient({ code }: { code: string }) {
                   {pendingCantoType === "truco" ? "Truco"
                     : pendingCantoType === "retruco" ? "Retruco"
                     : pendingCantoType === "vale_cuatro" ? "Vale Cuatro"
-                    : pendingCantoType === "envido" ? "Envido"
-                    : pendingCantoType === "real_envido" ? "Real Envido"
+                    : pendingCantoType === "envido" ? "Envido (2 pts)"
+                    : pendingCantoType === "real_envido" ? "Real Envido (3 pts)"
                     : "Falta Envido"}
                 </h2>
-                <p className="mt-2 text-sm text-slate-200">¿Querés aceptar o rechazar?</p>
+                <p className="mt-2 text-sm text-slate-200">¿Querés aceptar, subir o rechazar?</p>
                 <div className="mt-5 flex gap-3">
                   <button
                     type="button"
@@ -1449,6 +1535,43 @@ export function LobbyClient({ code }: { code: string }) {
                     No Quiero
                   </button>
                 </div>
+                {/* Raise options for envido */}
+                {(pendingCantoType === "envido" || pendingCantoType === "real_envido") ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <p className="w-full text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Subir a</p>
+                    {pendingCantoType === "envido" ? (
+                      <button
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto("envido")}
+                        className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
+                        title="Envido + Envido = 4 puntos"
+                      >
+                        Envido →4
+                      </button>
+                    ) : null}
+                    {(pendingCantoType === "envido") ? (
+                      <button
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto("real_envido")}
+                        className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
+                        title="Envido + Real Envido = 5 puntos"
+                      >
+                        Real Envido →5
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={actionPending}
+                      onClick={() => handleOpenCanto("falta_envido")}
+                      className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
+                      title="Termina la partida o vale lo que le falta al rival"
+                    >
+                      Falta Envido
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
