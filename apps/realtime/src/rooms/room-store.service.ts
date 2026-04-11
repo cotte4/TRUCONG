@@ -119,14 +119,17 @@ type MutableTrickResult = {
   winningCardLabel: string | null;
 };
 
+type MutableCantoType =
+  | 'truco'
+  | 'retruco'
+  | 'vale_cuatro'
+  | 'envido'
+  | 'real_envido'
+  | 'falta_envido';
+
 type MutablePendingCanto = {
-  cantoType:
-    | 'truco'
-    | 'retruco'
-    | 'vale_cuatro'
-    | 'envido'
-    | 'real_envido'
-    | 'falta_envido';
+  cantoType: MutableCantoType;
+  callChain: MutableCantoType[];
   actorSeatId: string;
   targetSeatId: string | null;
   openedAt: string;
@@ -162,6 +165,7 @@ type MutableEnvidoSinging = {
   callerTeamSide: TeamSide;
   quieroSeatId: string;
   cantoType: 'envido' | 'real_envido' | 'falta_envido';
+  callChain: Array<'envido' | 'real_envido' | 'falta_envido'>;
   singingOrder: string[];
   declarations: MutableEnvidoDeclaration[];
   pendingWildcardCommits: MutableEnvidoWildcardCommit[];
@@ -1098,10 +1102,12 @@ export class RoomStoreService {
       : null;
 
     const isRaisingTruco = this.canRaiseTruco(room, actorSeat.id, cantoType);
+    const isRaisingEnvido = this.canRaiseEnvido(room, actorSeat.id, cantoType);
 
     if (
       (!interruptedPendingTruco &&
         !isRaisingTruco &&
+        !isRaisingEnvido &&
         room.phase !== 'action_turn') ||
       !room.match
     ) {
@@ -1113,6 +1119,7 @@ export class RoomStoreService {
     if (
       !interruptedPendingTruco &&
       !isRaisingTruco &&
+      !isRaisingEnvido &&
       room.match.currentTurnSeatId !== actorSeat.id
     ) {
       throw new BadRequestException('Only the active player can open a canto.');
@@ -1121,7 +1128,8 @@ export class RoomStoreService {
     if (
       room.match.pendingCanto &&
       !interruptedPendingTruco &&
-      !isRaisingTruco
+      !isRaisingTruco &&
+      !isRaisingEnvido
     ) {
       throw new BadRequestException(
         'There is already a pending canto response.',
@@ -1140,6 +1148,13 @@ export class RoomStoreService {
       room.match.pendingCanto = null;
     }
 
+    const raisedEnvidoFromCanto = isRaisingEnvido
+      ? (room.match.pendingCanto ?? null)
+      : null;
+    if (raisedEnvidoFromCanto && !this.isTrucoCanto(raisedEnvidoFromCanto.cantoType)) {
+      room.match.pendingCanto = null;
+    }
+
     this.validateCantoOpen(room, cantoType, actorSeat.id);
 
     if (this.isTrucoCanto(cantoType)) {
@@ -1148,11 +1163,16 @@ export class RoomStoreService {
 
     room.phase = 'response_pending';
     room.match.suspendedCanto = interruptedPendingTruco;
+    const callChain = raisedEnvidoFromCanto
+      ? [...this.getPendingCantoCallChain(raisedEnvidoFromCanto), cantoType]
+      : [cantoType];
     room.match.pendingCanto = {
       cantoType,
+      callChain,
       actorSeatId: actorSeat.id,
       targetSeatId:
         raisedFromCanto?.actorSeatId ??
+        raisedEnvidoFromCanto?.actorSeatId ??
         interruptedPendingTruco?.actorSeatId ??
         targetSeatId ??
         null,
@@ -1242,6 +1262,8 @@ export class RoomStoreService {
     room.match.reconnectDeadlineAt = null;
     this.clearCantoTimeout(room.code);
 
+    const pendingCallChain = this.getPendingCantoCallChain(pending);
+
     if (!this.isTrucoCanto(pending.cantoType)) {
       room.match.envidoResolved = true;
     }
@@ -1256,11 +1278,19 @@ export class RoomStoreService {
         ? {
             A:
               callerTeamSide === 'A'
-                ? this.getDeclinedCantoPoints(pending.cantoType)
+                ? this.getDeclinedCantoPoints(
+                    pending.cantoType,
+                    room,
+                    pendingCallChain,
+                  )
                 : 0,
             B:
               callerTeamSide === 'B'
-                ? this.getDeclinedCantoPoints(pending.cantoType)
+                ? this.getDeclinedCantoPoints(
+                    pending.cantoType,
+                    room,
+                    pendingCallChain,
+                  )
                 : 0,
           }
         : { A: 0, B: 0 };
@@ -2376,6 +2406,65 @@ export class RoomStoreService {
     return newIdx === oldIdx + 1;
   }
 
+  private getPendingCantoCallChain(pending: MutablePendingCanto) {
+    return pending.callChain.length > 0 ? [...pending.callChain] : [pending.cantoType];
+  }
+
+  private getAllowedNextEnvidoCalls(
+    callChain: Array<'envido' | 'real_envido' | 'falta_envido'>,
+  ) {
+    const lastCall = callChain[callChain.length - 1];
+    const envidoCount = callChain.filter((call) => call === 'envido').length;
+
+    if (lastCall === 'falta_envido') {
+      return [] as Array<'envido' | 'real_envido' | 'falta_envido'>;
+    }
+
+    if (lastCall === 'real_envido') {
+      return ['falta_envido'] as Array<'envido' | 'real_envido' | 'falta_envido'>;
+    }
+
+    const nextCalls: Array<'envido' | 'real_envido' | 'falta_envido'> = [];
+
+    if (envidoCount < 2) {
+      nextCalls.push('envido');
+    }
+
+    nextCalls.push('real_envido', 'falta_envido');
+
+    return nextCalls;
+  }
+
+  private canRaiseEnvido(
+    room: MutableRoom,
+    actorSeatId: string | null,
+    newCantoType: MutablePendingCanto['cantoType'],
+  ) {
+    if (
+      !room.match ||
+      this.isTrucoCanto(newCantoType) ||
+      room.phase !== 'response_pending'
+    ) {
+      return false;
+    }
+
+    const pending = room.match.pendingCanto;
+
+    if (!pending || this.isTrucoCanto(pending.cantoType)) {
+      return false;
+    }
+
+    if (pending.targetSeatId !== actorSeatId) {
+      return false;
+    }
+
+    return this.getAllowedNextEnvidoCalls(
+      this.getPendingCantoCallChain(pending) as Array<
+        'envido' | 'real_envido' | 'falta_envido'
+      >,
+    ).includes(newCantoType as 'envido' | 'real_envido' | 'falta_envido');
+  }
+
   private validateCantoOpen(
     room: MutableRoom,
     cantoType: MutablePendingCanto['cantoType'],
@@ -2591,7 +2680,26 @@ export class RoomStoreService {
     throw new BadRequestException('Missing or invalid suit.');
   }
 
-  private getDeclinedCantoPoints(cantoType: MutablePendingCanto['cantoType']) {
+  private getDeclinedCantoPoints(
+    cantoType: MutablePendingCanto['cantoType'],
+    room?: MutableRoom,
+    callChain?: MutablePendingCanto['callChain'],
+  ) {
+    if (
+      !this.isTrucoCanto(cantoType) &&
+      room &&
+      callChain &&
+      callChain.length > 0
+    ) {
+      return Math.max(
+        1,
+        this.getAcceptedEnvidoPointsForChain(
+          room,
+          callChain.slice(0, -1) as Array<'envido' | 'real_envido' | 'falta_envido'>,
+        ),
+      );
+    }
+
     switch (cantoType) {
       case 'retruco':
         return 2;
@@ -2641,15 +2749,22 @@ export class RoomStoreService {
     return cantoType === 'real_envido' ? 3 : 2;
   }
 
+  private getAcceptedEnvidoPointsForChain(
+    room: MutableRoom,
+    callChain: Array<'envido' | 'real_envido' | 'falta_envido'>,
+  ) {
+    return callChain.reduce(
+      (total, call) => total + this.getAcceptedEnvidoPoints(room, call),
+      0,
+    );
+  }
+
   private getAcceptedEnvidoScoreDelta(
     room: MutableRoom,
-    cantoType: Extract<
-      MutablePendingCanto['cantoType'],
-      'envido' | 'real_envido' | 'falta_envido'
-    >,
+    callChain: Array<'envido' | 'real_envido' | 'falta_envido'>,
   ): TeamScoreView {
     const awardedTeam = this.getEnvidoWinningTeam(room);
-    const points = this.getAcceptedEnvidoPoints(room, cantoType);
+    const points = this.getAcceptedEnvidoPointsForChain(room, callChain);
 
     return {
       A: awardedTeam === 'A' ? points : 0,
@@ -2757,6 +2872,9 @@ export class RoomStoreService {
     const callerTeamSide =
       room.seats.find((s) => s.id === callerSeatId)?.teamSide ?? 'A';
     const cantoType = pending.cantoType as MutableEnvidoSinging['cantoType'];
+    const callChain = this.getPendingCantoCallChain(pending) as Array<
+      'envido' | 'real_envido' | 'falta_envido'
+    >;
 
     const singingOrder = this.buildSingingOrder(
       room,
@@ -2784,6 +2902,7 @@ export class RoomStoreService {
       callerTeamSide,
       quieroSeatId: quieroSeat.id,
       cantoType,
+      callChain,
       singingOrder,
       declarations: [],
       pendingWildcardCommits,
@@ -2858,7 +2977,7 @@ export class RoomStoreService {
       }
     }
 
-    const points = this.getAcceptedEnvidoPoints(room, singing.cantoType);
+    const points = this.getAcceptedEnvidoPointsForChain(room, singing.callChain);
 
     const scoreDelta: TeamScoreView = {
       A: winnerTeam === 'A' ? points : 0,
@@ -2890,6 +3009,7 @@ export class RoomStoreService {
 
     return {
       cantoType: singing.cantoType,
+      callChain: [...singing.callChain],
       callerSeatId: singing.callerSeatId,
       quieroSeatId: singing.quieroSeatId,
       callerTeamSide: singing.callerTeamSide,

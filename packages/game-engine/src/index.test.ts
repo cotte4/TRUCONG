@@ -890,6 +890,66 @@ describe('game engine helpers', () => {
     ).toThrow('Cannot open Truco while Envido is pending.');
   });
 
+  it('lets the responding team raise truco and hands the window back', () => {
+    const opened = reduceRulesState(createInitialRulesState(), {
+      type: 'truco/open',
+      call: 'truco',
+      initiatorTeam: 'A',
+    });
+
+    const raised = reduceRulesState(opened, {
+      type: 'truco/open',
+      call: 'retruco',
+      initiatorTeam: 'B',
+    });
+
+    expect(raised.truco.callChain).toEqual(['truco', 'retruco']);
+    expect(raised.truco.window).toMatchObject({
+      call: 'retruco',
+      initiatorTeam: 'B',
+      responderTeam: 'A',
+      status: 'open',
+    });
+  });
+
+  it('lets the responding team raise envido and keeps the chain open', () => {
+    const opened = reduceRulesState(createInitialRulesState(), {
+      type: 'envido/open',
+      callChain: ['envido'],
+      initiatorTeam: 'A',
+    });
+
+    const raised = reduceRulesState(opened, {
+      type: 'envido/open',
+      callChain: ['envido', 'envido'],
+      initiatorTeam: 'B',
+    });
+
+    expect(raised.envido.callChain).toEqual(['envido', 'envido']);
+    expect(raised.envido.window).toMatchObject({
+      call: 'envido',
+      initiatorTeam: 'B',
+      responderTeam: 'A',
+      status: 'open',
+    });
+  });
+
+  it('rejects invalid envido jumps while the canto is pending', () => {
+    const opened = reduceRulesState(createInitialRulesState(), {
+      type: 'envido/open',
+      callChain: ['envido'],
+      initiatorTeam: 'A',
+    });
+
+    expect(() =>
+      reduceRulesState(opened, {
+        type: 'envido/open',
+        callChain: ['envido', 'envido', 'falta_envido'],
+        initiatorTeam: 'B',
+      }),
+    ).toThrow('Envido raises must append exactly one new call.');
+  });
+
   it('maps envido canto results into score deltas', () => {
     const accepted = getEnvidoCantoScoreDelta(
       resolveEnvidoResponse(['envido', 'real_envido'], 'quiero', {
@@ -915,6 +975,20 @@ describe('game engine helpers', () => {
     expect(declined).toMatchObject({
       accepted: false,
       points: 2,
+      isFinished: true,
+      resolvedBy: 'response',
+    });
+
+    const declinedFalta = getEnvidoCantoScoreDelta(
+      resolveEnvidoResponse(['envido', 'real_envido', 'falta_envido'], 'no_quiero', {
+        targetScore: 30,
+        teamScores: { A: 12, B: 14 },
+      }),
+    );
+
+    expect(declinedFalta).toMatchObject({
+      accepted: false,
+      points: 5,
       isFinished: true,
       resolvedBy: 'response',
     });

@@ -491,6 +491,7 @@ export interface EnvidoWildcardCommitView {
 
 export interface EnvidoSingingState {
   cantoType: string;
+  callChain: string[];
   callerSeatId: string;
   quieroSeatId: string;
   callerTeamSide: TeamSide;

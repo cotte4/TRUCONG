@@ -11,7 +11,12 @@ import type {
 } from './types.js';
 import type { BongCall } from './bongs.js';
 import type { EnvidoResolution, EnvidoScoringResolution } from './envido.js';
-import { resolveEnvidoResponse, resolveEnvidoScoring, validateEnvidoCallChain } from './envido.js';
+import {
+  canRaiseEnvido,
+  resolveEnvidoResponse,
+  resolveEnvidoScoring,
+  validateEnvidoCallChain,
+} from './envido.js';
 import type { TrucoResolution } from './truco.js';
 import { getNextTrucoCall, resolveTrucoResponse } from './truco.js';
 import { countEffectiveBongs } from './bongs.js';
@@ -199,10 +204,6 @@ function ensureOpenWindow<TCall extends string, TResponse extends string>(
   }
 }
 
-function appendUniqueCall<TCall extends string>(existing: TCall[], call: TCall) {
-  return existing[existing.length - 1] === call ? existing : [...existing, call];
-}
-
 function getExpectedTrucoOpenCall(state: DimadongRulesState): TrucoCall | null {
   const chain = state.truco.callChain;
   if (chain.length === 0) {
@@ -221,9 +222,30 @@ function getExpectedTrucoOpenCall(state: DimadongRulesState): TrucoCall | null {
 export function reduceRulesState(state: DimadongRulesState, action: RulesAction): DimadongRulesState {
   switch (action.type) {
     case 'truco/open': {
-      ensureOpenWindow(state.truco.window, 'Truco');
       if (state.envido.window?.status === 'open') {
         throw new Error('Cannot open Truco while Envido is pending.');
+      }
+
+      const pendingWindow = state.truco.window;
+
+      if (pendingWindow?.status === 'open') {
+        if (pendingWindow.responderTeam !== action.initiatorTeam) {
+          throw new Error('Only the responding team can raise Truco.');
+        }
+
+        const expectedRaisedCall = getNextTrucoCall(pendingWindow.call);
+        if (expectedRaisedCall === null || action.call !== expectedRaisedCall) {
+          throw new Error('Invalid Truco escalation.');
+        }
+
+        return {
+          ...state,
+          truco: {
+            callChain: [...state.truco.callChain, action.call],
+            window: createResponseWindow<TrucoCall, TrucoResponse>(action.call, action.initiatorTeam),
+            lastResolution: state.truco.lastResolution,
+          },
+        };
       }
 
       const expectedCall = getExpectedTrucoOpenCall(state);
@@ -234,7 +256,7 @@ export function reduceRulesState(state: DimadongRulesState, action: RulesAction)
       return {
         ...state,
         truco: {
-          callChain: appendUniqueCall(state.truco.callChain, action.call),
+          callChain: [...state.truco.callChain, action.call],
           window: createResponseWindow<TrucoCall, TrucoResponse>(action.call, action.initiatorTeam),
           lastResolution: state.truco.lastResolution,
         },
@@ -264,12 +286,57 @@ export function reduceRulesState(state: DimadongRulesState, action: RulesAction)
     }
 
     case 'envido/open': {
-      ensureOpenWindow(state.envido.window, 'Envido');
       if (state.truco.window?.status === 'open') {
         throw new Error('Cannot open Envido while Truco is pending.');
       }
 
+      const pendingWindow = state.envido.window;
+
+      if (pendingWindow?.status === 'open') {
+        if (action.callChain.length !== state.envido.callChain.length + 1) {
+          throw new Error('Envido raises must append exactly one new call.');
+        }
+
+        const previousChain = validateEnvidoCallChain(state.envido.callChain);
+        const nextCall = action.callChain[action.callChain.length - 1];
+        const prefixMatches =
+          previousChain.length === action.callChain.slice(0, -1).length &&
+          previousChain.every((call, index) => action.callChain[index] === call);
+
+        if (!prefixMatches) {
+          throw new Error('Envido raise must preserve the existing call chain.');
+        }
+
+        if (pendingWindow.responderTeam !== action.initiatorTeam) {
+          throw new Error('Only the responding team can raise Envido.');
+        }
+
+        if (!canRaiseEnvido(previousChain, nextCall)) {
+          throw new Error('Invalid Envido escalation.');
+        }
+
+        const validatedRaisedChain = validateEnvidoCallChain(action.callChain);
+
+        return {
+          ...state,
+          envido: {
+            callChain: validatedRaisedChain,
+            window: createResponseWindow<EnvidoCall, EnvidoResponse>(
+              validatedRaisedChain[validatedRaisedChain.length - 1],
+              action.initiatorTeam,
+            ),
+            lastResolution: state.envido.lastResolution,
+            lastScoring: state.envido.lastScoring,
+          },
+        };
+      }
+
+      ensureOpenWindow(state.envido.window, 'Envido');
       const validatedCallChain = validateEnvidoCallChain(action.callChain);
+
+      if (validatedCallChain.length !== 1) {
+        throw new Error('Initial Envido open must contain exactly one call.');
+      }
 
       return {
         ...state,

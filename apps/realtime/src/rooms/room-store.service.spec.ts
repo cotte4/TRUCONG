@@ -478,6 +478,17 @@ describe('RoomStoreService', () => {
     service.toggleReady(created.snapshot.code, joined.session.roomSessionToken);
     service.startMatch(created.snapshot.code, created.session.roomSessionToken);
 
+    setHand(service, created.snapshot.code, created.session.seatId, [
+      createCard('h1', 7, 'espada'),
+      createCard('h2', 6, 'espada'),
+      createCard('h3', 3, 'oro'),
+    ]);
+    setHand(service, created.snapshot.code, joined.session.seatId, [
+      createCard('g1', 5, 'copa'),
+      createCard('g2', 4, 'copa'),
+      createCard('g3', 2, 'basto'),
+    ]);
+
     service.openCanto(
       created.snapshot.code,
       created.session.roomSessionToken,
@@ -1383,6 +1394,69 @@ describe('RoomStoreService', () => {
     );
   });
 
+  it('hands envido raises back and awards the previous accepted ladder on no quiero', async () => {
+    const created = service.createRoom({
+      displayName: 'Host',
+      maxPlayers: 2,
+      targetScore: 30,
+    });
+    const joined = await service.joinRoom(created.snapshot.code, {
+      displayName: 'Guest',
+    });
+
+    service.toggleReady(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+    );
+    service.toggleReady(created.snapshot.code, joined.session.roomSessionToken);
+    service.startMatch(created.snapshot.code, created.session.roomSessionToken);
+
+    service.openCanto(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+      'envido',
+      joined.session.seatId,
+    );
+
+    let lifecycle = service.getRoomLifecycleState(
+      created.snapshot.code,
+      created.session.seatId,
+    );
+    expect(lifecycle.progressState?.statusText.toLowerCase()).toContain(
+      'envido',
+    );
+
+    service.openCanto(
+      created.snapshot.code,
+      joined.session.roomSessionToken,
+      'real_envido',
+      created.session.seatId,
+    );
+
+    service.openCanto(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+      'falta_envido',
+      joined.session.seatId,
+    );
+
+    service.resolveCanto(
+      created.snapshot.code,
+      joined.session.roomSessionToken,
+      'no_quiero',
+    );
+
+    lifecycle = service.getRoomLifecycleState(
+      created.snapshot.code,
+      created.session.seatId,
+    );
+
+    expect(lifecycle.progressState?.score).toMatchObject({
+      A: 5,
+      B: 0,
+    });
+  });
+
   it('awards accepted envido to the team with the better hand and can finish the match', async () => {
     const created = service.createRoom({
       displayName: 'Host',
@@ -1399,6 +1473,16 @@ describe('RoomStoreService', () => {
     );
     service.toggleReady(created.snapshot.code, joined.session.roomSessionToken);
     service.startMatch(created.snapshot.code, created.session.roomSessionToken);
+    setHand(service, created.snapshot.code, created.session.seatId, [
+      createCard('host-1', 7, 'espada'),
+      createCard('host-2', 6, 'espada'),
+      createCard('host-3', 3, 'oro'),
+    ]);
+    setHand(service, created.snapshot.code, joined.session.seatId, [
+      createCard('guest-1', 5, 'copa'),
+      createCard('guest-2', 4, 'copa'),
+      createCard('guest-3', 2, 'basto'),
+    ]);
     service.openCanto(
       created.snapshot.code,
       created.session.roomSessionToken,

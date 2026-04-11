@@ -155,6 +155,86 @@ function getTableCardStyle(totalSeats: number, relativeOffset: number) {
   return positions[relativeOffset] ?? positions[0];
 }
 
+function getCantoLabel(cantoType: CantoType) {
+  switch (cantoType) {
+    case "truco":
+      return "Truco";
+    case "retruco":
+      return "Retruco";
+    case "vale_cuatro":
+      return "Vale Cuatro";
+    case "real_envido":
+      return "Real Envido";
+    case "falta_envido":
+      return "Falta Envido";
+    case "envido":
+    default:
+      return "Envido";
+  }
+}
+
+function getEnvidoChainLabel(callChain: string[] | null | undefined, fallback: string) {
+  if (!callChain || callChain.length === 0) {
+    return fallback;
+  }
+
+  return callChain.map((call) => getCantoLabel(call as CantoType)).join(" + ");
+}
+
+function getEnvidoWinnerSeatId(
+  declarations: EnvidoSingingState["declarations"],
+  manoSeatId: string | null,
+) {
+  let winnerSeatId = manoSeatId;
+  let bestScore = -1;
+
+  for (const declaration of declarations) {
+    if (declaration.action !== "declared") {
+      continue;
+    }
+
+    if (declaration.score > bestScore) {
+      bestScore = declaration.score;
+      winnerSeatId = declaration.seatId;
+    } else if (declaration.score === bestScore) {
+      winnerSeatId = manoSeatId;
+    }
+  }
+
+  return winnerSeatId;
+}
+
+function isEnvidoWinningByMano(
+  declarations: EnvidoSingingState["declarations"],
+  manoSeatId: string | null,
+) {
+  if (!manoSeatId) {
+    return false;
+  }
+
+  const declaredScores = declarations
+    .filter((declaration) => declaration.action === "declared")
+    .map((declaration) => declaration.score);
+
+  if (declaredScores.length < 2) {
+    return false;
+  }
+
+  const bestScore = Math.max(...declaredScores);
+  const tiedBestCount = declaredScores.filter((score) => score === bestScore).length;
+
+  if (tiedBestCount < 2) {
+    return false;
+  }
+
+  return declarations.some(
+    (declaration) =>
+      declaration.seatId === manoSeatId &&
+      declaration.action === "declared" &&
+      declaration.score === bestScore,
+  );
+}
+
 type RealtimePayload = {
   snapshot: RoomSnapshot;
   matchView: MatchView | null;
@@ -1023,9 +1103,29 @@ export function LobbyClient({ code }: { code: string }) {
   const trickNumber = matchView?.trickNumber ?? matchState?.trickNumber ?? 1;
   const envidoResolved = matchView?.envidoResolved ?? false;
   const trucoOpened = matchView?.trucoOpened ?? false;
+  const currentHandPoints = matchView?.currentHandPoints ?? 1;
   const canCallEnvido = trickNumber === 1 && !trucoOpened && !envidoResolved;
   const needsWildcardSelection =
     wildcardSelection?.isPending === true && wildcardSelection.ownerSeatId === currentSeat?.id;
+  const manoSeatId = matchView?.dealerSeatId ?? matchState?.dealerSeatId ?? null;
+  const envidoWinnerSeatId = envidoSinging
+    ? getEnvidoWinnerSeatId(envidoSinging.declarations, manoSeatId)
+    : null;
+  const envidoWinningByMano = envidoSinging
+    ? isEnvidoWinningByMano(envidoSinging.declarations, manoSeatId)
+    : false;
+  const actionTurnTrucoOptions: CantoType[] =
+    currentHandPoints >= 3 ? ["vale_cuatro"] : currentHandPoints >= 2 ? ["retruco"] : ["truco"];
+  const responseRaiseOptions: CantoType[] =
+    pendingCantoType === "truco"
+      ? ["retruco"]
+      : pendingCantoType === "retruco"
+        ? ["vale_cuatro"]
+        : pendingCantoType === "envido"
+          ? ["envido", "real_envido", "falta_envido"]
+          : pendingCantoType === "real_envido"
+            ? ["falta_envido"]
+            : [];
 
   const now = Date.now();
   const visibleReactions = recentReactions.filter((r) => now - r.sentAt < REACTION_TTL_MS);
@@ -1506,14 +1606,17 @@ export function LobbyClient({ code }: { code: string }) {
 
               {phase === "action_turn" && isMyTurn ? (
                 <div className="mt-5 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={actionPending}
-                    onClick={() => handleOpenCanto("truco")}
-                    className="canto-action-btn canto-action-btn-truco"
-                  >
-                    Truco
-                  </button>
+                  {actionTurnTrucoOptions.map((cantoType) => (
+                    <button
+                      key={cantoType}
+                      type="button"
+                      disabled={actionPending}
+                      onClick={() => handleOpenCanto(cantoType)}
+                      className="canto-action-btn canto-action-btn-truco"
+                    >
+                      {getCantoLabel(cantoType)}
+                    </button>
+                  ))}
                   {canCallEnvido ? (
                     <>
                       <button
@@ -1553,22 +1656,54 @@ export function LobbyClient({ code }: { code: string }) {
               <div className={panelClass("border-violet-400/25 bg-violet-950/40")}>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-violet-300/80">Canto del Envido</p>
                 <h2 className="mt-1 text-xl font-semibold text-white capitalize">
-                  {envidoSinging.cantoType === "falta_envido" ? "Falta Envido" : envidoSinging.cantoType === "real_envido" ? "Real Envido" : "Envido"}
+                  {getEnvidoChainLabel(envidoSinging.callChain, getCantoLabel(envidoSinging.cantoType as CantoType))}
                 </h2>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em]">
+                  {manoSeatId ? (
+                    <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-amber-100">
+                      Mano: {snapshot.seats.find((seat) => seat.id === manoSeatId)?.displayName ?? "Jugador"}
+                    </span>
+                  ) : null}
+                  {envidoWinnerSeatId && envidoSinging.declarations.length > 0 ? (
+                    <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-emerald-100">
+                      {envidoWinningByMano ? "Gana por mano: " : "Va ganando: "}
+                      {snapshot.seats.find((seat) => seat.id === envidoWinnerSeatId)?.displayName ?? "Jugador"}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-sm text-slate-300">
+                  {envidoSinging.declarations.length === 0
+                    ? "Todavia no se cantaron los puntos."
+                    : "Se muestran los puntos declarados por cada jugador; si alguien no supera la marca, aparece como son buenas."}
+                </p>
                 <div className="mt-4 space-y-2">
                   {envidoSinging.declarations.length === 0 ? (
-                    <p className="text-sm text-slate-400">Esperando declaraciones…</p>
+                    <p className="text-sm text-slate-400">Esperando declaraciones...</p>
                   ) : (
-                    envidoSinging.declarations.map((decl) => {
+                    envidoSinging.declarations.map((decl, index) => {
                       const seat = snapshot.seats.find((s) => s.id === decl.seatId);
                       const isMe = decl.seatId === currentSeat?.id;
+                      const isMano = decl.seatId === manoSeatId;
+                      const isWinner = decl.seatId === envidoWinnerSeatId && decl.action === "declared";
+                      const previousCallingBest = envidoSinging.declarations
+                        .slice(0, index)
+                        .filter((item) => item.teamSide === envidoSinging.callerTeamSide && item.action === "declared")
+                        .reduce((best, item) => Math.max(best, item.score), 0);
+                      const sonBuenasReason =
+                        decl.action === "son_buenas"
+                          ? previousCallingBest > 0
+                            ? `No supera los ${previousCallingBest} ya cantados por el equipo que abrio.`
+                            : "El equipo que abrio ya sostiene la mejor marca."
+                          : null;
                       return (
                         <div
                           key={decl.seatId}
                           className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
-                            isMe
-                              ? "border-cyan-300/25 bg-cyan-300/8"
-                              : "border-white/10 bg-white/[0.03]"
+                            isWinner
+                              ? "border-emerald-300/30 bg-emerald-300/10"
+                              : isMe
+                                ? "border-cyan-300/25 bg-cyan-300/8"
+                                : "border-white/10 bg-white/[0.03]"
                           }`}
                         >
                           <div className="min-w-0">
@@ -1576,9 +1711,24 @@ export function LobbyClient({ code }: { code: string }) {
                               {seat?.displayName ?? "Jugador"}
                               {isMe ? " (vos)" : ""}
                             </p>
-                            <p className="text-xs uppercase tracking-[0.14em] text-slate-400">
-                              Equipo {decl.teamSide}
-                            </p>
+                            <div className="mt-1 flex flex-wrap gap-2">
+                              <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
+                                Equipo {decl.teamSide}
+                              </span>
+                              {isMano ? (
+                                <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100">
+                                  Mano
+                                </span>
+                              ) : null}
+                              {isWinner ? (
+                                <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-100">
+                                  {envidoWinningByMano ? "Gana por mano" : "Ganando"}
+                                </span>
+                              ) : null}
+                            </div>
+                            {sonBuenasReason ? (
+                              <p className="mt-1 text-xs text-slate-400">{sonBuenasReason}</p>
+                            ) : null}
                           </div>
                           <div className="text-right">
                             {decl.action === "son_buenas" ? (
@@ -1631,14 +1781,7 @@ export function LobbyClient({ code }: { code: string }) {
                     </span>
                   ) : null}
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold text-white">
-                  {pendingCantoType === "truco" ? "Truco"
-                    : pendingCantoType === "retruco" ? "Retruco"
-                    : pendingCantoType === "vale_cuatro" ? "Vale Cuatro"
-                    : pendingCantoType === "envido" ? "Envido (2 pts)"
-                    : pendingCantoType === "real_envido" ? "Real Envido (3 pts)"
-                    : "Falta Envido"}
-                </h2>
+                <h2 className="mt-2 text-2xl font-semibold text-white">{getCantoLabel(pendingCantoType)}</h2>
                 <p className="mt-2 text-sm text-slate-200">¿Querés aceptar, subir o rechazar?</p>
                 <div className="mt-5 flex gap-3">
                   <button
@@ -1658,69 +1801,21 @@ export function LobbyClient({ code }: { code: string }) {
                     No Quiero
                   </button>
                 </div>
-                {/* Raise options for truco */}
-                {(pendingCantoType === "truco" || pendingCantoType === "retruco") ? (
+                {responseRaiseOptions.length > 0 ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <p className="w-full text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Subir a</p>
-                    {pendingCantoType === "truco" ? (
+                    {responseRaiseOptions.map((cantoType) => (
                       <button
+                        key={cantoType}
                         type="button"
                         disabled={actionPending}
-                        onClick={() => handleOpenCanto("retruco")}
+                        onClick={() => handleOpenCanto(cantoType)}
                         className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
-                        title="Retruco vale 3 puntos"
+                        title={getCantoLabel(cantoType)}
                       >
-                        Retruco →3
+                        {getCantoLabel(cantoType)}
                       </button>
-                    ) : null}
-                    {pendingCantoType === "retruco" ? (
-                      <button
-                        type="button"
-                        disabled={actionPending}
-                        onClick={() => handleOpenCanto("vale_cuatro")}
-                        className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
-                        title="Vale Cuatro vale 4 puntos"
-                      >
-                        Vale 4 →4
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-                {/* Raise options for envido */}
-                {(pendingCantoType === "envido" || pendingCantoType === "real_envido") ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <p className="w-full text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Subir a</p>
-                    {pendingCantoType === "envido" ? (
-                      <button
-                        type="button"
-                        disabled={actionPending}
-                        onClick={() => handleOpenCanto("envido")}
-                        className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
-                        title="Envido + Envido = 4 puntos"
-                      >
-                        Envido →4
-                      </button>
-                    ) : null}
-                    {(pendingCantoType === "envido") ? (
-                      <button
-                        type="button"
-                        disabled={actionPending}
-                        onClick={() => handleOpenCanto("real_envido")}
-                        className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
-                        title="Envido + Real Envido = 5 puntos"
-                      >
-                        Real Envido →5
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={actionPending}
-                      onClick={() => handleOpenCanto("falta_envido")}
-                      className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
-                      title="Termina la partida o vale lo que le falta al rival"
-                    >
-                      Falta Envido
-                    </button>
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -1890,4 +1985,3 @@ export function LobbyClient({ code }: { code: string }) {
     </div>
   );
 }
-

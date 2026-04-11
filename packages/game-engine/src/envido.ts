@@ -77,9 +77,37 @@ export function getEnvidoStep(call: EnvidoCall) {
   return ENVIDO_CALL_STEPS.find((step) => step.call === call) ?? null;
 }
 
+export function getAllowedNextEnvidoCalls(callChain: EnvidoCall[]) {
+  const validatedCallChain = validateEnvidoCallChain(callChain);
+  const lastCall = validatedCallChain[validatedCallChain.length - 1];
+  const envidoCount = validatedCallChain.filter((call) => call === 'envido').length;
+
+  if (lastCall === 'falta_envido') {
+    return [] as EnvidoCall[];
+  }
+
+  if (lastCall === 'real_envido') {
+    return ['falta_envido'] as EnvidoCall[];
+  }
+
+  const nextCalls: EnvidoCall[] = [];
+
+  if (envidoCount < 2) {
+    nextCalls.push('envido');
+  }
+
+  nextCalls.push('real_envido', 'falta_envido');
+
+  return nextCalls;
+}
+
 export function getNextEnvidoCall(call: EnvidoCall) {
   const index = ENVIDO_CALL_STEPS.findIndex((step) => step.call === call);
   return index >= 0 && index < ENVIDO_CALL_STEPS.length - 1 ? ENVIDO_CALL_STEPS[index + 1].call : null;
+}
+
+export function canRaiseEnvido(callChain: EnvidoCall[], nextCall: EnvidoCall) {
+  return getAllowedNextEnvidoCalls(callChain).includes(nextCall);
 }
 
 export function getEnvidoAcceptedPoints(callChain: EnvidoCall[], context: EnvidoScoreContext) {
