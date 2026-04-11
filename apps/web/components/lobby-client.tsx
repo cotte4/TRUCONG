@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type {
   AvatarId,
@@ -802,6 +802,134 @@ function useCountdown(deadlineAt: string | null): number | null {
   return deadlineAt === null ? null : seconds;
 }
 
+function HandSummaryOverlay({
+  event,
+  snapshot,
+  onDismiss,
+}: {
+  event: HandScoredEvent;
+  snapshot: RoomSnapshot;
+  onDismiss: () => void;
+}) {
+  const TOTAL_MS = 5000;
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const start = Date.now();
+    const id = setInterval(() => {
+      const ms = Date.now() - start;
+      setElapsed(ms);
+      if (ms >= TOTAL_MS) {
+        clearInterval(id);
+        onDismiss();
+      }
+    }, 80);
+    return () => clearInterval(id);
+  }, [onDismiss]);
+
+  const progress = Math.min(elapsed / TOTAL_MS, 1);
+  const winnerSide = event.handWinnerTeamSide;
+
+  const teamLabel = (side: TeamSide) => {
+    const names = snapshot.seats
+      .filter((s) => s.teamSide === side)
+      .map((s) => s.displayName ?? "?")
+      .filter(Boolean);
+    return names.length ? names.join(" & ") : `Equipo ${side}`;
+  };
+
+  return (
+    <div className="hand-summary-in absolute inset-0 z-40 flex items-center justify-center bg-slate-950/82 backdrop-blur-sm">
+      <div className="relative mx-4 w-full max-w-sm rounded-[2rem] border border-white/10 bg-[linear-gradient(145deg,rgba(10,16,36,0.99),rgba(6,11,24,0.99))] p-6 shadow-[0_0_100px_rgba(83,234,253,0.14),0_0_0_1px_rgba(255,255,255,0.05)_inset]">
+        {/* Header */}
+        <div className="text-center">
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.32em] text-slate-400">
+            Mano {event.handNumber} terminada
+          </p>
+          <p className="font-brand-display mt-2 text-2xl text-white">
+            {!winnerSide ? "Mano empatada" : `Ganó Equipo ${winnerSide}`}
+          </p>
+          {winnerSide ? (
+            <p className="mt-1 text-sm text-slate-300">{teamLabel(winnerSide)}</p>
+          ) : null}
+        </div>
+
+        {/* Trick results */}
+        <div className="mt-5 space-y-2">
+          {event.resolvedTricks.map((trick) => {
+            const side = trick.winnerTeamSide;
+            const sideColor =
+              side === "A"
+                ? "text-cyan-300"
+                : side === "B"
+                  ? "text-emerald-300"
+                  : "text-slate-400";
+            return (
+              <div
+                key={trick.trickNumber}
+                className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[0.03] px-3.5 py-2.5"
+              >
+                <span className="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                  Baza {trick.trickNumber}
+                </span>
+                <span className={`text-sm font-semibold ${sideColor}`}>
+                  {!side
+                    ? "Empate"
+                    : `Eq. ${side}${trick.winningCardLabel ? ` · ${trick.winningCardLabel}` : ""}`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Scoreboard */}
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          {(["A", "B"] as TeamSide[]).map((side) => {
+            const isWinner = side === winnerSide;
+            const border = side === "A" ? "border-cyan-300/25" : "border-emerald-300/25";
+            const bg = side === "A" ? "bg-cyan-300/10" : "bg-emerald-300/10";
+            const labelColor = side === "A" ? "text-cyan-200/70" : "text-emerald-200/70";
+            const numColor = side === "A" ? "text-cyan-100" : "text-emerald-100";
+            return (
+              <div
+                key={side}
+                className={`rounded-2xl border ${border} ${bg} px-4 py-3 text-center ${isWinner ? "ring-1 ring-white/20 shadow-[0_0_20px_rgba(255,255,255,0.05)]" : ""}`}
+              >
+                <p className={`text-[0.6rem] font-semibold uppercase tracking-[0.26em] ${labelColor}`}>
+                  {teamLabel(side)}
+                </p>
+                <p className={`mt-1 text-3xl font-bold tabular-nums ${numColor}`}>
+                  {event.score[side]}
+                </p>
+                <p className="text-[0.56rem] uppercase tracking-widest text-slate-500">
+                  de {snapshot.targetScore}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Auto-dismiss progress + button */}
+        <div className="mt-5 space-y-3">
+          <div className="h-[3px] overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-cyan-400/60"
+              style={{ width: `${progress * 100}%`, transition: "width 80ms linear" }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="w-full rounded-full border border-white/12 bg-white/[0.06] py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+          >
+            Continuar →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LobbyClient({ code }: { code: string }) {
   const normalizedCode = useMemo(() => code.toUpperCase(), [code]);
   const [snapshot, setSnapshot] = useState<RoomSnapshot | null>(null);
@@ -825,6 +953,8 @@ export function LobbyClient({ code }: { code: string }) {
   const [lastTrickCards, setLastTrickCards] = useState<TablePlayView[]>([]);
   const [envidoSinging, setEnvidoSinging] = useState<EnvidoSingingState | null>(null);
   const [navVisible, setNavVisible] = useState(true);
+  const [lastHandScoredEvent, setLastHandScoredEvent] = useState<HandScoredEvent | null>(null);
+  const [isDealAnimActive, setIsDealAnimActive] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const refreshRoomStateRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -882,6 +1012,21 @@ export function LobbyClient({ code }: { code: string }) {
       setNavVisible(false);
     }
   }, [currentPhaseForNav]);
+
+  // Trigger deal animation when server enters 'dealing' phase (first hand and new hands via phase)
+  useEffect(() => {
+    if (currentPhaseForNav === "dealing") {
+      setIsDealAnimActive(true);
+      const t = setTimeout(() => setIsDealAnimActive(false), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [currentPhaseForNav]);
+
+  const dismissHandSummary = useCallback(() => {
+    setLastHandScoredEvent(null);
+    setIsDealAnimActive(true);
+    setTimeout(() => setIsDealAnimActive(false), 1800);
+  }, []);
 
   useEffect(() => {
     const token = window.localStorage.getItem(getSessionStorageKey(normalizedCode));
@@ -1078,6 +1223,7 @@ export function LobbyClient({ code }: { code: string }) {
         activeSocket.on("hand:scored", (event: HandScoredEvent) => {
           setEnvidoSinging(null);
           setLastTrickCards([]);
+          setLastHandScoredEvent(event);
           syncRoomState(event);
         });
 
@@ -1869,6 +2015,14 @@ export function LobbyClient({ code }: { code: string }) {
                     </div>
                   </div>
                 ) : null}
+
+                {lastHandScoredEvent ? (
+                  <HandSummaryOverlay
+                    event={lastHandScoredEvent}
+                    snapshot={snapshot}
+                    onDismiss={dismissHandSummary}
+                  />
+                ) : null}
               </div>
             </div>
           </section>
@@ -1901,10 +2055,11 @@ export function LobbyClient({ code }: { code: string }) {
                     {matchView.yourHand.map((card, index) => (
                       <div
                         key={card.id}
-                        className="relative shrink-0 transition md:hover:z-20 md:hover:-translate-y-4"
+                        className={`relative shrink-0 transition md:hover:z-20 md:hover:-translate-y-4 ${isDealAnimActive ? "card-deal-in" : ""}`}
                         style={{
                           zIndex: index + 1,
                           width: "clamp(148px, 30vw, 220px)",
+                          animationDelay: isDealAnimActive ? `${index * 0.11}s` : undefined,
                         }}
                       >
                         <ReadableTrucoCardSprite
