@@ -118,6 +118,7 @@ export interface RoomSeatSnapshot {
   isHost: boolean;
   isReady: boolean;
   handCount: number;
+  bongBalance: number;
 }
 
 export interface RoomSnapshot {
@@ -420,6 +421,7 @@ export interface CantoOpenPayload extends LobbyActionPayload {
   cantoType: CantoType;
   targetSeatId?: string | null;
   note?: string;
+  withBong?: boolean;
 }
 
 export interface CantoResolvePayload extends LobbyActionPayload {
@@ -578,6 +580,7 @@ export interface CantoOpenedEvent {
   actorSeatId: string | null;
   clientActionId: string | null;
   cantoType: CantoType;
+  hasBong: boolean;
   statusText: string;
   openedAt: string;
   responseDeadlineAt: string | null;

@@ -72,6 +72,8 @@ type PersistedSnapshotState = {
     lastHandWinnerTeamSide?: TeamSide | null;
     turnDeadlineAt: string | null;
     reconnectDeadlineAt: string | null;
+    activeBongBet?: { betterSeatId: string; targetSeatId: string } | null;
+    bongBalance?: Record<string, number>;
   } | null;
 };
 
@@ -135,6 +137,7 @@ type MutablePendingCanto = {
   targetSeatId: string | null;
   openedAt: string;
   responseDeadlineAt: string | null;
+  hasBong: boolean;
 };
 
 type MutablePendingWildcardSelection = {
@@ -203,6 +206,8 @@ type MutableMatchState = {
   lastHandWinnerTeamSide: TeamSide | null;
   turnDeadlineAt: string | null;
   reconnectDeadlineAt: string | null;
+  activeBongBet: { betterSeatId: string; targetSeatId: string } | null;
+  bongBalance: Record<string, number>;
 };
 
 type MutableRoom = {
@@ -848,12 +853,14 @@ export class RoomStoreService {
           payload.payload,
           'targetSeatId',
         );
+        const withBong = payload.payload.withBong === true;
 
         return this.openCanto(
           roomCode,
           payload.roomSessionToken,
           cantoType,
           targetSeatId,
+          withBong,
         );
       }
       case 'canto_resolve': {
@@ -1082,12 +1089,14 @@ export class RoomStoreService {
     roomSessionToken: string,
     cantoType: MutablePendingCanto['cantoType'],
     targetSeatId?: string | null,
+    withBong?: boolean,
   ) {
     return this.openCantoWithResult(
       code,
       roomSessionToken,
       cantoType,
       targetSeatId,
+      withBong,
     ).snapshot;
   }
 
@@ -1096,6 +1105,7 @@ export class RoomStoreService {
     roomSessionToken: string,
     cantoType: MutablePendingCanto['cantoType'],
     targetSeatId?: string | null,
+    withBong?: boolean,
   ): OpenCantoResult {
     const { room, actorSeat } = this.getAuthorizedSeat(code, roomSessionToken);
     const interruptedPendingTruco = this.canInterruptPendingTrucoWithEnvido(
@@ -1186,6 +1196,8 @@ export class RoomStoreService {
         null,
       openedAt: new Date().toISOString(),
       responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
+      hasBong:
+        (withBong ?? false) && room.allowBongs && this.isTrucoCanto(cantoType),
     };
     room.match.turnDeadlineAt = null;
     room.match.reconnectDeadlineAt = null;
@@ -1328,6 +1340,7 @@ export class RoomStoreService {
           room,
           `El Equipo ${callerTeamSide} ganó la mano ${room.match.handNumber} por no quiero al ${pending.cantoType}.`,
         );
+        this.settleBongBet(room, callerTeamSide);
       }
     } else {
       if (this.isTrucoCanto(pending.cantoType)) {
@@ -1339,6 +1352,16 @@ export class RoomStoreService {
           room,
           `${actorSeat.displayName ?? 'Jugador'} aceptó el ${pending.cantoType}.`,
         );
+        if (pending.hasBong) {
+          room.match.activeBongBet = {
+            betterSeatId: pending.actorSeatId,
+            targetSeatId: actorSeat.id,
+          };
+          this.pushEvent(
+            room,
+            `BONG: ${room.seats.find((s) => s.id === pending.actorSeatId)?.displayName ?? 'Jugador'} apostó un BONG — se juega en la mano.`,
+          );
+        }
       } else {
         // Envido accepted — enter the singing phase instead of scoring immediately
         this.pushEvent(
@@ -1919,6 +1942,7 @@ export class RoomStoreService {
         isHost: seat.isHost,
         isReady: seat.isReady,
         handCount: room.match?.handsBySeatId[seat.id]?.length ?? 0,
+        bongBalance: room.match?.bongBalance[seat.id] ?? 0,
       })),
       score: room.match?.teamScores ?? { A: 0, B: 0 },
       recentEvents: room.match?.recentEvents ?? [],
@@ -2025,6 +2049,8 @@ export class RoomStoreService {
           lastHandWinnerTeamSide: state.match.lastHandWinnerTeamSide ?? null,
           turnDeadlineAt: state.match.turnDeadlineAt,
           reconnectDeadlineAt: state.match.reconnectDeadlineAt,
+          activeBongBet: state.match.activeBongBet ?? null,
+          bongBalance: state.match.bongBalance ?? {},
         }
       : null;
 
@@ -2153,6 +2179,8 @@ export class RoomStoreService {
       lastHandWinnerTeamSide: null,
       turnDeadlineAt: null,
       reconnectDeadlineAt: null,
+      activeBongBet: null,
+      bongBalance: Object.fromEntries(occupiedSeats.map((s) => [s.id, 0])),
     };
   }
 
@@ -2212,6 +2240,7 @@ export class RoomStoreService {
         room,
         `El Equipo ${handWinner} ganó la mano ${match.handNumber} por ${match.currentHandPoints} punto${match.currentHandPoints === 1 ? '' : 's'}.`,
       );
+      this.settleBongBet(room, handWinner);
       this.persistAction(room, 'trick_resolved', {
         trickNumber,
         winnerSeatId: winningSeat?.id ?? null,
@@ -2294,6 +2323,7 @@ export class RoomStoreService {
     match.lastHandWinnerTeamSide = null;
     match.turnDeadlineAt = null;
     match.reconnectDeadlineAt = null;
+    match.activeBongBet = null;
     room.phase = 'action_turn';
     this.setStatus(room, `Mano ${match.handNumber} en juego.`);
     this.pushEvent(
@@ -2305,6 +2335,41 @@ export class RoomStoreService {
       handNumber: match.handNumber,
       dealerSeatId: nextDealerSeatId,
     });
+  }
+
+  private settleBongBet(room: MutableRoom, handWinnerTeam: TeamSide): void {
+    const match = room.match;
+    if (!match?.activeBongBet || !room.allowBongs) return;
+
+    const { betterSeatId, targetSeatId } = match.activeBongBet;
+    match.activeBongBet = null;
+
+    if (!(betterSeatId in match.bongBalance))
+      match.bongBalance[betterSeatId] = 0;
+    if (!(targetSeatId in match.bongBalance))
+      match.bongBalance[targetSeatId] = 0;
+
+    const betterTeam = room.seats.find((s) => s.id === betterSeatId)?.teamSide;
+    const betterName =
+      room.seats.find((s) => s.id === betterSeatId)?.displayName ?? 'Jugador';
+    const targetName =
+      room.seats.find((s) => s.id === targetSeatId)?.displayName ?? 'Jugador';
+
+    if (betterTeam === handWinnerTeam) {
+      match.bongBalance[betterSeatId]++;
+      match.bongBalance[targetSeatId]--;
+      this.pushEvent(
+        room,
+        `BONG: ${betterName} ganó un BONG. ${targetName} le debe uno.`,
+      );
+    } else {
+      match.bongBalance[targetSeatId]++;
+      match.bongBalance[betterSeatId]--;
+      this.pushEvent(
+        room,
+        `BONG: ${targetName} recuperó un BONG de ${betterName}.`,
+      );
+    }
   }
 
   private getLegalWildcardChoices(

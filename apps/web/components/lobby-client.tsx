@@ -956,6 +956,7 @@ export function LobbyClient({ code }: { code: string }) {
   const [lastHandScoredEvent, setLastHandScoredEvent] = useState<HandScoredEvent | null>(null);
   const [isDealAnimActive, setIsDealAnimActive] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [pendingCantoHasBong, setPendingCantoHasBong] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const refreshRoomStateRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -1175,6 +1176,7 @@ export function LobbyClient({ code }: { code: string }) {
             ...prev.slice(-4),
             { id: `${event.seatId}-${event.openedAt}`, seatId: event.seatId, cantoType: event.cantoType, sentAt: Date.now() },
           ]);
+          setPendingCantoHasBong(event.hasBong ?? false);
           syncRoomState(event);
         });
 
@@ -1205,6 +1207,7 @@ export function LobbyClient({ code }: { code: string }) {
             label: getCantoResolutionLabel(event),
             sentAt: Date.now(),
           });
+          setPendingCantoHasBong(false);
           // Clear envido singing once canto is fully resolved
           if (!["envido", "real_envido", "falta_envido"].includes(event.cantoType)) {
             setEnvidoSinging(null);
@@ -1416,7 +1419,7 @@ export function LobbyClient({ code }: { code: string }) {
     await runSocketAction("game:play-card", payload);
   };
 
-  const handleOpenCanto = async (cantoType: CantoType) => {
+  const handleOpenCanto = async (cantoType: CantoType, withBong = false) => {
     if (!session) {
       return;
     }
@@ -1425,6 +1428,7 @@ export function LobbyClient({ code }: { code: string }) {
       roomSessionToken: session.roomSessionToken,
       clientActionId: crypto.randomUUID(),
       cantoType,
+      withBong,
     };
     await runSocketAction("canto:open", payload);
   };
@@ -2006,6 +2010,12 @@ export function LobbyClient({ code }: { code: string }) {
                                 ? isCurrentSeat ? "Jugá tu carta." : "Pensando..."
                                 : `${seat.handCount} carta(s)`}
                             </p>
+                            {snapshot.allowBongs && seat.bongBalance !== 0 ? (
+                              <span className={`mt-1.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.2em] ${seat.bongBalance > 0 ? "border-amber-300/40 bg-amber-300/10 text-amber-300" : "border-rose-300/30 bg-rose-300/8 text-rose-300"}`}>
+                                <span>{seat.bongBalance > 0 ? "+" : ""}{seat.bongBalance}</span>
+                                <span>BONG</span>
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                         {seatCantos.length > 0 ? (
@@ -2108,15 +2118,27 @@ export function LobbyClient({ code }: { code: string }) {
               {phase === "action_turn" && isMyTurn ? (
                 <div className="mt-5 flex flex-wrap gap-2">
                   {actionTurnTrucoOptions.map((cantoType) => (
-                    <button
-                      key={cantoType}
-                      type="button"
-                      disabled={actionPending}
-                      onClick={() => handleOpenCanto(cantoType)}
-                      className="canto-action-btn canto-action-btn-truco"
-                    >
-                      {getCantoLabel(cantoType)}
-                    </button>
+                    <div key={cantoType} className="flex gap-1">
+                      <button
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto(cantoType)}
+                        className="canto-action-btn canto-action-btn-truco"
+                      >
+                        {getCantoLabel(cantoType)}
+                      </button>
+                      {snapshot.allowBongs ? (
+                        <button
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() => handleOpenCanto(cantoType, true)}
+                          className="canto-action-btn canto-action-btn-bong"
+                          title={`${getCantoLabel(cantoType)} + BONG`}
+                        >
+                          BONG
+                        </button>
+                      ) : null}
+                    </div>
                   ))}
                   {canCallEnvido ? (
                     <>
@@ -2282,7 +2304,13 @@ export function LobbyClient({ code }: { code: string }) {
                     </span>
                   ) : null}
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold text-white">{getCantoLabel(pendingCantoType)}</h2>
+                <h2 className="mt-2 text-2xl font-semibold text-white">
+                  {getCantoLabel(pendingCantoType)}
+                  {pendingCantoHasBong ? <span className="ml-2 font-brand-display text-amber-300"> + BONG</span> : null}
+                </h2>
+                {pendingCantoHasBong ? (
+                  <p className="mt-1 text-xs font-bold uppercase tracking-[0.22em] text-amber-300/80">Si aceptás, aceptás el BONG también</p>
+                ) : null}
                 <p className="mt-2 text-sm text-slate-200">¿Querés aceptar, subir o rechazar?</p>
                 <div className="mt-5 flex gap-3">
                   <button
@@ -2306,16 +2334,26 @@ export function LobbyClient({ code }: { code: string }) {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <p className="w-full text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Subir a</p>
                     {responseRaiseOptions.map((cantoType) => (
-                      <button
-                        key={cantoType}
-                        type="button"
-                        disabled={actionPending}
-                        onClick={() => handleOpenCanto(cantoType)}
-                        className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
-                        title={getCantoLabel(cantoType)}
-                      >
-                        {getCantoLabel(cantoType)}
-                      </button>
+                      <div key={cantoType} className="flex gap-1">
+                        <button
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() => handleOpenCanto(cantoType)}
+                          className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
+                        >
+                          {getCantoLabel(cantoType)}
+                        </button>
+                        {snapshot.allowBongs ? (
+                          <button
+                            type="button"
+                            disabled={actionPending}
+                            onClick={() => handleOpenCanto(cantoType, true)}
+                            className="rounded-full border border-amber-300/40 bg-amber-300/12 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-amber-200 transition hover:bg-amber-300/20 disabled:opacity-60"
+                          >
+                            BONG
+                          </button>
+                        ) : null}
+                      </div>
                     ))}
                   </div>
                 ) : null}

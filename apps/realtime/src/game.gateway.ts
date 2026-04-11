@@ -1011,6 +1011,7 @@ export class GameGateway implements OnGatewayDisconnect {
     const targetSeatId = payload.targetSeatId
       ? this.normalizeSeatId(payload.targetSeatId, 'targetSeatId')
       : null;
+    const withBong = payload.withBong === true;
     const openedAt = new Date().toISOString();
     try {
       const snapshot = this.roomStore.openCanto(
@@ -1018,6 +1019,7 @@ export class GameGateway implements OnGatewayDisconnect {
         roomSessionToken,
         cantoType,
         targetSeatId,
+        withBong,
       );
       const lifecycle = this.roomStore.getRoomLifecycleState(
         roomCode,
@@ -1041,6 +1043,7 @@ export class GameGateway implements OnGatewayDisconnect {
         actorSeatId: session?.seatId ?? null,
         clientActionId,
         cantoType,
+        hasBong: withBong,
         statusText: snapshot.statusText,
         openedAt,
         responseDeadlineAt,
