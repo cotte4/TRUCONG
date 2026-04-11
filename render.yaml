@@ -4,6 +4,7 @@ services:
     env: node
     buildCommand: npm install -g pnpm@10.33.0 && pnpm install && pnpm --filter @dimadong/realtime build
     startCommand: pnpm --filter @dimadong/realtime start:prod
+    healthCheckPath: /
     envVars:
       - key: PORT
         value: 4001

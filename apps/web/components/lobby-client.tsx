@@ -341,7 +341,6 @@ function SuitIcon({
 
 function TrucoCardSprite({
   card,
-  subtitle,
   artMode = "watermark",
   disabled = false,
   active = false,
@@ -355,37 +354,43 @@ function TrucoCardSprite({
   onClick?: () => void;
 }) {
   const visual = SUIT_VISUALS[card.suit];
-  const cornerRank = card.isWildcard ? "W" : `${card.rank}`;
-  const centerLabel = card.isWildcard ? "WILDCARD" : card.label;
-  const centerArtClass =
+  const cornerRank = card.isWildcard ? "★" : `${card.rank}`;
+
+  const centerSizeClass =
     artMode === "hologram"
-      ? `${visual.centerSizeHologramClass} opacity-95 drop-shadow-[0_0_16px_rgba(255,255,255,0.52)]`
-      : `${visual.centerSizeWatermarkClass} opacity-20 grayscale`;
+      ? visual.centerSizeHologramClass
+      : visual.centerSizeWatermarkClass;
+
+  const centerIconClass =
+    artMode === "hologram"
+      ? `${centerSizeClass} opacity-95 drop-shadow-[0_0_16px_rgba(255,255,255,0.52)]`
+      : `${centerSizeClass} opacity-[0.15] grayscale`;
 
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`group relative h-full min-h-[184px] w-full overflow-hidden rounded-[1rem] border bg-[rgba(12,17,34,0.86)] px-3 pb-3 pt-3 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${visual.edge} ${active ? `${visual.glow} ring-2 ring-white/15` : "shadow-[inset_0_0_16px_rgba(0,0,0,0.5)]"} ${!disabled ? "hover:-translate-y-0.5 hover:bg-[rgba(15,23,46,0.9)]" : ""}`}
+      className={`group relative h-full min-h-[184px] w-full overflow-hidden rounded-[1rem] border bg-[rgba(12,17,34,0.86)] transition disabled:cursor-not-allowed disabled:opacity-55 ${visual.edge} ${active ? `${visual.glow} ring-2 ring-white/15` : "shadow-[inset_0_0_16px_rgba(0,0,0,0.5)]"} ${!disabled ? "hover:-translate-y-0.5 hover:bg-[rgba(15,23,46,0.9)]" : ""}`}
     >
-      <div className="absolute inset-0 bg-[linear-gradient(165deg,rgba(255,255,255,0.12),transparent_35%)]" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="relative grid place-items-center rounded-full border border-white/10 bg-white/[0.02] p-4">
-          <SuitIcon suit={card.suit} alt={card.suit} className={centerArtClass} />
-        </div>
+      {/* Gloss overlay */}
+      <div className="absolute inset-0 bg-[linear-gradient(165deg,rgba(255,255,255,0.10),transparent_35%)] pointer-events-none" />
+
+      {/* Top-left corner: rank + mini suit icon */}
+      <div className="absolute top-2 left-2 flex flex-col items-center gap-1 z-10">
+        <span className="text-[1.5rem] font-black leading-none text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]">
+          {cornerRank}
+        </span>
+        <SuitIcon
+          suit={card.suit}
+          alt={card.suit}
+          className={`h-5 w-5 object-contain ${visual.miniGlow}`}
+        />
       </div>
-      <div className="relative flex h-full flex-col justify-between">
-        <div className="inline-flex w-fit flex-col items-center rounded-xl border border-white/10 bg-black/25 px-2.5 py-1.5">
-          <span className="text-[1.65rem] font-black leading-none text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.8)]">
-            {cornerRank}
-          </span>
-          <SuitIcon suit={card.suit} alt={card.suit} className={`${visual.miniSizeClass} ${visual.miniGlow}`} />
-        </div>
-        <div className="rounded-lg border border-white/10 bg-black/30 px-2 py-1">
-          <p className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-200">{centerLabel}</p>
-          <p className="mt-0.5 truncate text-[10px] uppercase tracking-[0.12em] text-slate-400">{subtitle}</p>
-        </div>
+
+      {/* Center: watermark / hologram suit art */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+        <SuitIcon suit={card.suit} alt={card.suit} className={centerIconClass} />
       </div>
     </button>
   );
@@ -407,7 +412,7 @@ type ActiveReaction = {
 
 const REACTIONS = ["👽", "🛸", "🔥", "💀", "⚡", "🌟"];
 const REACTION_TTL_MS = 4_000;
-const SOCKET_ACK_TIMEOUT_MS = 8_000;
+const SOCKET_ACK_TIMEOUT_MS = 18_000;
 
 function useCountdown(deadlineAt: string | null): number | null {
   const [seconds, setSeconds] = useState<number | null>(null);
@@ -542,7 +547,9 @@ export function LobbyClient({ code }: { code: string }) {
         await refreshRoomState();
 
         activeSocket = io(`${socketBaseUrl}/game`, {
-          transports: ["websocket"],
+          transports: ["polling", "websocket"],
+          upgrade: true,
+          reconnectionDelayMax: 8_000,
         });
         setSocket(activeSocket);
 
@@ -555,11 +562,23 @@ export function LobbyClient({ code }: { code: string }) {
         });
 
         activeSocket.on("disconnect", () => {
-          setConnectionLabel("Desconectado...");
+          setConnectionLabel("Reconectando...");
         });
 
         activeSocket.on("connect_error", () => {
-          setConnectionLabel("Desconectado");
+          setConnectionLabel("Reconectando...");
+        });
+
+        activeSocket.on("reconnect_attempt", (attempt: number) => {
+          setConnectionLabel(`Reconectando… (${attempt})`);
+        });
+
+        activeSocket.on("reconnect", () => {
+          setConnectionLabel("Uniéndose...");
+        });
+
+        activeSocket.on("server:restarting", () => {
+          setConnectionLabel("Servidor reiniciando…");
         });
 
         const handleRealtimePayload = (payload: RealtimePayload) => {

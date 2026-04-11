@@ -2038,7 +2038,7 @@ export class RoomStoreService {
 
     return {
       persistedMatchId: null,
-      snapshotVersion: 0,
+      snapshotVersion: room.snapshotVersion,
       handNumber: 1,
       trickNumber: 1,
       dealerSeatId: firstSeatId,

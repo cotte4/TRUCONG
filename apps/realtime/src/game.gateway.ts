@@ -87,6 +87,8 @@ type RoomLifecycleState = ReturnType<RoomStoreService['getRoomLifecycleState']>;
 
 @WebSocketGateway({
   namespace: '/game',
+  pingInterval: 10_000,
+  pingTimeout: 15_000,
   cors: {
     origin: process.env.CORS_ORIGIN?.split(',') ?? true,
     credentials: true,
