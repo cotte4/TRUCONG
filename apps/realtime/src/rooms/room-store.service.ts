@@ -4120,7 +4120,7 @@ export class RoomStoreService {
       options?.preserveDeadline
         ? room.match.pendingCanto.responseDeadlineAt
         : null,
-      12_000,
+      60_000,
     );
 
     const timeout = setTimeout(() => {

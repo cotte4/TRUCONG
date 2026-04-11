@@ -130,22 +130,6 @@ function getSeatPositionClass(totalSeats: number, relativeOffset: number) {
   return positions[relativeOffset] ?? positions[0];
 }
 
-function getTableCardStyle(totalSeats: number, relativeOffset: number) {
-  if (totalSeats === 2) {
-    return relativeOffset === 0
-      ? { left: "50%", bottom: "23%", transform: "translateX(-50%) rotate(-3deg)" }
-      : { left: "50%", top: "23%", transform: "translateX(-50%) rotate(3deg)" };
-  }
-
-  const positions = [
-    { left: "50%", bottom: "20%", transform: "translateX(-50%) rotate(-2deg)" },
-    { left: "26%", top: "50%", transform: "translateY(-50%) rotate(-7deg)" },
-    { left: "50%", top: "20%", transform: "translateX(-50%) rotate(2deg)" },
-    { right: "26%", top: "50%", transform: "translateY(-50%) rotate(7deg)" },
-  ];
-
-  return positions[relativeOffset] ?? positions[0];
-}
 
 function getCantoLabel(cantoType: CantoType) {
   switch (cantoType) {
@@ -360,6 +344,27 @@ type SuitVisual = {
   centerSizeHologramClass: string;
 };
 
+const SUIT_FACE_GRADIENT: Record<NormalCardSuit, string> = {
+  oro: "bg-[linear-gradient(180deg,#fffdf0_0%,#fef9e0_55%,#fbedbb_100%)]",
+  copa: "bg-[linear-gradient(180deg,#fdf0ff_0%,#f3e6ff_55%,#e5d0f7_100%)]",
+  espada: "bg-[linear-gradient(180deg,#f0f9ff_0%,#e4f1ff_55%,#cfe0f5_100%)]",
+  basto: "bg-[linear-gradient(180deg,#f0fff5_0%,#e4f7ec_55%,#cfeedd_100%)]",
+};
+
+const SUIT_ACCENT_BAR: Record<NormalCardSuit, string> = {
+  oro: "bg-[linear-gradient(90deg,#f5c518,#ffe066,#f5c518)]",
+  copa: "bg-[linear-gradient(90deg,#a855f7,#d8b4fe,#a855f7)]",
+  espada: "bg-[linear-gradient(90deg,#06b6d4,#a5f3fc,#06b6d4)]",
+  basto: "bg-[linear-gradient(90deg,#10b981,#6ee7b7,#10b981)]",
+};
+
+const SUIT_CORNER_TONE: Record<NormalCardSuit, string> = {
+  oro: "text-rose-700",
+  copa: "text-rose-700",
+  espada: "text-slate-800",
+  basto: "text-slate-800",
+};
+
 const SUIT_VISUALS: Record<NormalCardSuit, SuitVisual> = {
   oro: {
     iconPath: "/cards/suits/oro.png",
@@ -459,6 +464,46 @@ function WildcardIcon({
       onError={() => setFailed(true)}
       loading="lazy"
     />
+  );
+}
+
+function PlayedCard({ play, faded = false }: { play: TablePlayView; faded?: boolean }) {
+  const card = play.card;
+  const normalSuit: NormalCardSuit | null = card.suit === "comodin" ? null : card.suit;
+  const visual = normalSuit ? SUIT_VISUALS[normalSuit] : WILDCARD_VISUAL;
+  const rank = card.isWildcard ? "★" : `${card.rank}`;
+
+  const faceClass = card.isWildcard
+    ? "bg-[radial-gradient(circle_at_top,rgba(107,66,255,0.65),rgba(21,26,58,0.98)_60%,rgba(10,13,31,1)_100%)]"
+    : normalSuit ? SUIT_FACE_GRADIENT[normalSuit] : "bg-white";
+  const borderClass = card.isWildcard ? "border-fuchsia-300/65" : visual.edge;
+  const rankTone = card.isWildcard ? "text-cyan-50" : normalSuit ? SUIT_CORNER_TONE[normalSuit] : "text-slate-800";
+
+  return (
+    <div className={`flex flex-col items-center gap-2 transition-opacity duration-500 ${faded ? "opacity-35" : "opacity-100"}`}>
+      <div className={`relative w-[72px] h-[100px] overflow-hidden rounded-xl border shadow-[0_10px_28px_rgba(0,0,0,0.5)] ${faceClass} ${borderClass}`}>
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgba(255,255,255,0.38),transparent_28%)]" />
+        {normalSuit ? (
+          <div className={`absolute inset-x-0 top-0 h-1 ${SUIT_ACCENT_BAR[normalSuit]} opacity-85`} />
+        ) : null}
+        <div className="absolute top-1.5 left-1.5 flex flex-col items-center gap-0.5">
+          <span className={`text-[1.35rem] font-black leading-none [text-shadow:0_1px_3px_rgba(0,0,0,0.12)] ${rankTone}`}>{rank}</span>
+          {normalSuit ? (
+            <SuitIcon suit={normalSuit} alt={normalSuit} className={`h-4 w-4 object-contain ${visual.miniGlow}`} />
+          ) : null}
+        </div>
+        <div className="absolute left-1/2 top-[52%] -translate-x-1/2 -translate-y-1/2">
+          {normalSuit ? (
+            <SuitIcon suit={normalSuit} alt={normalSuit} className="h-11 w-11 object-contain opacity-70" />
+          ) : (
+            <WildcardIcon alt="comodin" className="h-10 w-10 object-contain opacity-80" />
+          )}
+        </div>
+      </div>
+      <p className="max-w-[80px] truncate text-center text-xs font-semibold text-slate-300">
+        {play.displayName ?? "Mesa"}
+      </p>
+    </div>
   );
 }
 
@@ -591,31 +636,15 @@ function ReadableTrucoCardSprite({
       ? `${centerSizeClass} opacity-95 drop-shadow-[0_0_24px_rgba(255,255,255,0.24)]`
       : `${centerSizeClass} opacity-88 drop-shadow-[0_2px_12px_rgba(0,0,0,0.18)]`;
 
-  const suitFaceGradient: Record<NormalCardSuit, string> = {
-    oro: "bg-[linear-gradient(180deg,#fffdf0_0%,#fef9e0_55%,#fbedbb_100%)]",
-    copa: "bg-[linear-gradient(180deg,#fdf0ff_0%,#f3e6ff_55%,#e5d0f7_100%)]",
-    espada: "bg-[linear-gradient(180deg,#f0f9ff_0%,#e4f1ff_55%,#cfe0f5_100%)]",
-    basto: "bg-[linear-gradient(180deg,#f0fff5_0%,#e4f7ec_55%,#cfeedd_100%)]",
-  };
-
-  const suitAccentBar: Record<NormalCardSuit, string> = {
-    oro: "bg-[linear-gradient(90deg,#f5c518,#ffe066,#f5c518)]",
-    copa: "bg-[linear-gradient(90deg,#a855f7,#d8b4fe,#a855f7)]",
-    espada: "bg-[linear-gradient(90deg,#06b6d4,#a5f3fc,#06b6d4)]",
-    basto: "bg-[linear-gradient(90deg,#10b981,#6ee7b7,#10b981)]",
-  };
-
   const cardFaceClass = isWildcardCard
     ? "bg-[radial-gradient(circle_at_top,rgba(107,66,255,0.65),rgba(21,26,58,0.98)_42%,rgba(10,13,31,1)_100%)] text-white"
-    : `${normalSuit ? suitFaceGradient[normalSuit] : "bg-white"} text-slate-950`;
+    : `${normalSuit ? SUIT_FACE_GRADIENT[normalSuit] : "bg-white"} text-slate-950`;
   const cardBorderClass = isWildcardCard
     ? `${visual.edge} shadow-[0_0_28px_rgba(205,88,255,0.26)]`
     : `${visual.edge} border-white/80 shadow-[0_20px_34px_rgba(2,6,23,0.28)]`;
   const cornerToneClass = isWildcardCard
     ? "text-cyan-50"
-    : normalSuit === "copa" || normalSuit === "oro"
-      ? "text-rose-700"
-      : "text-slate-800";
+    : normalSuit ? SUIT_CORNER_TONE[normalSuit] : "text-slate-800";
   const labelToneClass = isWildcardCard
     ? "border-white/10 bg-slate-950/35 text-cyan-50"
     : "border-slate-900/10 bg-white/72 text-slate-700";
@@ -633,7 +662,7 @@ function ReadableTrucoCardSprite({
 
       {/* Suit accent bar */}
       {!isWildcardCard && normalSuit ? (
-        <div className={`pointer-events-none absolute inset-x-0 top-0 h-1.5 ${suitAccentBar[normalSuit]} opacity-80`} />
+        <div className={`pointer-events-none absolute inset-x-0 top-0 h-1.5 ${SUIT_ACCENT_BAR[normalSuit]} opacity-80`} />
       ) : null}
 
       {isWildcardCard ? (
@@ -1048,6 +1077,7 @@ export function LobbyClient({ code }: { code: string }) {
         // clear envidoSinging panel when a new hand starts.
         activeSocket.on("hand:scored", (event: HandScoredEvent) => {
           setEnvidoSinging(null);
+          setLastTrickCards([]);
           syncRoomState(event);
         });
 
@@ -1827,35 +1857,16 @@ export function LobbyClient({ code }: { code: string }) {
                 })}
 
                 {displayTableCards.length > 0 ? (
-                  <div className={`absolute inset-0 transition-opacity duration-500 ${isShowingLastTrick ? "opacity-40" : "opacity-100"}`}>
-                    {displayTableCards.map((play, index) => {
-                      const seat = snapshot.seats.find((item) => item.id === play.seatId);
-                      const relativeOffset = getRelativeSeatOffset(
-                        seat?.seatIndex ?? index,
-                        anchorSeatIndex,
-                        snapshot.maxPlayers,
-                      );
-
-                      return (
-                        <div
+                  <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+                    <div className="flex items-end justify-center gap-3">
+                      {displayTableCards.map((play, index) => (
+                        <PlayedCard
                           key={`${play.seatId}-${play.card.id}-${index}`}
-                          className="absolute shrink-0"
-                          style={{
-                            ...getTableCardStyle(snapshot.maxPlayers, relativeOffset),
-                            width: "clamp(132px, 22vw, 170px)",
-                          }}
-                        >
-                          <div className="absolute inset-x-4 bottom-0 h-8 rounded-full bg-black/45 blur-xl" />
-                          <ReadableTrucoCardSprite
-                            card={play.card}
-                            subtitle={play.displayName ?? "Mesa"}
-                            artMode="hologram"
-                            active={!isShowingLastTrick}
-                            disabled
-                          />
-                        </div>
-                      );
-                    })}
+                          play={play}
+                          faded={isShowingLastTrick}
+                        />
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>

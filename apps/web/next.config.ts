@@ -10,6 +10,18 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: workspaceRoot,
   },
+  headers: async () => [
+    {
+      // HTML pages — always revalidate so new deploys are picked up immediately
+      source: "/((?!_next/static|_next/image|favicon.ico).*)",
+      headers: [
+        {
+          key: "Cache-Control",
+          value: "no-cache, no-store, must-revalidate",
+        },
+      ],
+    },
+  ],
 };
 
 export default nextConfig;
