@@ -87,7 +87,7 @@ function badgeClass(active?: boolean) {
 }
 
 function panelClass(extra = "") {
-  return `game-panel game-panel-cyan rounded-[1.9rem] p-5 shadow-[0_20px_80px_rgba(2,6,23,0.28)] ${extra}`.trim();
+  return `rounded-[1.75rem] border border-white/10 bg-slate-950/78 p-5 shadow-[0_20px_80px_rgba(2,6,23,0.28)] ${extra}`.trim();
 }
 
 function getRelativeSeatOffset(seatIndex: number, anchorSeatIndex: number | null, totalSeats: number) {
@@ -1842,18 +1842,18 @@ export function LobbyClient({ code }: { code: string }) {
       ) : null}
       {/* Collapsable nav — auto-hides when game starts */}
       {navVisible ? (
-        <nav className="game-nav flex flex-wrap items-center justify-between gap-4 rounded-full px-5 py-3">
+        <nav className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-white/10 bg-slate-950/72 px-5 py-3 backdrop-blur">
           <div className="flex items-center gap-3">
             <span className="text-xl ufo-pulse inline-block">🛸</span>
             <p className="font-brand-display text-xs text-slate-300">Dimadong</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="game-chip rounded-full px-4 py-2 text-sm font-semibold text-slate-100">
+            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100">
               {normalizedCode}
             </span>
             <Link
               href="/manual"
-              className="game-chip rounded-full px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
             >
               Cómo se juega
             </Link>
@@ -1870,7 +1870,7 @@ export function LobbyClient({ code }: { code: string }) {
           <button
             type="button"
             onClick={() => setNavVisible(true)}
-            className="game-nav flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10"
+            className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/72 px-4 py-2 text-sm font-semibold text-slate-300 backdrop-blur transition hover:bg-white/10"
           >
             <span className="ufo-pulse inline-block">🛸</span>
             <span>{normalizedCode}</span>
@@ -1879,21 +1879,21 @@ export function LobbyClient({ code }: { code: string }) {
         </div>
       )}
 
-      <section className={panelClass(isLobby ? "game-briefing-lines" : "game-briefing-lines overflow-hidden border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,15,32,0.98),rgba(11,19,40,0.94)_55%,rgba(7,12,24,0.98)_100%)]")}>
+      <section className={panelClass(isLobby ? "" : "overflow-hidden border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,15,32,0.98),rgba(11,19,40,0.94)_55%,rgba(7,12,24,0.98)_100%)]")}>
         <div className={`flex flex-wrap gap-4 ${isLobby ? "items-start justify-between" : "items-center justify-between"}`}>
           <div className={isLobby ? "space-y-2" : "flex flex-wrap items-center gap-3"}>
             {isLobby ? (
               <>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Sala</p>
                 <div className="flex items-center gap-3">
-                  <h1 className="game-screen-title font-brand-display text-3xl tracking-tight text-white md:text-4xl">{snapshot.code}</h1>
+                  <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">{snapshot.code}</h1>
                   <button
                     type="button"
                     onClick={() => void handleCopyLink()}
                     className={`rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] transition ${
                       linkCopied
                         ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-300"
-                        : "game-chip border-white/15 text-slate-300 hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-200"
+                        : "border-white/15 bg-white/5 text-slate-300 hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-200"
                     }`}
                   >
                     {linkCopied ? "✓ Copiado" : "Invitar"}
@@ -1902,7 +1902,7 @@ export function LobbyClient({ code }: { code: string }) {
               </>
             ) : (
               <>
-                <span className="game-chip rounded-full border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/80">
+                <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-cyan-100/80">
                   Sala
                 </span>
                 <h1 className="font-brand-display text-xl text-white sm:text-2xl">{snapshot.code}</h1>
@@ -1962,7 +1962,7 @@ export function LobbyClient({ code }: { code: string }) {
 
       {isLobby ? (
         <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-          <section className={`${panelClass("game-briefing-lines")} overflow-hidden`}>
+          <section className={`${panelClass()} overflow-hidden`}>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.28em] text-slate-500">Previa</p>
@@ -2074,7 +2074,7 @@ export function LobbyClient({ code }: { code: string }) {
             </div>
           </section>
 
-          <aside className={`${panelClass("game-briefing-lines space-y-5")} border-amber-200/20 bg-[#121827]/88`}>
+          <aside className={`${panelClass("space-y-5")} border-amber-200/20 bg-[#121827]/88`}>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.28em] text-amber-300/60">Cabina</p>
             </div>
@@ -2166,7 +2166,7 @@ export function LobbyClient({ code }: { code: string }) {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1.18fr_0.82fr]">
           <section className="order-2 space-y-6 lg:order-1">
-            <div className={`${panelClass("game-briefing-lines")} overflow-hidden`}>
+            <div className={`${panelClass()} overflow-hidden`}>
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Mesa OVNI</p>

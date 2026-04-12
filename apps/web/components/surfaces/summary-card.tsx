@@ -17,15 +17,15 @@ export function SummaryCard({
 }: SummaryCardProps) {
   const palette =
     accent === "emerald"
-      ? "game-panel-emerald text-emerald-100"
+      ? "border-emerald-300/20 bg-emerald-300/8 text-emerald-100"
       : accent === "amber"
-        ? "game-panel-amber text-amber-100"
-        : "game-panel-cyan text-cyan-100";
+        ? "border-amber-300/20 bg-amber-300/8 text-amber-100"
+        : "border-cyan-300/20 bg-cyan-300/8 text-cyan-100";
 
   return (
-    <article className={`game-panel game-briefing-lines rounded-[2rem] p-6 ${palette}`}>
+    <article className={`rounded-[2rem] border p-6 shadow-2xl backdrop-blur ${palette}`}>
       <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/65">{eyebrow}</p>
-      <h2 className="game-screen-title mt-3 text-3xl font-semibold text-white">{title}</h2>
+      <h2 className="mt-3 text-3xl font-semibold text-white">{title}</h2>
       <p className="mt-4 max-w-2xl text-sm leading-7 text-white/75">{description}</p>
       {footer ? <div className="mt-6">{footer}</div> : null}
     </article>

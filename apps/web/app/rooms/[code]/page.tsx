@@ -8,11 +8,9 @@ export default async function RoomPage({
   const { code } = await params;
 
   return (
-    <main className="min-h-screen px-4 py-4 sm:px-6 sm:py-6">
-      <div className="game-shell mx-auto max-w-7xl">
-        <div className="game-shell-content px-4 py-4 sm:px-6 sm:py-6">
-          <LobbyClient code={code} />
-        </div>
+    <main className="min-h-screen px-6 py-10 md:py-12">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6">
+        <LobbyClient code={code} />
       </div>
     </main>
   );

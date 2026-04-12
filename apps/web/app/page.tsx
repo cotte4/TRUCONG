@@ -154,15 +154,33 @@ export default function Home() {
             inert={isLobbyOpen}
           >
             <div className="grid h-full gap-6 px-6 py-6 sm:px-10 sm:py-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:items-center lg:gap-12 lg:px-14">
-              <div className="flex flex-col justify-center gap-5 text-left sm:gap-6">
-                <h1 className="font-brand-display text-[clamp(2.2rem,8.4vw,7.4rem)] leading-[0.84] text-white">
-                  TRUCO CON <span className="text-cyan-300">ALIENS,</span>
+              <div className="flex min-w-0 flex-col justify-center gap-5 text-left sm:gap-6">
+                <h1 className="font-brand-display text-[clamp(1.45rem,10vw,2.6rem)] leading-[0.9] text-white [letter-spacing:0.04em] sm:text-[clamp(2.2rem,8.4vw,7.4rem)] sm:leading-[0.84] sm:[letter-spacing:0.08em]">
+                  TRUCO
+                  <span className="hidden sm:inline"> CON</span>
+                  <span className="sm:hidden">
+                    <br />
+                    CON
+                  </span>
                   <br />
-                  DIMADONGS Y
+                  <span className="text-cyan-300">ALIENS,</span>
                   <br />
-                  <span className="text-rose-400">CAOS</span> CONTROLADO.
+                  DIMADONGS
+                  <span className="hidden sm:inline"> Y</span>
+                  <span className="sm:hidden">
+                    <br />
+                    Y CAOS
+                  </span>
+                  <span className="hidden sm:inline">
+                    <br />
+                    <span className="text-rose-400">CAOS</span> CONTROLADO.
+                  </span>
+                  <span className="sm:hidden">
+                    <br />
+                    CONTROLADO.
+                  </span>
                 </h1>
-                <p className="max-w-2xl text-[clamp(0.95rem,1.8vw,1.22rem)] leading-7 text-slate-300 sm:leading-8">
+                <p className="max-w-[16rem] text-[clamp(0.95rem,1.8vw,1.22rem)] leading-7 text-slate-300 sm:max-w-[30rem] sm:leading-8">
                   Armas la sala, pasas el codigo y arranca la mano: reglas conocidas, mutaciones alien y alguna senal
                   rara que conviene no tocar demasiado.
                 </p>
