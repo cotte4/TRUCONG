@@ -157,6 +157,7 @@ function AvatarPicker({
                 src={avatar.imagePath}
                 alt={avatar.label}
                 fill
+                sizes="(max-width: 640px) 20vw, 96px"
                 className="object-cover"
                 loading="lazy"
               />
