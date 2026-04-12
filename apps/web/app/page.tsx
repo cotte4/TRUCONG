@@ -45,7 +45,7 @@ function AlienSignal({
   };
 
   return (
-    <div className="relative flex h-[20rem] w-full max-w-[24rem] items-center justify-center sm:h-[24rem] sm:max-w-[28rem] lg:h-[28rem] lg:max-w-none">
+    <div className="relative flex h-[18rem] w-full max-w-[22rem] items-center justify-center sm:h-[22rem] sm:max-w-[26rem] lg:h-[20rem] lg:max-w-[22rem] xl:h-[22rem] xl:max-w-[24rem]">
       <div className="absolute inset-0 rounded-full bg-cyan-400/6 blur-3xl" />
       <div className="absolute inset-[9%] rounded-full border border-cyan-400/10" />
       <div className="absolute inset-[20%] rounded-full border border-cyan-400/8" />
@@ -145,42 +145,53 @@ export default function Home() {
   };
 
   return (
-    <main className="h-screen overflow-hidden p-4 sm:p-6">
+    <main className="h-[100dvh] overflow-hidden p-3 sm:p-5 lg:p-4 xl:p-6">
       <div className="mx-auto h-full max-w-7xl">
-        <div className="landing-stage relative isolate h-full overflow-hidden rounded-[2rem] border border-white/10 shadow-[0_30px_120px_rgba(2,6,23,0.42)]">
+        <div className="landing-stage relative isolate h-full overflow-hidden rounded-[1.75rem] border border-white/10 shadow-[0_30px_120px_rgba(2,6,23,0.42)] sm:rounded-[2rem]">
           <section
             className={`landing-view ${isLobbyOpen ? "landing-intro-out" : "landing-intro-in"}`}
             aria-hidden={isLobbyOpen}
             inert={isLobbyOpen}
           >
-            <div className="grid h-full gap-6 px-6 py-6 sm:px-10 sm:py-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:items-center lg:gap-12 lg:px-14">
-              <div className="flex min-w-0 flex-col justify-center gap-5 text-left sm:gap-6">
-                <h1 className="font-brand-display text-[clamp(1.45rem,10vw,2.6rem)] leading-[0.9] text-white [letter-spacing:0.04em] sm:text-[clamp(2.2rem,8.4vw,7.4rem)] sm:leading-[0.84] sm:[letter-spacing:0.08em]">
-                  TRUCO
-                  <span className="hidden sm:inline"> CON</span>
-                  <span className="sm:hidden">
+            <div className="grid h-full gap-6 px-6 py-6 sm:px-10 sm:py-8 lg:grid-cols-[minmax(0,1.02fr)_minmax(260px,0.78fr)] lg:items-center lg:gap-6 lg:px-10 lg:py-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(300px,0.82fr)] xl:gap-10 xl:px-12">
+              <div className="flex min-w-0 flex-col justify-center gap-4 text-left sm:gap-5 lg:gap-4">
+                <h1 className="font-brand-display text-[clamp(1.45rem,10vw,2.6rem)] leading-[0.9] text-white [letter-spacing:0.04em] sm:text-[clamp(2.15rem,6vw,4.3rem)] sm:leading-[0.86] sm:[letter-spacing:0.06em] lg:text-[clamp(2.85rem,4.2vw,4.6rem)] lg:leading-[0.84] xl:text-[clamp(3.35rem,4.7vw,5.4rem)] xl:[letter-spacing:0.08em]">
+                  <span className="lg:hidden">
+                    TRUCO
+                    <span className="hidden sm:inline"> CON</span>
+                    <span className="sm:hidden">
+                      <br />
+                      CON
+                    </span>
                     <br />
-                    CON
-                  </span>
-                  <br />
-                  <span className="text-cyan-300">ALIENS,</span>
-                  <br />
-                  DIMADONGS
-                  <span className="hidden sm:inline"> Y</span>
-                  <span className="sm:hidden">
+                    <span className="text-cyan-300">ALIENS,</span>
                     <br />
-                    Y CAOS
+                    DIMADONGS
+                    <span className="hidden sm:inline"> Y</span>
+                    <span className="sm:hidden">
+                      <br />
+                      Y CAOS
+                    </span>
+                    <span className="hidden sm:inline">
+                      <br />
+                      <span className="text-rose-400">CAOS</span> CONTROLADO.
+                    </span>
+                    <span className="sm:hidden">
+                      <br />
+                      CONTROLADO.
+                    </span>
                   </span>
-                  <span className="hidden sm:inline">
+                  <span className="hidden lg:block">
+                    TRUCO CON
+                    <br />
+                    <span className="text-cyan-300">ALIENS,</span>
+                    <br />
+                    DIMADONGS Y
                     <br />
                     <span className="text-rose-400">CAOS</span> CONTROLADO.
                   </span>
-                  <span className="sm:hidden">
-                    <br />
-                    CONTROLADO.
-                  </span>
                 </h1>
-                <p className="max-w-[16rem] text-[clamp(0.95rem,1.8vw,1.22rem)] leading-7 text-slate-300 sm:max-w-[30rem] sm:leading-8">
+                <p className="max-w-[16rem] text-[clamp(0.95rem,1.8vw,1.12rem)] leading-7 text-slate-300 sm:max-w-[24rem] sm:leading-8 lg:max-w-[28rem] lg:text-[1rem] lg:leading-7 xl:max-w-[31rem] xl:text-[1.08rem]">
                   Armas la sala, pasas el codigo y arranca la mano: reglas conocidas, mutaciones alien y alguna senal
                   rara que conviene no tocar demasiado.
                 </p>
@@ -188,7 +199,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setIsLobbyOpen(true)}
-                    className="landing-enter-button rounded-full px-8 py-4 text-sm font-black uppercase tracking-[0.28em] text-slate-950 sm:px-10 sm:py-5 sm:text-base"
+                    className="landing-enter-button rounded-full px-8 py-4 text-sm font-black uppercase tracking-[0.28em] text-slate-950 sm:px-10 sm:py-4.5 sm:text-base lg:px-11 lg:py-4 lg:text-[0.95rem]"
                   >
                     Entrar a la nave
                   </button>

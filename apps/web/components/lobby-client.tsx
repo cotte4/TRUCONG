@@ -500,10 +500,16 @@ function PlayedCard({ play, faded = false }: { play: TablePlayView; faded?: bool
         <div className="absolute top-1.5 left-1.5 flex flex-col items-center gap-0.5">
           <span className={`text-[1.35rem] font-black leading-none [text-shadow:0_1px_3px_rgba(0,0,0,0.12)] ${rankTone}`}>{rank}</span>
           {normalSuit ? (
-            <SuitIcon suit={normalSuit} alt={normalSuit} className={`h-4 w-4 object-contain ${visual.miniGlow}`} />
+            <div className="rounded-full bg-slate-950/72 p-1 shadow-[0_0_10px_rgba(15,23,42,0.35)]">
+              <SuitIcon
+                suit={normalSuit}
+                alt={normalSuit}
+                className={`h-3.5 w-3.5 object-contain [filter:brightness(0)_invert(1)] ${visual.miniGlow}`}
+              />
+            </div>
           ) : null}
         </div>
-        <div className="absolute left-1/2 top-[52%] -translate-x-1/2 -translate-y-1/2">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           {normalSuit ? (
             <SuitIcon suit={normalSuit} alt={normalSuit} className="h-11 w-11 object-contain opacity-70" />
           ) : (
@@ -665,7 +671,7 @@ function ReadableTrucoCardSprite({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`group relative h-full min-h-[224px] w-full overflow-hidden rounded-[1.3rem] border transition disabled:cursor-not-allowed disabled:opacity-55 ${cardFaceClass} ${cardBorderClass} ${active ? `${visual.glow} ring-2 ring-cyan-200/30` : ""} ${!disabled ? "hover:-translate-y-1 hover:shadow-[0_24px_40px_rgba(15,23,42,0.26)]" : ""}`}
+      className={`group relative h-full min-h-[224px] w-full rounded-[1.3rem] border transition disabled:cursor-not-allowed disabled:opacity-55 ${cardFaceClass} ${cardBorderClass} ${active ? `${visual.glow} ring-2 ring-cyan-200/30` : ""} ${!disabled ? "hover:-translate-y-1 hover:shadow-[0_24px_40px_rgba(15,23,42,0.26)]" : ""}`}
     >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(160deg,rgba(255,255,255,0.42),transparent_26%,rgba(255,255,255,0.06)_70%,rgba(15,23,42,0.12)_100%)]" />
       <div className="pointer-events-none absolute inset-[10px] rounded-[1rem] border border-black/8" />
@@ -690,11 +696,13 @@ function ReadableTrucoCardSprite({
           <span className={`text-[2.1rem] font-black leading-none [text-shadow:0_1px_4px_rgba(0,0,0,0.15)] ${cornerToneClass}`}>
             {cornerRank}
           </span>
-          <SuitIcon
-            suit={normalSuit!}
-            alt={normalSuit!}
-            className={`${visual.miniSizeClass} object-contain ${visual.miniGlow}`}
-          />
+          <div className="rounded-full bg-slate-950/72 p-1.5 shadow-[0_0_12px_rgba(15,23,42,0.34)]">
+            <SuitIcon
+              suit={normalSuit!}
+              alt={normalSuit!}
+              className={`${visual.miniSizeClass} object-contain [filter:brightness(0)_invert(1)] ${visual.miniGlow}`}
+            />
+          </div>
         </div>
       )}
 
@@ -703,15 +711,17 @@ function ReadableTrucoCardSprite({
           <span className={`text-[2.1rem] font-black leading-none [text-shadow:0_1px_4px_rgba(0,0,0,0.15)] ${cornerToneClass}`}>
             {cornerRank}
           </span>
-          <SuitIcon
-            suit={normalSuit!}
-            alt={normalSuit!}
-            className={`${visual.miniSizeClass} object-contain ${visual.miniGlow}`}
-          />
+          <div className="rounded-full bg-slate-950/72 p-1.5 shadow-[0_0_12px_rgba(15,23,42,0.34)]">
+            <SuitIcon
+              suit={normalSuit!}
+              alt={normalSuit!}
+              className={`${visual.miniSizeClass} object-contain [filter:brightness(0)_invert(1)] ${visual.miniGlow}`}
+            />
+          </div>
         </div>
       ) : null}
 
-      <div className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2">
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
         {isWildcardCard ? (
           <WildcardIcon alt="DIMADONG alien" className={`${centerIconClass} object-contain`} />
         ) : (
@@ -2439,9 +2449,9 @@ export function LobbyClient({ code }: { code: string }) {
                 ) : null}
               </div>
 
-              <div className="mt-5 overflow-x-auto overflow-y-hidden rounded-[1.7rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-3 pb-6 pt-4 sm:px-4">
+              <div className="mt-5 overflow-x-auto overflow-y-visible rounded-[1.7rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))] px-5 pb-7 pt-5 sm:px-6">
                 {matchView?.yourHand.length ? (
-                  <div className="relative flex min-h-[300px] min-w-max items-end gap-4 px-2 sm:min-h-[320px] sm:justify-center">
+                  <div className="relative flex min-h-[300px] min-w-max items-end gap-5 px-3 sm:min-h-[320px] sm:justify-center">
                     <div className="absolute inset-x-8 bottom-0 h-10 rounded-full bg-black/40 blur-2xl" />
                     {matchView.yourHand.map((card, index) => (
                       <div

@@ -358,13 +358,13 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
                   </span>
                 ) : null}
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="mt-3 grid grid-cols-3 gap-4">
                 {([2, 4, 6] as const).map((value) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => setMaxPlayers(value)}
-                    className={`rounded-2xl px-3 py-3 text-center text-sm font-medium transition ${
+                    className={`rounded-[1.2rem] px-5 py-4 text-center text-[0.95rem] font-semibold tracking-[0.02em] transition ${
                       maxPlayers === value
                         ? "bg-cyan-300 text-slate-950"
                         : "border border-white/10 bg-slate-900/90 text-slate-200"
@@ -388,13 +388,13 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
                   11 es el numero verdadero de DIMADONG.
                 </p>
               </div>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+              <div className="mt-3 grid gap-4 sm:grid-cols-3">
                 {[11, 15, 30].map((value) => (
                   <button
                     key={value}
                     type="button"
                     onClick={() => setTargetScore(value as 11 | 15 | 30)}
-                    className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                    className={`rounded-[1.2rem] px-5 py-4 text-[0.95rem] font-semibold tracking-[0.02em] transition ${
                       targetScore === value
                         ? "bg-cyan-300 text-slate-950"
                         : "border border-white/10 bg-slate-900/90 text-slate-200"
