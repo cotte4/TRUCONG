@@ -2,9 +2,10 @@
 
 import { HomeClient } from "@/components/home-client";
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 const BONG_UNLOCK_STORAGE_KEY = "dimadong:landing:bong-unlocked";
+const LANDING_TRANSITION_MS = 340;
 
 function AlienSignal({
   bongUnlocked,
@@ -137,11 +138,34 @@ export default function Home() {
 
     return window.sessionStorage.getItem(BONG_UNLOCK_STORAGE_KEY) === "true";
   });
-  const [isLobbyOpen, setIsLobbyOpen] = useState(false);
+  const [landingPhase, setLandingPhase] = useState<"intro" | "transition" | "lobby">("intro");
 
   const handleUnlockBong = () => {
     setBongUnlocked(true);
     window.sessionStorage.setItem(BONG_UNLOCK_STORAGE_KEY, "true");
+  };
+
+  useEffect(() => {
+    if (landingPhase !== "transition") {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setLandingPhase("lobby");
+    }, LANDING_TRANSITION_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [landingPhase]);
+
+  const isLobbyOpen = landingPhase === "lobby";
+  const isTransitioning = landingPhase === "transition";
+
+  const handleOpenLobby = () => {
+    if (landingPhase !== "intro") {
+      return;
+    }
+
+    setLandingPhase("transition");
   };
 
   return (
@@ -149,9 +173,15 @@ export default function Home() {
       <div className="mx-auto flex min-h-[calc(100dvh-1.5rem)] max-w-7xl sm:min-h-[calc(100dvh-2.5rem)] lg:min-h-[calc(100dvh-2rem)] xl:min-h-[calc(100dvh-3rem)]">
         <div className="landing-stage relative isolate min-h-full w-full overflow-hidden rounded-[1.75rem] border border-white/10 shadow-[0_30px_120px_rgba(2,6,23,0.42)] sm:rounded-[2rem]">
           <section
-            className={`landing-view ${isLobbyOpen ? "landing-intro-out" : "landing-intro-in"}`}
+            className={`landing-view landing-intro ${
+              isTransitioning
+                ? "landing-intro-out"
+                : isLobbyOpen
+                  ? "landing-intro-hidden"
+                  : "landing-intro-in"
+            }`}
             aria-hidden={isLobbyOpen}
-            inert={isLobbyOpen}
+            inert={landingPhase !== "intro"}
           >
             <div className="grid min-h-full gap-6 px-6 py-7 sm:px-10 sm:py-9 lg:grid-cols-[minmax(0,1.02fr)_minmax(260px,0.78fr)] lg:items-center lg:gap-6 lg:px-10 lg:py-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(300px,0.82fr)] xl:gap-10 xl:px-12 xl:py-8">
               <div className="flex min-w-0 flex-col justify-center gap-4 pb-4 text-left sm:gap-5 sm:pb-6 lg:gap-3 lg:pb-6">
@@ -196,7 +226,8 @@ export default function Home() {
                 <div>
                   <button
                     type="button"
-                    onClick={() => setIsLobbyOpen(true)}
+                    onClick={handleOpenLobby}
+                    disabled={landingPhase !== "intro"}
                     className="landing-enter-button rounded-full px-8 py-4 text-sm font-black uppercase tracking-[0.28em] text-slate-950 sm:px-10 sm:py-4.5 sm:text-base lg:px-11 lg:py-4 lg:text-[0.95rem]"
                   >
                     Entrar a la nave
@@ -208,7 +239,7 @@ export default function Home() {
                 <AlienSignal
                   bongUnlocked={bongUnlocked}
                   onUnlock={handleUnlockBong}
-                  isDormant={isLobbyOpen}
+                  isDormant={landingPhase !== "intro"}
                 />
               </div>
             </div>

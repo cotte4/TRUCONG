@@ -540,32 +540,49 @@ body {
   inset: 0;
 }
 
+.landing-intro {
+  z-index: 1;
+}
+
 .landing-intro-in {
   opacity: 1;
+  transform: translateY(0) scale(1);
   pointer-events: auto;
 }
 
 .landing-intro-out {
   pointer-events: none;
-  animation: landing-intro-exit 0.62s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: landing-intro-exit 0.34s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.landing-intro-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .landing-lobby {
+  z-index: 2;
   transition:
-    opacity 0.52s cubic-bezier(0.22, 1, 0.36, 1) 0.14s,
-    transform 0.52s cubic-bezier(0.22, 1, 0.36, 1) 0.14s;
+    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 0.34s;
+  will-change: opacity, transform;
 }
 
 .landing-lobby-closed {
   opacity: 0;
-  transform: translateY(24px);
+  visibility: hidden;
+  transform: translateY(18px) scale(0.985);
   pointer-events: none;
 }
 
 .landing-lobby-open {
   opacity: 1;
   transform: translateY(0);
+  visibility: visible;
   pointer-events: auto;
+  transition-delay: 0s;
 }
 
 .landing-enter-button {
@@ -601,6 +618,20 @@ body {
   filter: saturate(1.08);
 }
 
+.landing-enter-button:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.landing-enter-button:disabled {
+  cursor: default;
+  transform: none;
+  filter: none;
+}
+
+.landing-enter-button:disabled::after {
+  transform: translateX(-140%);
+}
+
 .landing-enter-button:hover::after {
   transform: translateX(120%);
 }
@@ -629,19 +660,9 @@ body {
     transform: translateY(0) scale(1);
     filter: blur(0);
   }
-  22% {
-    opacity: 1;
-    transform: translateX(-3px) skewX(-5deg);
-    filter: drop-shadow(6px 0 0 rgba(255, 77, 184, 0.18));
-  }
-  48% {
-    opacity: 0.72;
-    transform: translateX(3px) skewX(3deg);
-    filter: drop-shadow(-6px 0 0 rgba(103, 232, 249, 0.18));
-  }
   100% {
     opacity: 0;
-    transform: translateY(-18px) scale(0.985);
+    transform: translateY(-10px) scale(0.985);
     filter: blur(8px);
   }
 }
