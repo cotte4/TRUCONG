@@ -127,6 +127,47 @@ async function postJson<TBody, TResult>(url: string, body: TBody): Promise<TResu
   }
 }
 
+function AvatarPicker({
+  selectedAvatarId,
+  onSelect,
+}: {
+  selectedAvatarId: string;
+  onSelect: (avatarId: string) => void;
+}) {
+  return (
+    <div className="mt-2 grid grid-cols-4 gap-2">
+      {AVATAR_OPTIONS.map((avatar) => {
+        const active = selectedAvatarId === avatar.id;
+
+        return (
+          <button
+            key={avatar.id}
+            type="button"
+            onClick={() => onSelect(avatar.id)}
+            className={`overflow-hidden rounded-2xl border p-1 transition ${
+              active
+                ? "border-cyan-300/60 ring-2 ring-cyan-300/25"
+                : "border-white/10 bg-slate-900/70 hover:bg-slate-900"
+            }`}
+            aria-label={`Elegir avatar ${avatar.label}`}
+            aria-pressed={active}
+          >
+            <div className="relative h-16 w-full overflow-hidden rounded-xl">
+              <Image
+                src={avatar.imagePath}
+                alt={avatar.label}
+                fill
+                className="object-cover"
+                loading="lazy"
+              />
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -267,7 +308,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
   };
 
   return (
-    <section className="grid gap-6 lg:grid-cols-2">
+    <section className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
       <form
         onSubmit={handleCreate}
         className="rounded-[1.75rem] border border-white/10 bg-slate-950/72 p-6 backdrop-blur"
@@ -285,84 +326,85 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
             maxLength={24}
           />
         </label>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <p className="text-sm text-slate-200/78">Modo</p>
-            <div className="mt-2 flex gap-2">
-              {([2, 4, 6] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setMaxPlayers(value)}
-                  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                    maxPlayers === value
-                      ? "bg-cyan-300 text-slate-950"
-                      : "border border-white/10 bg-slate-900/90 text-slate-200"
-                  }`}
-                >
-                  {value === 2 ? "1 vs 1" : value === 4 ? "2 vs 2" : "3 vs 3"}
-                </button>
-              ))}
-            </div>
-            {maxPlayers === 6 ? (
-              <p className="mt-1 text-xs text-cyan-200/75">
-                Incluye PICA PICA cada dos rondas.
-              </p>
-            ) : null}
-          </div>
-          <div>
-            <p className="text-sm text-slate-200/78">Puntaje objetivo</p>
-            <p className="mt-1 text-xs text-cyan-200/75">
-              11 es el numero verdadero de DIMADONG.
-            </p>
-            <div className="mt-2 flex gap-2">
-              {[11, 15, 30].map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setTargetScore(value as 11 | 15 | 30)}
-                  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                    targetScore === value
-                      ? "bg-cyan-300 text-slate-950"
-                      : "border border-white/10 bg-slate-900/90 text-slate-200"
-                  }`}
-                >
-                  {value === 11 ? "11 · DIMADONG" : `${value} puntos`}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
         <div className="mt-4">
-          <p className="text-sm text-slate-200/78">Avatar</p>
-          <div className="mt-2 grid grid-cols-4 gap-2">
-            {AVATAR_OPTIONS.map((avatar) => {
-              const active = selectedCreateAvatarId === avatar.id;
-
-              return (
-                <button
-                  key={avatar.id}
-                  type="button"
-                  onClick={() => setCreateAvatarIdRaw(avatar.id)}
-                  className={`overflow-hidden rounded-2xl border p-1 transition ${
-                    active
-                      ? "border-cyan-300/60 ring-2 ring-cyan-300/25"
-                      : "border-white/10 bg-slate-900/70 hover:bg-slate-900"
-                  }`}
-                  aria-label={`Elegir avatar ${avatar.label}`}
-                >
-                  <div className="relative h-16 w-full overflow-hidden rounded-xl">
-                    <Image
-                      src={avatar.imagePath}
-                      alt={avatar.label}
-                      fill
-                      className="object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-slate-200/78">Avatar</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Paso 1
+            </p>
+          </div>
+          <AvatarPicker
+            selectedAvatarId={selectedCreateAvatarId}
+            onSelect={setCreateAvatarIdRaw}
+          />
+        </div>
+        <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Configuracion
+            </p>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Paso 2
+            </p>
+          </div>
+          <div className="mt-4 space-y-4">
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-slate-200/78">Modo</p>
+                {maxPlayers === 6 ? (
+                  <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-cyan-100">
+                    Experimental
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {([2, 4, 6] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setMaxPlayers(value)}
+                    className={`rounded-2xl px-3 py-3 text-center text-sm font-medium transition ${
+                      maxPlayers === value
+                        ? "bg-cyan-300 text-slate-950"
+                        : "border border-white/10 bg-slate-900/90 text-slate-200"
+                    }`}
+                    aria-pressed={maxPlayers === value}
+                  >
+                    {value === 2 ? "1 vs 1" : value === 4 ? "2 vs 2" : "3 vs 3"}
+                  </button>
+                ))}
+              </div>
+              {maxPlayers === 6 ? (
+                <p className="mt-2 text-xs text-cyan-200/75">
+                  Incluye PICA PICA cada dos rondas.
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <p className="text-sm text-slate-200/78">Puntaje objetivo</p>
+                <p className="text-xs text-cyan-200/75">
+                  11 es el numero verdadero de DIMADONG.
+                </p>
+              </div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {[11, 15, 30].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTargetScore(value as 11 | 15 | 30)}
+                    className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                      targetScore === value
+                        ? "bg-cyan-300 text-slate-950"
+                        : "border border-white/10 bg-slate-900/90 text-slate-200"
+                    }`}
+                    aria-pressed={targetScore === value}
+                  >
+                    {value === 11 ? "11 DIMADONG" : `${value} puntos`}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
         <div
@@ -417,36 +459,16 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
           />
         </label>
         <div className="mt-4">
-          <p className="text-sm text-slate-200/78">Avatar</p>
-          <div className="mt-2 grid grid-cols-4 gap-2">
-            {AVATAR_OPTIONS.map((avatar) => {
-              const active = selectedJoinAvatarId === avatar.id;
-
-              return (
-                <button
-                  key={avatar.id}
-                  type="button"
-                  onClick={() => setJoinAvatarIdRaw(avatar.id)}
-                  className={`overflow-hidden rounded-2xl border p-1 transition ${
-                    active
-                      ? "border-cyan-300/60 ring-2 ring-cyan-300/25"
-                      : "border-white/10 bg-slate-900/70 hover:bg-slate-900"
-                  }`}
-                  aria-label={`Elegir avatar ${avatar.label}`}
-                >
-                  <div className="relative h-16 w-full overflow-hidden rounded-xl">
-                    <Image
-                      src={avatar.imagePath}
-                      alt={avatar.label}
-                      fill
-                      className="object-cover"
-                      loading="lazy"
-                    />
-                  </div>
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-slate-200/78">Avatar</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+              Identidad
+            </p>
           </div>
+          <AvatarPicker
+            selectedAvatarId={selectedJoinAvatarId}
+            onSelect={setJoinAvatarIdRaw}
+          />
         </div>
         <button
           type="submit"
