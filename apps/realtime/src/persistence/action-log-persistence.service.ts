@@ -33,4 +33,32 @@ export class ActionLogPersistenceService {
       })),
     });
   }
+
+  /**
+   * Returns actions logged for a room after a given ISO timestamp.
+   * Used by the reconnection handler to send clients a history of what
+   * happened while they were disconnected (Gap 3 — DB-backed event replay).
+   *
+   * Max 50 entries to avoid flooding a player who was offline for hours.
+   */
+  async findEventsSince(roomId: string, afterISO: string, limit = 50) {
+    const after = new Date(afterISO);
+    if (isNaN(after.getTime())) return [];
+
+    return this.prisma.actionLog.findMany({
+      where: {
+        roomId,
+        createdAt: { gt: after },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: limit,
+      select: {
+        id: true,
+        actionType: true,
+        seatId: true,
+        createdAt: true,
+        // payload intentionally omitted — may contain card values
+      },
+    });
+  }
 }

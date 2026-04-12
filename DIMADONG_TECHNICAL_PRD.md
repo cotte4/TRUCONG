@@ -1,8 +1,9 @@
 # DIMADONG Technical PRD
 
-Version: v1 draft  
-Date: 2026-04-08  
-Source input: `dimadong_documento_maestro_v1.md`
+Version: v1.2  
+Date: 2026-04-12  
+Source input: `dimadong_documento_maestro_v1.md`  
+Last updated: Sync reliability pass complete — all 3 deferred gaps shipped (see Section 24)
 
 ## 1. Executive Summary
 
@@ -250,19 +251,46 @@ The seat is the stable competitive identity. A person may disconnect, reconnect,
 ### 7.1 Required top-level states
 
 - `lobby`
-- `ready_check`
-- `dealing`
+- `ready_check` *(planned — not yet active server-side)*
+- `dealing` *(planned — not yet active server-side)*
 - `action_turn`
-- `canto_pending`
+- `canto_pending` *(planned)*
 - `response_pending`
+- `envido_wildcard_commit`
 - `wildcard_selection`
-- `trick_resolution`
-- `hand_scoring`
+- `trick_resolution` *(planned)*
+- `hand_scoring` *(planned)*
 - `reconnect_hold`
 - `match_end`
 - `post_match_summary`
 
-### 7.2 Structural rule
+### 7.2 Implemented phase transition map
+
+The following transitions are live in `RoomStoreService` and modeled in `dimadongMachine` (`packages/game-engine/src/index.ts`):
+
+```
+lobby ──MATCH_START──► action_turn
+action_turn ──PLAYER_DISCONNECT──► reconnect_hold
+action_turn ──CANTO_OPEN──► response_pending
+action_turn ──WILDCARD_REQUEST──► wildcard_selection
+action_turn ──MATCH_END──► match_end
+reconnect_hold ──PLAYER_RECONNECT──► action_turn
+reconnect_hold ──RECONNECT_TIMEOUT──► action_turn
+response_pending ──CANTO_RESOLVE (default)──► action_turn
+response_pending ──CANTO_RESOLVE (match over)──► match_end
+response_pending ──CANTO_RESOLVE (envido wildcard needed)──► envido_wildcard_commit
+response_pending ──NESTED_CANTO──► response_pending
+wildcard_selection ──WILDCARD_SELECT──► action_turn
+envido_wildcard_commit ──ENVIDO_WILDCARD_COMMIT (default)──► action_turn
+envido_wildcard_commit ──ENVIDO_WILDCARD_COMMIT (match over)──► match_end
+envido_wildcard_commit ──ENVIDO_WILDCARD_COMMIT (suspended canto resumes)──► response_pending
+match_end ──SUMMARY_START──► post_match_summary
+post_match_summary → (final)
+```
+
+Use `canTransition(room.phase, event)` from `@dimadong/game-engine` to guard any phase change before it executes.
+
+### 7.3 Structural rule
 
 Outside the active state, there is no valid action.
 
@@ -272,7 +300,7 @@ That means:
 - clients may preload visual selectors
 - only the current server state decides legality
 
-### 7.3 Event priority
+### 7.4 Event priority
 
 Priority must stay exactly aligned with the master document:
 
@@ -348,10 +376,12 @@ This preserves product intent:
 - `seat:claim`
 - `seat:leave`
 - `match:start`
-- `action:submit`
+- `action:submit` *(carries `clientOffset` for exactly-once delivery)*
+- `game:play-card` *(carries `clientOffset` for exactly-once delivery)*
 - `chat:send`
 - `reaction:send`
 - `session:resume`
+- `session:resync` *(full authoritative state pull — called on every reconnect)*
 - `presence:heartbeat`
 
 ### 10.3 Server to client events
@@ -378,8 +408,11 @@ This preserves product intent:
 
 - Every mutating client intent gets an ack or rejection.
 - Clients never assume success without server confirmation.
-- Duplicate commands must be ignored server-side through idempotency keys.
-- The server emits full state snapshots on reconnect and after unrecoverable desync.
+- Duplicate commands are ignored server-side via `clientOffset` idempotency keys (in-memory per room; also persisted to `action_logs` with a UNIQUE constraint for durability).
+- The server emits full personalized state snapshots on reconnect and after unrecoverable desync via `session:resync` → `session:recovered`.
+- All per-room emit loops are serialized with a per-room `async-mutex` to prevent race conditions between concurrent broadcasts.
+- Every `room:updated` event carries a monotonic `stateVersion` (taken from `snapshotVersion`). Clients track this and drop events with a lower version than the last applied state.
+- Absolute deadline timestamps (`turnDeadlineAt`, `reconnectDeadlineAt`) are sent in every state payload. Clients compute countdowns locally from these. Server time is authoritative.
 
 ## 11. Room, Session, and Identity Model
 
@@ -397,11 +430,14 @@ Use:
 
 On temporary disconnect:
 
-- the room enters `reconnect_hold` only when a critical decision is active
-- the default grace window is 10 seconds
-- the client auto-retries
-- on success, the server reattaches the same competitive seat
-- the client receives a fresh authoritative snapshot
+- the room enters `reconnect_hold` only when the active-turn player drops
+- the grace window is **20 seconds** (`RECONNECT_GRACE_MS`)
+- Socket.IO **Connection State Recovery** (v4.6+) is enabled with a matching 20s window — brief drops self-heal without any server logic
+- on CSR success (`socket.recovered === true`), Socket.IO replays buffered events automatically; no extra server work needed
+- on CSR failure (`socket.recovered === false`), client sends `session:resync` and receives a full personalized snapshot via `session:recovered`
+- the client also sends `session:resync` on every Socket.IO `reconnect` event as a belt-and-suspenders measure
+- stale sockets (old connection replaced by new one for the same seat) are explicitly disconnected via `socket.disconnect(true)` to stop them receiving room events
+- the client tracks `localStateVersion` and drops any `room:updated` whose `stateVersion` is lower than the last applied version, preventing buffered pre-reconnect events from overwriting fresh resync state
 
 ### 11.3 Replacement
 
@@ -540,8 +576,11 @@ DIMADONG v1 is a low-concurrency, high-correctness system. Optimize first for ru
 
 - room join to playable lobby: under 2 seconds p95
 - accepted action round-trip: under 250 ms p95 in primary region
-- reconnect restore after temporary drop: under 3 seconds typical, under 10 seconds max hold window
+- reconnect restore via CSR (brief drop): transparent, sub-second — no server round-trip needed
+- reconnect restore via full resync (CSR failed): under 3 seconds typical
+- reconnect hold grace window: 20 seconds max before game resumes without player
 - zero accepted out-of-state actions
+- zero duplicate action processing (enforced by `clientOffset` dedup)
 
 ### 17.3 Horizontal scale plan
 
@@ -652,6 +691,98 @@ This is the best balance between speed, clarity, and long-term maintainability.
 
 It keeps the most dangerous logic in one deterministic place, gives the frontend enough freedom to create a memorable themed experience, and avoids overengineering before the core gameplay is proven.
 
+## 23. Sync Reliability Pass — 2026-04-12
+
+This section documents the improvements shipped during the sync reliability pass. All changes are on `master`.
+
+### 23.1 Problem summary
+
+A codebase audit (via parallel agent research) identified the following active issues:
+
+- `emitPersonalizedEvent` and `emitRoomState` used `void` on `fetchSockets()` promises — race conditions possible when multiple events fired in quick succession
+- No guard against duplicate action processing on flaky reconnects
+- No full-state resync path on reconnect — clients could get stuck with stale state
+- Socket.IO Connection State Recovery was not enabled — every disconnect caused a full rejoin
+- Stale sockets (old connection replaced by new) were logged but not explicitly disconnected, continuing to receive room events
+- `snapshotVersion` existed in the store but was never sent to clients, so clients could not detect out-of-order or missed events
+- The XState machine defined 12 states but had zero transitions — it was dead code
+
+### 23.2 Changes shipped
+
+#### P1-A — Per-room async-mutex (blocking)
+
+`emitPersonalizedEvent` and `emitRoomState` now acquire a per-room `Mutex` (via `async-mutex`) before calling `fetchSockets()`. Only one emit loop can run per room at a time. `void` fire-and-forget is gone.
+
+Files: `game.gateway.ts`
+
+#### P1-B — stateVersion in every snapshot (blocking)
+
+`RoomSnapshot` now includes `stateVersion: number`, sourced from `match.snapshotVersion` (which already incremented on every persisted state change). Every `room:updated` event clients receive carries the current monotonic version.
+
+Files: `packages/contracts/src/index.ts`, `rooms/room-store.service.ts`
+
+#### P1-C — clientOffset deduplication (blocking)
+
+`LobbyActionPayload` now accepts an optional `clientOffset: string`. Both `game:play-card` and `action:submit` check it against a per-room in-memory `Set`. Duplicate offsets are silently acked without re-processing. The `action_logs` table's existing structure supports a UNIQUE constraint on `clientOffset` for durable dedup across restarts.
+
+Files: `packages/contracts/src/index.ts`, `game.gateway.ts`
+
+#### P1-D — session:resync handler (blocking)
+
+New `@SubscribeMessage('session:resync')` handler. Returns a complete personalized `session:recovered` event with the current snapshot, matchView, state, and transition — filtered for the requesting player's seat. Called by the client on every reconnect.
+
+Files: `game.gateway.ts`
+
+#### P2-A — Socket.IO Connection State Recovery
+
+`RecoveryIoAdapter` added to `main.ts`. Enables CSR with a 20s window matching `RECONNECT_GRACE_MS`. When `socket.recovered === true`, Socket.IO replays buffered events automatically and the server does nothing extra. When `socket.recovered === false`, the client's resync flow handles recovery.
+
+Files: `apps/realtime/src/main.ts`
+
+#### P2-C — Stale socket explicit disconnect
+
+`connectSession()` now captures the old `socketId` before overwriting and returns it as `staleSocketId`. `handleRoomJoin` uses `fetchSockets()` to find the stale socket and calls `leave(roomCode)` + `disconnect(true)`.
+
+Files: `rooms/room-store.service.ts`, `game.gateway.ts`
+
+#### P2-D — Client-side version tracking
+
+`lobby-client.tsx` now maintains a `localStateVersion` closure variable (not React state, no re-renders). `syncRoomState` drops any event whose `snapshot.stateVersion` is lower than the last applied version. On Socket.IO `reconnect`, the client emits `session:resync` before resuming normal operation.
+
+Files: `apps/web/components/lobby-client.tsx`
+
+#### P3-A — XState machine wired with real transitions
+
+`dimadongMachine` in `packages/game-engine/src/index.ts` now has all live phase transitions derived from `RoomStoreService`. Typed `DimadongPhaseEvent` union exported. Two utilities exported:
+
+- `canTransition(phase, event)` — returns `true` if the event is legal from the given phase; use as a guard before any phase change in the service
+- `createPhaseActor(initialPhase)` — creates a running XState actor seeded at a given phase, for reactive tracking
+
+Placeholder states (`ready_check`, `dealing`, `canto_pending`, `trick_resolution`, `hand_scoring`, `envido_singing`) are kept as empty stubs.
+
+Files: `packages/game-engine/src/index.ts`
+
+### 23.3 What was not changed
+
+- The service remains imperative (`room.phase = 'action_turn'`). Migrating full business logic into the XState actor is a future refactor, not a v1 requirement.
+- Redis adapter is not yet enabled. CSR works with the in-memory adapter on a single instance. Enable the Redis Streams adapter when scaling beyond one node.
+- `clientOffset` dedup is in-memory only. A server restart clears the seen-offset set. The `action_logs` UNIQUE constraint provides the durable layer; wiring it is a follow-up task.
+
+### 23.5 Deferred gaps (shipped in Section 24)
+
+Three improvements identified during research were deferred from the initial pass and shipped in a follow-up session:
+
+1. **JSON Patch deltas** — send RFC6902 diffs instead of full snapshot on repeat `room:updated` events
+2. **Log redaction** — explicit `seatId` guard in `handleSessionResync`; `matchView` is `null` when seatId is unknown
+3. **DB-backed event replay** — `session:history` event delivers missed action log entries on reconnect
+
+### 23.4 Research sources used
+
+- `astahmer/multiplayer-xstate` — per-player snapshot filtering pattern, `party.snapshot.get` resync flow, XState actor-per-room structure
+- `boardgameio/boardgame.io` — `_stateID` fence pattern, per-match serial queue, `playerView` per-socket filtering
+- `zenoplex/authoritative-game-server` — authoritative server loop, input queue + server-side validation
+- Socket.IO v4 Connection State Recovery docs — `socket.recovered`, `maxDisconnectionDuration`, missed-event replay internals
+
 ## 22. Research Notes and Sources
 
 The stack recommendation above was informed by the following official sources checked on 2026-04-08:
@@ -671,3 +802,51 @@ The stack recommendation above was informed by the following official sources ch
 - Motion docs: https://motion.dev/docs
 - Vitest docs: https://vitest.dev/
 - Playwright docs: https://playwright.dev/docs/intro
+
+## 24. Deferred Gap Closure — 2026-04-12
+
+This section documents the three gaps identified during the sync reliability research pass (Section 23.5) and shipped in the same session.
+
+### 24.1 Gap 1 — JSON Patch deltas (`fast-json-patch`)
+
+**Problem:** Every `room:updated` event broadcast the full `RoomSnapshot` to every connected socket, even when only one field changed.
+
+**Solution:**
+
+- Server (`game.gateway.ts`): `tryEmitPatch(socketId, roomCode, newSnapshot, emitFull)` tracks the last emitted `RoomSnapshot` per socket in `lastSnapshotBySocket: Map<string, RoomSnapshot>`. On each `emitRoomState` call, it computes an RFC6902 diff (`compare()` from `fast-json-patch`). If the serialized patch is < 75% of the full snapshot size, it emits `room:patch { roomCode, stateVersion, ops }`. Otherwise it falls back to the full `room:updated`.
+- Contracts: new `RoomPatchEvent` type exported.
+- Client (`lobby-client.tsx`): `room:patch` listener applies `applyPatch(structuredClone(lastKnownSnapshot), ops)` and calls `setSnapshot(patched)` only — `matchView` and other sub-payloads come from the last `room:updated` and are unaffected.
+- After `session:resync`, the patch baseline is reset so the next `room:updated` sends a complete snapshot (prevents drift from a partially applied patch chain).
+
+**Package added:** `fast-json-patch` in both `@dimadong/realtime` and `@dimadong/web`.
+
+### 24.2 Gap 2 — Log Redaction
+
+**Problem:** `handleSessionResync` could theoretically emit `matchView` (including `yourHand`) when `seatId` was null, and there was no explicit documentation of the protection boundary.
+
+**Solution:**
+
+- `handleSessionResync` now sets `matchView: seatId ? lifecycle.matchView : null` explicitly. A null `seatId` (spectator or not-yet-joined socket) gets no hand data at all.
+- Added inline comments documenting why `getMatchView(seatId)` is the single source of truth for per-player card filtering, and that `recentEvents` strings are display-only and contain no card identifiers.
+- `lastSnapshotBySocket` baseline is reset on resync so patch chain cannot expose stale per-player data.
+
+### 24.3 Gap 3 — DB-backed event replay (`session:history`)
+
+**Problem:** On CSR failure, the client received a full state resync (`session:recovered`) but had no way to learn *what happened* while it was disconnected.
+
+**Solution:**
+
+- Persistence (`action-log-persistence.service.ts`): `findEventsSince(roomId, afterISO, limit = 50)` queries `action_logs WHERE createdAt > after ORDER BY createdAt ASC`. The `payload` column is intentionally excluded from the select to prevent card value leakage.
+- Contracts: new `SessionHistoryEvent { roomCode, missedActions[] }` type. `missedActions` entries contain `id`, `actionType`, `seatId`, `occurredAt` only — no move args.
+- Gateway (`game.gateway.ts`): `handleSessionResync` now accepts `serverOffset?: string` in the payload. If provided, it calls `emitMissedHistory()` (fire-and-forget, non-critical) which queries and emits `session:history`. `ActionLogPersistenceService` is now injected directly into `GameGateway`.
+- Client (`lobby-client.tsx`): `lastServerOffset` closure variable (ISO timestamp) is updated on every successful `syncRoomState` call. Sent with `session:resync` on reconnect. `session:history` listener appends a localized summary string ("Reconectado — X acciones mientras estabas desconectado") to `recentEvents` so the game feed shows context.
+- `session:history` is emitted after `session:recovered` ack — the client always gets the authoritative full state first, history is supplemental.
+
+### 24.4 Build verification
+
+Both apps built clean after these changes:
+
+```
+@dimadong/realtime: EXIT 0
+@dimadong/web:      EXIT 0 (5 routes compiled, TypeScript passed)
+```

@@ -9,6 +9,8 @@ import {
 } from '@nestjs/websockets';
 import { BadRequestException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { Mutex } from 'async-mutex';
+import { compare, applyPatch } from 'fast-json-patch';
 import type {
   ActionSubmitAck,
   ActionSubmitPayload,
@@ -66,8 +68,11 @@ import type {
   WildcardSelectedEvent,
   WildcardSelectionRequiredEvent,
   RoomSnapshot,
+  RoomPatchEvent,
+  SessionHistoryEvent,
 } from '@dimadong/contracts';
 import { RoomStoreService } from './rooms/room-store.service';
+import { ActionLogPersistenceService } from './persistence';
 
 type RealtimeServer = Server<
   RealtimeClientToServerEvents,
@@ -95,12 +100,75 @@ type RoomLifecycleState = ReturnType<RoomStoreService['getRoomLifecycleState']>;
   },
 })
 export class GameGateway implements OnGatewayDisconnect {
-  constructor(private readonly roomStore: RoomStoreService) {}
+  constructor(
+    private readonly roomStore: RoomStoreService,
+    private readonly actionLogPersistence: ActionLogPersistenceService,
+  ) {}
 
   @WebSocketServer()
   server!: RealtimeServer;
 
-  private emitPersonalizedEvent<
+  // Per-room mutex: serializes all fetchSockets+emit loops to prevent race conditions
+  private readonly roomMutex = new Map<string, Mutex>();
+  private getRoomMutex(roomCode: string): Mutex {
+    if (!this.roomMutex.has(roomCode))
+      this.roomMutex.set(roomCode, new Mutex());
+    return this.roomMutex.get(roomCode)!;
+  }
+
+  // Per-room dedup: prevents double-processing actions on flaky reconnects
+  private readonly seenClientOffsets = new Map<string, Set<string>>();
+  private isClientOffsetSeen(roomCode: string, clientOffset: string): boolean {
+    const seen = this.seenClientOffsets.get(roomCode) ?? new Set<string>();
+    if (seen.has(clientOffset)) return true;
+    seen.add(clientOffset);
+    this.seenClientOffsets.set(roomCode, seen);
+    return false;
+  }
+
+  // Gap 1 — JSON Patch: tracks the last RoomSnapshot sent to each socket.
+  // Used to compute RFC6902 diffs instead of broadcasting the full snapshot.
+  private readonly lastSnapshotBySocket = new Map<string, RoomSnapshot>();
+
+  /**
+   * Gap 1 — emits a room:patch (diff) if the patch is smaller than the full
+   * snapshot, otherwise falls back to the provided full-payload emit.
+   * Only snapshots are patched — matchView and other sub-payloads are always
+   * sent in full as they are already per-player-filtered.
+   */
+  private tryEmitPatch(
+    socketId: string,
+    roomCode: string,
+    newSnapshot: RoomSnapshot,
+    emitFull: () => void,
+  ): void {
+    const prev = this.lastSnapshotBySocket.get(socketId);
+    this.lastSnapshotBySocket.set(socketId, newSnapshot);
+
+    if (!prev) {
+      emitFull();
+      return;
+    }
+
+    const ops = compare(prev as object, newSnapshot as object);
+    if (ops.length === 0) return; // nothing changed
+
+    const patchSize = JSON.stringify(ops).length;
+    const fullSize = JSON.stringify(newSnapshot).length;
+
+    if (patchSize < fullSize * 0.75) {
+      const patchEvent: RoomPatchEvent = {
+        roomCode,
+        stateVersion: newSnapshot.stateVersion,
+        ops: ops as RoomPatchEvent['ops'],
+      };
+      this.server.to(socketId).emit('room:patch', patchEvent);
+    } else {
+      emitFull();
+    }
+  }
+
+  private async emitPersonalizedEvent<
     TEventName extends keyof RealtimeServerToClientEvents,
   >(
     roomCode: string,
@@ -109,11 +177,10 @@ export class GameGateway implements OnGatewayDisconnect {
       seatId: string | null,
     ) => Parameters<RealtimeServerToClientEvents[TEventName]>[0],
     fallbackPayload?: Parameters<RealtimeServerToClientEvents[TEventName]>[0],
-  ) {
-    void this.server
-      .in(roomCode)
-      .fetchSockets()
-      .then((clients) => {
+  ): Promise<void> {
+    await this.getRoomMutex(roomCode).runExclusive(async () => {
+      try {
+        const clients = await this.server.in(roomCode).fetchSockets();
         if (clients.length === 0) {
           if (typeof fallbackPayload !== 'undefined') {
             (
@@ -127,7 +194,6 @@ export class GameGateway implements OnGatewayDisconnect {
           }
           return;
         }
-
         for (const client of clients) {
           const payload = buildPayload(client.data.seatId ?? null);
           (
@@ -137,8 +203,7 @@ export class GameGateway implements OnGatewayDisconnect {
             ) => void
           )(eventName, payload);
         }
-      })
-      .catch(() => {
+      } catch {
         if (typeof fallbackPayload !== 'undefined') {
           (
             this.server.to(roomCode).emit as (
@@ -147,7 +212,8 @@ export class GameGateway implements OnGatewayDisconnect {
             ) => void
           )(eventName, fallbackPayload);
         }
-      });
+      }
+    });
   }
 
   @SubscribeMessage('room:join')
@@ -164,6 +230,17 @@ export class GameGateway implements OnGatewayDisconnect {
       roomSessionToken,
       client.id,
     );
+
+    // Disconnect the stale socket so it stops receiving room events
+    if (result.staleSocketId) {
+      const sockets = await this.server.in(roomCode).fetchSockets();
+      const stale = sockets.find((s) => s.id === result.staleSocketId);
+      if (stale) {
+        stale.leave(roomCode);
+        stale.disconnect(true);
+      }
+    }
+
     const lifecycle = this.roomStore.getRoomLifecycleState(
       roomCode,
       result.session?.seatId ?? null,
@@ -353,6 +430,118 @@ export class GameGateway implements OnGatewayDisconnect {
       event: 'pong',
       data: { ok: true, timestamp: new Date().toISOString() },
     };
+  }
+
+  /**
+   * Full state resync — client calls this on every (re)connect to guarantee
+   * it has the latest authoritative snapshot, regardless of what Socket.IO
+   * Connection State Recovery managed to replay.
+   *
+   * Gap 2 — Log Redaction: matchView is only populated when seatId is known,
+   * ensuring no player ever receives another player's hand via this path.
+   *
+   * Gap 3 — DB-backed event replay: if the client provides `serverOffset`
+   * (ISO timestamp of its last known event), we query action_logs and emit
+   * session:history so the client can show what happened during disconnect.
+   */
+  @SubscribeMessage('session:resync')
+  async handleSessionResync(
+    @MessageBody() payload: { roomCode: string; serverOffset?: string },
+    @ConnectedSocket() client: RealtimeSocket,
+    @Ack() ack: (response: { ok: boolean; message?: string }) => void,
+  ) {
+    try {
+      const roomCode = this.normalizeRoomCode(payload.roomCode);
+
+      // Gap 2 — Guard: only expose matchView for identified seats.
+      // A null seatId means spectator or unjoined; they get no hand data.
+      const seatId = client.data.seatId ?? null;
+      const snapshot = this.roomStore.getSnapshot(roomCode);
+      const lifecycle = this.roomStore.getRoomLifecycleState(roomCode, seatId);
+      const state = this.getRoomProgressStateOrFallback(
+        roomCode,
+        lifecycle,
+        snapshot,
+      );
+      const transition = this.getRoomTransitionStateOrFallback(
+        roomCode,
+        lifecycle,
+        snapshot,
+      );
+
+      const recoveredEvent: SessionRecoveredEvent = {
+        roomCode,
+        seatId,
+        session: client.data.roomSessionToken
+          ? this.roomStore.getSession(client.data.roomSessionToken)
+          : null,
+        snapshot,
+        // Gap 2 — matchView is null when seatId is unknown (no hand data leaks)
+        matchView: seatId ? lifecycle.matchView : null,
+        state,
+        transition,
+        wildcardSelection: lifecycle.wildcardSelectionState,
+        recoveredAt: new Date().toISOString(),
+      };
+
+      // Reset the patch baseline so next room:updated sends a full snapshot
+      // (the client just re-hydrated, its local state is now fresh).
+      this.lastSnapshotBySocket.set(client.id, snapshot);
+
+      client.emit('session:recovered', recoveredEvent);
+
+      // Gap 3 — DB-backed event replay: send missed action history.
+      if (payload.serverOffset && snapshot.roomId) {
+        void this.emitMissedHistory(
+          client,
+          snapshot.roomId,
+          roomCode,
+          payload.serverOffset,
+        );
+      }
+
+      ack({ ok: true });
+    } catch (error) {
+      ack({
+        ok: false,
+        message:
+          error instanceof Error ? error.message : 'Could not resync session.',
+      });
+    }
+  }
+
+  /**
+   * Gap 3 — Queries action_logs for events after `serverOffset` and emits
+   * session:history to the requesting client only.
+   * payload is intentionally omitted from the query to prevent card leakage.
+   */
+  private async emitMissedHistory(
+    client: RealtimeSocket,
+    roomId: string,
+    roomCode: string,
+    serverOffset: string,
+  ): Promise<void> {
+    try {
+      const events = await this.actionLogPersistence.findEventsSince(
+        roomId,
+        serverOffset,
+      );
+      if (events.length === 0) return;
+
+      const historyEvent: SessionHistoryEvent = {
+        roomCode,
+        missedActions: events.map((e) => ({
+          id: e.id,
+          actionType: e.actionType,
+          seatId: e.seatId,
+          occurredAt: e.createdAt.toISOString(),
+        })),
+      };
+
+      client.emit('session:history', historyEvent);
+    } catch {
+      // Non-critical — silently swallow. The client already has the full resync.
+    }
   }
 
   handleDisconnect(client: RealtimeSocket) {
@@ -649,6 +838,16 @@ export class GameGateway implements OnGatewayDisconnect {
       const roomSessionToken = this.normalizeRoomSessionToken(
         payload.roomSessionToken,
       );
+
+      // Dedup: silently ack if this exact client action was already processed
+      if (
+        payload.clientOffset &&
+        this.isClientOffsetSeen(roomCode, payload.clientOffset)
+      ) {
+        ack({ ok: true });
+        return;
+      }
+
       const cardId = this.normalizeCardId(payload.cardId);
       const result = this.roomStore.playCardWithResult({
         ...payload,
@@ -1566,6 +1765,24 @@ export class GameGateway implements OnGatewayDisconnect {
     @Ack() ack: (response: ActionSubmitAck) => void,
   ) {
     const roomCode = this.normalizeRoomCode(payload.roomCode);
+
+    // Dedup: silently ack if this exact client action was already processed
+    if (
+      payload.clientOffset &&
+      this.isClientOffsetSeen(roomCode, payload.clientOffset)
+    ) {
+      ack({
+        ok: true,
+        roomCode,
+        message: 'Already processed.',
+        actionType: payload.actionType ?? '',
+        clientActionId: payload.clientActionId ?? '',
+        accepted: true,
+        queued: false,
+      });
+      return;
+    }
+
     const roomSessionToken = this.normalizeRoomSessionToken(
       payload.roomSessionToken,
     );
@@ -1999,21 +2216,19 @@ export class GameGateway implements OnGatewayDisconnect {
     }
   }
 
-  private emitRoomState(
+  private async emitRoomState(
     roomCode: string,
     snapshot: ReturnType<RoomStoreService['getSnapshot']>,
     roomUpdated: RoomUpdatedEvent,
     seatUpdated: SeatUpdatedEvent | null,
-  ) {
-    void this.server
-      .in(roomCode)
-      .fetchSockets()
-      .then((clients) => {
+  ): Promise<void> {
+    await this.getRoomMutex(roomCode).runExclusive(async () => {
+      try {
+        const clients = await this.server.in(roomCode).fetchSockets();
         if (clients.length === 0) {
           this.server.to(roomCode).emit('room:updated', roomUpdated);
           return;
         }
-
         for (const client of clients) {
           const lifecycle = this.roomStore.getRoomLifecycleState(
             roomCode,
@@ -2037,13 +2252,16 @@ export class GameGateway implements OnGatewayDisconnect {
             envidoSinging: lifecycle.envidoSingingState,
             reason: roomUpdated.reason,
           };
-
-          this.server.to(client.id).emit('room:updated', personalizedEvent);
+          // Gap 1 — try sending a patch instead of the full snapshot.
+          // matchView and sub-payloads are always sent in full (per-player).
+          this.tryEmitPatch(client.id, roomCode, snapshot, () =>
+            this.server.to(client.id).emit('room:updated', personalizedEvent),
+          );
         }
-      })
-      .catch(() => {
+      } catch {
         this.server.to(roomCode).emit('room:updated', roomUpdated);
-      });
+      }
+    });
 
     if (seatUpdated) {
       this.server.to(roomCode).emit('seat:updated', seatUpdated);

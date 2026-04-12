@@ -137,6 +137,7 @@ export interface RoomSnapshot {
   winnerTeamSide: TeamSide | null;
   turnDeadlineAt: string | null;
   reconnectDeadlineAt: string | null;
+  stateVersion: number;
 }
 
 export interface RoomSession {
@@ -198,6 +199,7 @@ export interface ResumeRoomResponse {
 export interface LobbyActionPayload {
   roomCode: string;
   roomSessionToken: string;
+  clientOffset?: string;
 }
 
 export interface RoomJoinPayload extends SessionResumePayload {}
@@ -746,6 +748,38 @@ export interface SessionRecoveredEvent {
   recoveredAt: string;
 }
 
+/**
+ * Gap 3 — DB-backed event replay.
+ * Sent after session:recovered when the client provides a serverOffset.
+ * Contains the list of actions that occurred while the client was disconnected.
+ * payload is omitted server-side to prevent card information leakage (Gap 2).
+ */
+export interface SessionHistoryEvent {
+  roomCode: string;
+  missedActions: Array<{
+    id: string;
+    actionType: string;
+    seatId: string | null;
+    occurredAt: string; // ISO timestamp
+  }>;
+}
+
+/**
+ * Gap 1 — JSON Patch delta.
+ * Sent instead of room:updated when the diff is smaller than the full snapshot.
+ * Client applies ops to its last known RoomSnapshot.
+ */
+export interface RoomPatchEvent {
+  roomCode: string;
+  stateVersion: number;
+  ops: Array<{
+    op: 'add' | 'remove' | 'replace' | 'move' | 'copy' | 'test';
+    path: string;
+    value?: unknown;
+    from?: string;
+  }>;
+}
+
 export interface ActionSubmittedEvent {
   roomCode: string;
   clientActionId: string;
@@ -836,8 +870,10 @@ export interface RealtimeClientToServerEvents {
 export interface RealtimeServerToClientEvents {
   'room:joined': (payload: RoomJoinedEvent) => void;
   'room:updated': (payload: RoomUpdatedEvent) => void;
+  'room:patch': (payload: RoomPatchEvent) => void;
   'seat:updated': (payload: SeatUpdatedEvent) => void;
   'session:recovered': (payload: SessionRecoveredEvent) => void;
+  'session:history': (payload: SessionHistoryEvent) => void;
   'action:submitted': (payload: ActionSubmittedEvent) => void;
   'action:rejected': (payload: ActionRejectedEvent) => void;
   'chat:received': (payload: ChatReceivedEvent) => void;

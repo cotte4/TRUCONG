@@ -30,6 +30,8 @@ import type {
   ResumeRoomResponse,
   RoomSession,
   RoomSnapshot,
+  RoomPatchEvent,
+  SessionHistoryEvent,
   SeatFreePayload,
   SummaryStartedEvent,
   SummaryStartPayload,
@@ -41,6 +43,7 @@ import type {
   WildcardSelectedEvent,
   WildcardSelectionRequiredEvent,
 } from "@dimadong/contracts";
+import { applyPatch } from "fast-json-patch";
 import { apiBaseUrl, socketBaseUrl } from "@/lib/config";
 import { AVATAR_OPTIONS } from "@/lib/avatar-catalog";
 import { TrucoScoreboard } from "@/components/surfaces/truco-scoreboard";
@@ -1272,6 +1275,17 @@ export function LobbyClient({ code }: { code: string }) {
 
     let activeSocket: Socket | null = null;
 
+    // Tracks the highest stateVersion we've applied — used to drop stale events
+    // that arrive after a resync (e.g. buffered room:updated from before reconnect).
+    let localStateVersion = -1;
+
+    // Gap 3 — tracks the ISO timestamp of the last received event so we can
+    // ask the server for missed actions on reconnect.
+    let lastServerOffset: string = new Date(0).toISOString();
+
+    // Gap 1 — stores the last authoritative RoomSnapshot for patch application.
+    let lastKnownSnapshot: RoomSnapshot | null = null;
+
     const syncRoomState = ({
       snapshot: nextSnapshot,
       matchView: nextMatchView,
@@ -1281,6 +1295,22 @@ export function LobbyClient({ code }: { code: string }) {
       envidoSinging: nextEnvidoSinging,
       session: nextSession,
     }: RealtimePayload) => {
+      // Drop events that carry an older stateVersion than what we already applied.
+      // This prevents buffered pre-reconnect events from overwriting fresh resync state.
+      if (
+        typeof nextSnapshot?.stateVersion === "number" &&
+        nextSnapshot.stateVersion < localStateVersion
+      ) {
+        return;
+      }
+      if (typeof nextSnapshot?.stateVersion === "number") {
+        localStateVersion = nextSnapshot.stateVersion;
+      }
+      // Gap 3 — update the event timestamp cursor on every successful sync.
+      lastServerOffset = new Date().toISOString();
+      // Gap 1 — keep the patch baseline in sync with the applied snapshot.
+      if (nextSnapshot) lastKnownSnapshot = nextSnapshot;
+
       setSnapshot(nextSnapshot);
       setMatchView(nextMatchView);
       setMatchState(nextState);
@@ -1359,6 +1389,13 @@ export function LobbyClient({ code }: { code: string }) {
 
         activeSocket.on("reconnect", () => {
           setConnectionLabel("Uniéndose...");
+          // On reconnect (not initial connect), request a full authoritative resync.
+          // Gap 3: pass serverOffset so the server can emit what we missed.
+          activeSocket?.emit(
+            "session:resync",
+            { roomCode: normalizedCode, serverOffset: lastServerOffset },
+            () => { setConnectionLabel("En vivo"); },
+          );
         });
 
         activeSocket.on("server:restarting", () => {
@@ -1374,9 +1411,49 @@ export function LobbyClient({ code }: { code: string }) {
           syncRoomState(payload);
         });
         activeSocket.on("room:updated", handleRealtimePayload);
+
+        // Gap 1 — JSON Patch: apply diff to last known snapshot instead of
+        // replacing the full state. Falls back to no-op if baseline is missing.
+        activeSocket.on("room:patch", (event: RoomPatchEvent) => {
+          if (!lastKnownSnapshot) return;
+          if (event.stateVersion < localStateVersion) return;
+          try {
+             
+            const { newDocument } = applyPatch(
+              structuredClone(lastKnownSnapshot) as object,
+              event.ops as any[],
+              /*validate*/ false,
+              /*mutate*/ false,
+            );
+            const patched = newDocument as RoomSnapshot;
+            lastKnownSnapshot = patched;
+            localStateVersion = event.stateVersion;
+            lastServerOffset = new Date().toISOString();
+            setSnapshot(patched);
+          } catch {
+            // Patch failed (e.g. baseline drift) — next room:updated will fix state.
+          }
+        });
+
         activeSocket.on("session:recovered", (payload: RealtimePayload) => {
           setConnectionLabel("En vivo");
           syncRoomState(payload);
+        });
+
+        // Gap 3 — DB-backed event replay: show a toast/log of missed actions.
+        activeSocket.on("session:history", (event: SessionHistoryEvent) => {
+          if (event.missedActions.length === 0) return;
+          // Surface missed actions as recent-events strings so the UI shows
+          // a "you missed N actions while disconnected" summary.
+          const summary = `Reconectado — ${event.missedActions.length} acción${event.missedActions.length !== 1 ? "es" : ""} mientras estabas desconectado.`;
+          setSnapshot((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  recentEvents: [summary, ...prev.recentEvents].slice(0, 8),
+                }
+              : prev,
+          );
         });
         activeSocket.on("chat:received", (event: ChatReceivedEvent) => {
           if (!event.accepted) return;
