@@ -145,43 +145,41 @@ export default function Home() {
   };
 
   return (
-    <main className="h-[100dvh] overflow-hidden p-3 sm:p-5 lg:p-4 xl:p-6">
-      <div className="mx-auto h-full max-w-7xl">
-        <div className="landing-stage relative isolate h-full overflow-hidden rounded-[1.75rem] border border-white/10 shadow-[0_30px_120px_rgba(2,6,23,0.42)] sm:rounded-[2rem]">
+    <main className="min-h-[100dvh] overflow-hidden p-3 sm:p-5 lg:p-4 xl:p-6">
+      <div className="mx-auto flex min-h-[calc(100dvh-1.5rem)] max-w-7xl sm:min-h-[calc(100dvh-2.5rem)] lg:min-h-[calc(100dvh-2rem)] xl:min-h-[calc(100dvh-3rem)]">
+        <div className="landing-stage relative isolate min-h-full w-full overflow-hidden rounded-[1.75rem] border border-white/10 shadow-[0_30px_120px_rgba(2,6,23,0.42)] sm:rounded-[2rem]">
           <section
             className={`landing-view ${isLobbyOpen ? "landing-intro-out" : "landing-intro-in"}`}
             aria-hidden={isLobbyOpen}
             inert={isLobbyOpen}
           >
-            <div className="grid h-full gap-6 px-6 py-6 sm:px-10 sm:py-8 lg:grid-cols-[minmax(0,1.02fr)_minmax(260px,0.78fr)] lg:items-center lg:gap-6 lg:px-10 lg:py-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(300px,0.82fr)] xl:gap-10 xl:px-12">
-              <div className="flex min-w-0 flex-col justify-center gap-4 text-left sm:gap-5 lg:gap-4">
-                <h1 className="font-brand-display text-[clamp(1.45rem,10vw,2.6rem)] leading-[0.9] text-white [letter-spacing:0.04em] sm:text-[clamp(2.15rem,6vw,4.3rem)] sm:leading-[0.86] sm:[letter-spacing:0.06em] lg:text-[clamp(2.85rem,4.2vw,4.6rem)] lg:leading-[0.84] xl:text-[clamp(3.35rem,4.7vw,5.4rem)] xl:[letter-spacing:0.08em]">
+            <div className="grid min-h-full gap-6 px-6 py-7 sm:px-10 sm:py-9 lg:grid-cols-[minmax(0,1.02fr)_minmax(260px,0.78fr)] lg:items-center lg:gap-6 lg:px-10 lg:py-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(300px,0.82fr)] xl:gap-10 xl:px-12 xl:py-8">
+              <div className="flex min-w-0 flex-col justify-center gap-4 pb-4 text-left sm:gap-5 sm:pb-6 lg:gap-3 lg:pb-6">
+                <h1
+                  className="max-w-[10ch] font-brand-display leading-[1.03] text-white [letter-spacing:0.04em] sm:max-w-[11ch] lg:max-w-[16ch] xl:[letter-spacing:0.08em]"
+                  style={{ fontSize: "clamp(2.3rem, 4.15vw + 0.8rem, 5.4rem)" }}
+                >
                   <span className="lg:hidden">
-                    TRUCO
-                    <span className="hidden sm:inline"> CON</span>
-                    <span className="sm:hidden">
-                      <br />
-                      CON
-                    </span>
+                    TRUCO CON
                     <br />
                     <span className="text-cyan-300">ALIENS,</span>
-                    <br />
-                    DIMADONGS
-                    <span className="hidden sm:inline"> Y</span>
+                    <span className="hidden sm:inline"> DIMADONGS</span>
                     <span className="sm:hidden">
                       <br />
-                      Y CAOS
+                      DIMADONGS
                     </span>
                     <span className="hidden sm:inline">
                       <br />
-                      <span className="text-rose-400">CAOS</span> CONTROLADO.
+                      Y <span className="text-rose-400">CAOS</span> CONTROLADO.
                     </span>
                     <span className="sm:hidden">
+                      <br />
+                      Y <span className="text-rose-400">CAOS</span>
                       <br />
                       CONTROLADO.
                     </span>
                   </span>
-                  <span className="hidden lg:block">
+                  <span className="hidden max-w-[15ch] lg:block">
                     TRUCO CON
                     <br />
                     <span className="text-cyan-300">ALIENS,</span>
@@ -191,7 +189,7 @@ export default function Home() {
                     <span className="text-rose-400">CAOS</span> CONTROLADO.
                   </span>
                 </h1>
-                <p className="max-w-[16rem] text-[clamp(0.95rem,1.8vw,1.12rem)] leading-7 text-slate-300 sm:max-w-[24rem] sm:leading-8 lg:max-w-[28rem] lg:text-[1rem] lg:leading-7 xl:max-w-[31rem] xl:text-[1.08rem]">
+                <p className="max-w-[16rem] pb-1 text-[clamp(0.95rem,1.3vw+0.7rem,1.12rem)] leading-7 text-slate-300 sm:max-w-[24rem] sm:leading-8 lg:max-w-[30rem] lg:pb-2 lg:leading-7 xl:max-w-[32rem]">
                   Armas la sala, pasas el codigo y arranca la mano: reglas conocidas, mutaciones alien y alguna senal
                   rara que conviene no tocar demasiado.
                 </p>
