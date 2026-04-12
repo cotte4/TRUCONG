@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Bungee, Geist_Mono, Inter } from "next/font/google";
+import { Bungee, Geist_Mono, Inter, Permanent_Marker } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -18,6 +18,12 @@ const bungee = Bungee({
   weight: "400",
 });
 
+const permanentMarker = Permanent_Marker({
+  variable: "--font-chaos-marker",
+  subsets: ["latin"],
+  weight: "400",
+});
+
 export const metadata: Metadata = {
   title: "DIMADONG",
   description: "Truco multijugador por salas privadas, con aliens, DIMADONGS y BONGS.",
@@ -31,7 +37,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${inter.variable} ${geistMono.variable} ${bungee.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} ${bungee.variable} ${permanentMarker.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

@@ -778,6 +778,12 @@ export interface RoomPatchEvent {
     value?: unknown;
     from?: string;
   }>;
+  matchView: MatchView | null;
+  state: MatchProgressState | null;
+  transition: MatchTransitionState | null;
+  wildcardSelection: DetailedWildcardSelectionState | null;
+  envidoSinging: EnvidoSingingState | null;
+  reason?: string;
 }
 
 export interface ActionSubmittedEvent {

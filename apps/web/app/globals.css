@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #07111f;
+  --background: #05060a;
   --foreground: #f4fbff;
 }
 
@@ -15,10 +15,10 @@
 
 html {
   background:
-    radial-gradient(circle at 15% 18%, rgba(105, 255, 61, 0.18), transparent 16%),
-    radial-gradient(circle at 82% 14%, rgba(255, 68, 93, 0.18), transparent 16%),
-    radial-gradient(circle at 50% 0%, rgba(83, 234, 253, 0.18), transparent 22%),
-    linear-gradient(180deg, #060914 0%, #09101d 48%, #050813 100%);
+    radial-gradient(circle at 14% 16%, rgba(142, 251, 69, 0.14), transparent 18%),
+    radial-gradient(circle at 82% 13%, rgba(255, 43, 214, 0.16), transparent 17%),
+    radial-gradient(circle at 50% -4%, rgba(114, 0, 255, 0.2), transparent 24%),
+    linear-gradient(180deg, #030306 0%, #070810 44%, #020204 100%);
 }
 
 body {
@@ -26,9 +26,10 @@ body {
   color: var(--foreground);
   font-family: var(--font-inter), "Roboto", Arial, Helvetica, sans-serif;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 36px 36px;
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 35%);
+  background-size: 42px 42px, 42px 42px, 100% 100%;
 }
 
 .game-shell {
@@ -166,6 +167,67 @@ body {
   font-family: var(--font-display), "Arial Black", sans-serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.landing-neon-cyan {
+  color: #67f6ff;
+  text-shadow:
+    0 0 12px rgba(103, 246, 255, 0.55),
+    0 0 26px rgba(103, 246, 255, 0.28);
+}
+
+.landing-neon-magenta {
+  color: #ff2bd6;
+  text-shadow:
+    0 0 12px rgba(255, 43, 214, 0.56),
+    0 0 28px rgba(255, 43, 214, 0.32);
+}
+
+.landing-neon-slime {
+  color: #8efb45;
+  text-shadow:
+    0 0 12px rgba(142, 251, 69, 0.5),
+    0 0 28px rgba(142, 251, 69, 0.22);
+}
+
+.landing-chaos-word {
+  display: inline-block;
+  font-family: var(--font-chaos-marker), var(--font-display), sans-serif;
+  color: #ff2bd6;
+  text-shadow:
+    0 0 10px rgba(255, 43, 214, 0.6),
+    0 0 26px rgba(181, 21, 255, 0.34);
+  transform: rotate(-3deg);
+}
+
+.landing-copy-kicker {
+  color: rgba(210, 218, 236, 0.72);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.36em;
+  text-transform: uppercase;
+}
+
+.landing-copy-body {
+  color: rgba(223, 231, 241, 0.78);
+  text-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+.landing-info-chip {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  padding: 0.55rem 0.9rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.landing-info-chip-bong {
+  border-color: rgba(142, 251, 69, 0.26);
+  color: #cfffba;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 24px rgba(142, 251, 69, 0.12);
 }
 
 .ovni-table-surface {
@@ -508,10 +570,14 @@ body {
 
 .landing-stage {
   background:
-    radial-gradient(circle at 18% 18%, rgba(83, 234, 253, 0.16), transparent 20%),
-    radial-gradient(circle at 82% 18%, rgba(255, 87, 123, 0.12), transparent 18%),
-    radial-gradient(circle at 50% 100%, rgba(45, 212, 191, 0.12), transparent 34%),
-    linear-gradient(180deg, rgba(3, 8, 20, 0.94) 0%, rgba(6, 15, 29, 0.96) 52%, rgba(3, 8, 20, 0.98) 100%);
+    radial-gradient(circle at 14% 18%, rgba(142, 251, 69, 0.12), transparent 20%),
+    radial-gradient(circle at 82% 16%, rgba(255, 43, 214, 0.18), transparent 18%),
+    radial-gradient(circle at 48% -8%, rgba(135, 0, 255, 0.22), transparent 28%),
+    linear-gradient(145deg, rgba(18, 19, 27, 0.92), rgba(5, 6, 10, 0.98) 42%, rgba(8, 10, 16, 0.98) 100%);
+  box-shadow:
+    0 30px 120px rgba(1, 3, 8, 0.56),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    inset 0 0 80px rgba(181, 21, 255, 0.06);
 }
 
 .landing-stage::before,
@@ -524,15 +590,23 @@ body {
 
 .landing-stage::before {
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 36px 36px;
-  opacity: 0.7;
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 6px
+    );
+  background-size: 38px 38px, 38px 38px, 100% 100%;
+  opacity: 0.62;
 }
 
 .landing-stage::after {
   background:
-    radial-gradient(circle at 50% 50%, transparent 0%, rgba(3, 8, 20, 0) 58%, rgba(3, 8, 20, 0.46) 100%);
+    linear-gradient(120deg, rgba(255, 255, 255, 0.07), transparent 16%, transparent 84%, rgba(255, 255, 255, 0.04)),
+    radial-gradient(circle at 50% 50%, transparent 0%, rgba(3, 8, 20, 0) 58%, rgba(3, 8, 20, 0.62) 100%);
 }
 
 .landing-view {
@@ -561,39 +635,75 @@ body {
   pointer-events: none;
 }
 
-.landing-lobby {
-  z-index: 2;
-  transition:
-    opacity 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-    visibility 0s linear 0.34s;
+.lobby-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  background:
+    radial-gradient(circle at top, rgba(181, 21, 255, 0.12), transparent 24%),
+    radial-gradient(circle at bottom, rgba(142, 251, 69, 0.08), transparent 24%),
+    rgba(5, 6, 10, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overscroll-behavior: contain;
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out, visibility 0s linear 0.3s;
   will-change: opacity, transform;
 }
 
-.landing-lobby-closed {
+.lobby-overlay-closed {
   opacity: 0;
   visibility: hidden;
-  transform: translateY(18px) scale(0.985);
+  pointer-events: none;
+  transform: translateY(20px);
+}
+
+.lobby-overlay-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+
+.lobby-overlay-shell {
+  width: min(100%, 72rem);
+  margin: auto;
+  padding: clamp(1rem, 2.4vw, 1.5rem);
+  transform: translateY(20px);
+  opacity: 0;
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+  will-change: opacity, transform;
+}
+
+.lobby-overlay-shell-closed {
+  opacity: 0;
+  transform: translateY(20px);
   pointer-events: none;
 }
 
-.landing-lobby-open {
+.lobby-overlay-shell-open {
   opacity: 1;
   transform: translateY(0);
-  visibility: visible;
   pointer-events: auto;
-  transition-delay: 0s;
 }
 
 .landing-enter-button {
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.85rem;
   background:
-    linear-gradient(135deg, #ffffff 0%, #71e6ff 44%, #2dd4bf 100%);
+    linear-gradient(135deg, #8efb45 0%, #67f6ff 28%, #ff2bd6 74%, #8b1eff 100%);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.26) inset,
-    0 18px 46px rgba(45, 212, 191, 0.2);
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset,
+    0 18px 42px rgba(255, 43, 214, 0.16),
+    0 0 36px rgba(103, 246, 255, 0.12);
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 26%, 100% 100%, 18px 100%, 0 74%);
   transition:
     transform 180ms ease,
     box-shadow 220ms ease,
@@ -605,17 +715,35 @@ body {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(115deg, transparent 18%, rgba(255, 255, 255, 0.74) 34%, transparent 48%);
+    linear-gradient(115deg, transparent 14%, rgba(255, 255, 255, 0.75) 28%, transparent 42%);
   transform: translateX(-140%);
   transition: transform 280ms ease;
+}
+
+.landing-enter-button::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  clip-path: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 28%),
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.14) 0px,
+      rgba(0, 0, 0, 0.14) 3px,
+      transparent 3px,
+      transparent 11px
+    );
+  opacity: 0.55;
 }
 
 .landing-enter-button:hover {
   transform: translateY(-2px) scale(1.01);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.34) inset,
-    0 24px 56px rgba(45, 212, 191, 0.28);
-  filter: saturate(1.08);
+    0 24px 60px rgba(255, 43, 214, 0.24),
+    0 0 44px rgba(103, 246, 255, 0.22);
+  filter: saturate(1.12);
 }
 
 .landing-enter-button:active {
@@ -637,8 +765,198 @@ body {
 }
 
 .landing-enter-button:focus-visible {
-  outline: 2px solid rgba(103, 232, 249, 0.7);
+  outline: 2px solid rgba(255, 43, 214, 0.7);
   outline-offset: 4px;
+}
+
+.landing-ufo-haze,
+.landing-ufo-smog {
+  pointer-events: none;
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(22px);
+}
+
+.landing-ufo-haze {
+  top: 18%;
+  height: 36%;
+  width: 34%;
+  opacity: 0.7;
+}
+
+.landing-ufo-haze-left {
+  left: 10%;
+  background: radial-gradient(circle, rgba(255, 43, 214, 0.28) 0%, rgba(255, 43, 214, 0) 70%);
+}
+
+.landing-ufo-haze-right {
+  right: 10%;
+  background: radial-gradient(circle, rgba(103, 246, 255, 0.24) 0%, rgba(103, 246, 255, 0) 72%);
+}
+
+.landing-ufo-smog {
+  left: 18%;
+  right: 18%;
+  bottom: 10%;
+  height: 20%;
+  background: radial-gradient(circle, rgba(142, 251, 69, 0.16) 0%, rgba(142, 251, 69, 0) 72%);
+}
+
+.landing-ufo-smog-low {
+  animation: landing-ufo-smog 5.2s ease-in-out infinite;
+}
+
+.landing-ufo-smog-mid {
+  bottom: 18%;
+  left: 24%;
+  right: 24%;
+  height: 16%;
+  opacity: 0.66;
+  animation: landing-ufo-smog 4.3s ease-in-out infinite reverse;
+}
+
+.landing-ufo-light {
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.32));
+}
+
+.trap-topbar {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(145deg, rgba(18, 20, 28, 0.86), rgba(7, 8, 12, 0.92)),
+    linear-gradient(90deg, rgba(255, 43, 214, 0.04), rgba(103, 246, 255, 0.04));
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(18px);
+}
+
+.trap-panel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background:
+    linear-gradient(160deg, rgba(18, 20, 28, 0.94), rgba(7, 8, 12, 0.96)),
+    linear-gradient(90deg, rgba(255, 43, 214, 0.04), rgba(103, 246, 255, 0.03));
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+    inset 0 0 42px rgba(181, 21, 255, 0.05);
+  backdrop-filter: blur(18px);
+}
+
+.trap-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 18%),
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.025) 0px,
+      rgba(255, 255, 255, 0.025) 1px,
+      transparent 1px,
+      transparent 12px
+    );
+}
+
+.trap-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.trap-input {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background:
+    linear-gradient(180deg, rgba(11, 13, 19, 0.96), rgba(6, 7, 10, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 24px rgba(0, 0, 0, 0.22);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.trap-input:focus {
+  border-color: rgba(255, 43, 214, 0.4);
+  box-shadow:
+    0 0 0 3px rgba(255, 43, 214, 0.12),
+    0 0 24px rgba(103, 246, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.trap-option {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background:
+    linear-gradient(180deg, rgba(10, 11, 16, 0.96), rgba(6, 7, 10, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.trap-option:hover {
+  border-color: rgba(103, 246, 255, 0.22);
+  box-shadow:
+    0 0 20px rgba(103, 246, 255, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.trap-option-active {
+  border-color: rgba(255, 255, 255, 0.22);
+  background:
+    linear-gradient(135deg, #8efb45 0%, #67f6ff 22%, #ff2bd6 66%, #8b1eff 100%);
+  color: #040507;
+  box-shadow:
+    0 0 30px rgba(255, 43, 214, 0.18),
+    0 0 18px rgba(142, 251, 69, 0.12);
+}
+
+.trap-cta {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.9rem;
+  background:
+    linear-gradient(135deg, #8efb45 0%, #67f6ff 28%, #ff2bd6 70%, #8b1eff 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset,
+    0 22px 40px rgba(255, 43, 214, 0.18);
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 26%, 100% 100%, 18px 100%, 0 74%);
+}
+
+.trap-cta::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  clip-path: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 28%),
+    repeating-linear-gradient(
+      135deg,
+      rgba(0, 0, 0, 0.14) 0px,
+      rgba(0, 0, 0, 0.14) 3px,
+      transparent 3px,
+      transparent 11px
+    );
+  opacity: 0.5;
+}
+
+.trap-cta:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset,
+    0 24px 50px rgba(255, 43, 214, 0.22),
+    0 0 36px rgba(103, 246, 255, 0.18);
+}
+
+.trap-ghost-button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.85rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.trap-ghost-button:hover {
+  border-color: rgba(255, 43, 214, 0.24);
+  background:
+    linear-gradient(180deg, rgba(255, 43, 214, 0.12), rgba(103, 246, 255, 0.07));
 }
 
 .landing-ufo-float {
@@ -651,6 +969,17 @@ body {
   }
   50% {
     transform: translateY(-8px) scale(1.02);
+  }
+}
+
+@keyframes landing-ufo-smog {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-10px) scale(1.06);
+    opacity: 0.8;
   }
 }
 
@@ -700,15 +1029,22 @@ body {
   .landing-intro-out {
     animation: none;
   }
-  .landing-lobby {
+  .lobby-overlay,
+  .lobby-overlay-shell {
     transition: none;
   }
   .landing-enter-button,
-  .landing-enter-button::after {
+  .landing-enter-button::before,
+  .landing-enter-button::after,
+  .trap-cta,
+  .trap-cta::before {
     transition: none;
   }
   .landing-enter-button:hover {
     transform: none;
     filter: none;
+  }
+  .trap-cta:hover {
+    transform: none;
   }
 }

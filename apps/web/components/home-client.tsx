@@ -144,10 +144,10 @@ function AvatarPicker({
             key={avatar.id}
             type="button"
             onClick={() => onSelect(avatar.id)}
-            className={`overflow-hidden rounded-2xl border p-1 transition ${
+            className={`overflow-hidden rounded-[1.2rem] border p-1 transition ${
               active
-                ? "border-cyan-300/60 ring-2 ring-cyan-300/25"
-                : "border-white/10 bg-slate-900/70 hover:bg-slate-900"
+                ? "border-fuchsia-300/65 bg-fuchsia-400/8 ring-2 ring-fuchsia-300/25"
+                : "border-white/10 bg-slate-950/80 hover:border-cyan-300/25 hover:bg-slate-950"
             }`}
             aria-label={`Elegir avatar ${avatar.label}`}
             aria-pressed={active}
@@ -312,15 +312,15 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
     <section className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
       <form
         onSubmit={handleCreate}
-        className="rounded-[1.75rem] border border-white/10 bg-slate-950/72 p-6 backdrop-blur"
+        className="trap-panel rounded-[1.75rem] p-6"
       >
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-300">
           Crear sala
         </p>
         <label className="mt-6 block text-sm text-slate-200/78">
           Tu nombre
           <input
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-400"
+            className="trap-input mt-2 w-full rounded-[1rem] px-4 py-3 text-white outline-none placeholder:text-slate-500"
             value={createName}
             onChange={(event) => setCreateName(event.target.value)}
             placeholder="Franco"
@@ -330,7 +330,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         <div className="mt-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-slate-200/78">Avatar</p>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs uppercase tracking-[0.18em] text-fuchsia-200/55">
               Paso 1
             </p>
           </div>
@@ -339,12 +339,12 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
             onSelect={setCreateAvatarIdRaw}
           />
         </div>
-        <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-4">
+        <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-black/20 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">
               Configuracion
             </p>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs uppercase tracking-[0.18em] text-fuchsia-200/55">
               Paso 2
             </p>
           </div>
@@ -353,7 +353,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-slate-200/78">Modo</p>
                 {maxPlayers === 6 ? (
-                  <span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-cyan-100">
+                  <span className="rounded-full border border-lime-300/25 bg-lime-300/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-lime-100">
                     Experimental
                   </span>
                 ) : null}
@@ -364,10 +364,10 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
                     key={value}
                     type="button"
                     onClick={() => setMaxPlayers(value)}
-                    className={`rounded-[1.2rem] px-5 py-4 text-center text-[0.95rem] font-semibold tracking-[0.02em] transition ${
+                    className={`trap-option rounded-[1rem] px-5 py-4 text-center text-[0.95rem] font-semibold tracking-[0.02em] transition ${
                       maxPlayers === value
-                        ? "bg-cyan-300 text-slate-950"
-                        : "border border-white/10 bg-slate-900/90 text-slate-200"
+                        ? "trap-option-active"
+                        : "text-slate-200"
                     }`}
                     aria-pressed={maxPlayers === value}
                   >
@@ -376,7 +376,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
                 ))}
               </div>
               {maxPlayers === 6 ? (
-                <p className="mt-2 text-xs text-cyan-200/75">
+                <p className="mt-2 text-xs text-lime-200/75">
                   Incluye PICA PICA cada dos rondas.
                 </p>
               ) : null}
@@ -384,7 +384,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
             <div>
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <p className="text-sm text-slate-200/78">Puntaje objetivo</p>
-                <p className="text-xs text-cyan-200/75">
+                <p className="text-xs text-fuchsia-200/75">
                   11 es el numero verdadero de DIMADONG.
                 </p>
               </div>
@@ -394,10 +394,10 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
                     key={value}
                     type="button"
                     onClick={() => setTargetScore(value as 11 | 15 | 30)}
-                    className={`rounded-[1.2rem] px-5 py-4 text-[0.95rem] font-semibold tracking-[0.02em] transition ${
+                    className={`trap-option rounded-[1rem] px-5 py-4 text-[0.95rem] font-semibold tracking-[0.02em] transition ${
                       targetScore === value
-                        ? "bg-cyan-300 text-slate-950"
-                        : "border border-white/10 bg-slate-900/90 text-slate-200"
+                        ? "trap-option-active"
+                        : "text-slate-200"
                     }`}
                     aria-pressed={targetScore === value}
                   >
@@ -411,7 +411,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         <div
           className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
             bongUnlocked
-              ? "border-amber-300/30 bg-amber-300/10 text-amber-50"
+              ? "border-lime-300/25 bg-lime-300/10 text-lime-50"
               : "border-white/10 bg-white/[0.03] text-slate-300"
           }`}
         >
@@ -422,7 +422,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         <button
           type="submit"
           disabled={isBusy}
-          className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
+          className="trap-cta mt-6 w-full px-4 py-3 font-semibold text-slate-950 transition disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isCreating
             ? "Creando..."
@@ -434,15 +434,15 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
 
       <form
         onSubmit={handleJoin}
-        className="rounded-[1.75rem] border border-white/10 bg-slate-950/72 p-6 backdrop-blur"
+        className="trap-panel rounded-[1.75rem] p-6"
       >
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-400">
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-300">
           Unirse a sala
         </p>
         <label className="mt-6 block text-sm text-slate-200/78">
           Codigo de sala
           <input
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 uppercase text-white outline-none ring-0 placeholder:text-slate-400"
+            className="trap-input mt-2 w-full rounded-[1rem] px-4 py-3 uppercase text-white outline-none placeholder:text-slate-500"
             value={roomCode}
             onChange={(event) => setRoomCode(event.target.value)}
             placeholder="ABC123"
@@ -452,7 +452,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         <label className="mt-4 block text-sm text-slate-200/78">
           Tu nombre
           <input
-            className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-900/90 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-400"
+            className="trap-input mt-2 w-full rounded-[1rem] px-4 py-3 text-white outline-none placeholder:text-slate-500"
             value={joinName}
             onChange={(event) => setJoinName(event.target.value)}
             placeholder="Invitado"
@@ -462,7 +462,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         <div className="mt-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-slate-200/78">Avatar</p>
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+            <p className="text-xs uppercase tracking-[0.18em] text-cyan-200/55">
               Identidad
             </p>
           </div>
@@ -474,7 +474,7 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
         <button
           type="submit"
           disabled={isBusy}
-          className="mt-6 w-full rounded-full bg-white px-4 py-3 font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
+          className="trap-cta mt-6 w-full px-4 py-3 font-semibold text-slate-950 transition disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isJoining ? "Entrando..." : "Entrar a la sala"}
         </button>

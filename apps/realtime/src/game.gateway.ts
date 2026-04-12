@@ -140,6 +140,7 @@ export class GameGateway implements OnGatewayDisconnect {
     socketId: string,
     roomCode: string,
     newSnapshot: RoomSnapshot,
+    roomUpdated: RoomUpdatedEvent,
     emitFull: () => void,
   ): void {
     const prev = this.lastSnapshotBySocket.get(socketId);
@@ -151,7 +152,10 @@ export class GameGateway implements OnGatewayDisconnect {
     }
 
     const ops = compare(prev as object, newSnapshot as object);
-    if (ops.length === 0) return; // nothing changed
+    if (ops.length === 0) {
+      emitFull();
+      return;
+    }
 
     const patchSize = JSON.stringify(ops).length;
     const fullSize = JSON.stringify(newSnapshot).length;
@@ -161,6 +165,12 @@ export class GameGateway implements OnGatewayDisconnect {
         roomCode,
         stateVersion: newSnapshot.stateVersion,
         ops: ops as RoomPatchEvent['ops'],
+        matchView: roomUpdated.matchView,
+        state: roomUpdated.state,
+        transition: roomUpdated.transition,
+        wildcardSelection: roomUpdated.wildcardSelection,
+        envidoSinging: roomUpdated.envidoSinging,
+        reason: roomUpdated.reason,
       };
       this.server.to(socketId).emit('room:patch', patchEvent);
     } else {
@@ -2254,7 +2264,7 @@ export class GameGateway implements OnGatewayDisconnect {
           };
           // Gap 1 — try sending a patch instead of the full snapshot.
           // matchView and sub-payloads are always sent in full (per-player).
-          this.tryEmitPatch(client.id, roomCode, snapshot, () =>
+          this.tryEmitPatch(client.id, roomCode, snapshot, personalizedEvent, () =>
             this.server.to(client.id).emit('room:updated', personalizedEvent),
           );
         }

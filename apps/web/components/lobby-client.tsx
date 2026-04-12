@@ -43,7 +43,7 @@ import type {
   WildcardSelectedEvent,
   WildcardSelectionRequiredEvent,
 } from "@dimadong/contracts";
-import { applyPatch } from "fast-json-patch";
+import { applyPatch, type Operation } from "fast-json-patch";
 import { apiBaseUrl, socketBaseUrl } from "@/lib/config";
 import { AVATAR_OPTIONS } from "@/lib/avatar-catalog";
 import { TrucoScoreboard } from "@/components/surfaces/truco-scoreboard";
@@ -147,6 +147,42 @@ function getCantoLabel(cantoType: CantoType) {
     case "envido":
     default:
       return "Envido";
+  }
+}
+
+function getCantoSupportLine(cantoType: CantoType) {
+  switch (cantoType) {
+    case "truco":
+      return "Sube la mano a 2 puntos";
+    case "retruco":
+      return "Responde subiendo a 3 puntos";
+    case "vale_cuatro":
+      return "Ultima subida: mano a 4";
+    case "real_envido":
+      return "Vale 3 puntos";
+    case "falta_envido":
+      return "Vale lo que falta para ganar";
+    case "envido":
+    default:
+      return "Vale 2 puntos";
+  }
+}
+
+function getCantoBadge(cantoType: CantoType) {
+  switch (cantoType) {
+    case "truco":
+      return "T1";
+    case "retruco":
+      return "T2";
+    case "vale_cuatro":
+      return "V4";
+    case "real_envido":
+      return "RE";
+    case "falta_envido":
+      return "FE";
+    case "envido":
+    default:
+      return "EN";
   }
 }
 
@@ -835,7 +871,7 @@ function HandSummaryOverlay({
   snapshot: RoomSnapshot;
   onDismiss: () => void;
 }) {
-  const TOTAL_MS = 5000;
+  const TOTAL_MS = 6200;
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -852,7 +888,14 @@ function HandSummaryOverlay({
   }, [onDismiss]);
 
   const progress = Math.min(elapsed / TOTAL_MS, 1);
+  const countdownSeconds = Math.max(1, Math.ceil((TOTAL_MS - elapsed) / 1000));
   const winnerSide = event.handWinnerTeamSide;
+  const heroTone =
+    winnerSide === "A"
+      ? "border-cyan-300/28 bg-cyan-300/10"
+      : winnerSide === "B"
+        ? "border-emerald-300/28 bg-emerald-300/10"
+        : "border-white/12 bg-white/[0.04]";
 
   const teamLabel = (side: TeamSide) => {
     const names = snapshot.seats
@@ -863,10 +906,17 @@ function HandSummaryOverlay({
   };
 
   return (
-    <div className="hand-summary-in absolute inset-0 z-40 flex items-center justify-center bg-slate-950/82 backdrop-blur-sm">
-      <div className="relative mx-4 w-full max-w-sm rounded-[2rem] border border-white/10 bg-[linear-gradient(145deg,rgba(10,16,36,0.99),rgba(6,11,24,0.99))] p-6 shadow-[0_0_100px_rgba(83,234,253,0.14),0_0_0_1px_rgba(255,255,255,0.05)_inset]">
-        {/* Header */}
-        <div className="text-center">
+    <div className="hand-summary-in absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(83,234,253,0.14),rgba(2,6,23,0.9)_38%,rgba(2,6,23,0.96)_100%)] px-4 backdrop-blur-md">
+      <div className="relative w-full max-w-2xl rounded-[2rem] border border-white/10 bg-[linear-gradient(155deg,rgba(13,19,34,0.98),rgba(6,10,20,0.99))] p-6 shadow-[0_0_120px_rgba(83,234,253,0.12),0_0_0_1px_rgba(255,255,255,0.05)_inset] sm:p-7">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] font-black uppercase tracking-[0.26em] text-slate-200">
+            Mano {event.handNumber} cerrada
+          </span>
+          <span className="rounded-full border border-cyan-300/18 bg-cyan-300/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-50">
+            Proxima mano en {countdownSeconds}s
+          </span>
+        </div>
+        <div className={`mt-5 rounded-[1.6rem] border px-5 py-5 text-center ${heroTone}`}>
           <p className="text-[0.6rem] font-semibold uppercase tracking-[0.32em] text-slate-400">
             Mano {event.handNumber} terminada
           </p>
@@ -876,6 +926,9 @@ function HandSummaryOverlay({
           {winnerSide ? (
             <p className="mt-1 text-sm text-slate-300">{teamLabel(winnerSide)}</p>
           ) : null}
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-400">
+            {event.statusText}
+          </p>
         </div>
 
         {/* Trick results */}
@@ -944,7 +997,7 @@ function HandSummaryOverlay({
           <button
             type="button"
             onClick={onDismiss}
-            className="w-full rounded-full border border-white/12 bg-white/[0.06] py-2.5 text-sm font-semibold text-white transition hover:bg-white/10"
+            className="w-full rounded-[1.25rem] border border-white/12 bg-white/[0.06] py-3 text-sm font-semibold text-white transition hover:bg-white/10"
           >
             Continuar →
           </button>
@@ -1169,6 +1222,8 @@ export function LobbyClient({ code }: { code: string }) {
   const [envidoSinging, setEnvidoSinging] = useState<EnvidoSingingState | null>(null);
   const [navVisible, setNavVisible] = useState(true);
   const [lastHandScoredEvent, setLastHandScoredEvent] = useState<HandScoredEvent | null>(null);
+  const hasSeenInitialHandSummarySyncRef = useRef(false);
+  const lastShownHandSummaryAtRef = useRef<string | null>(null);
   const [isDealAnimActive, setIsDealAnimActive] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [pendingCantoHasBong, setPendingCantoHasBong] = useState(false);
@@ -1311,6 +1366,57 @@ export function LobbyClient({ code }: { code: string }) {
       // Gap 1 — keep the patch baseline in sync with the applied snapshot.
       if (nextSnapshot) lastKnownSnapshot = nextSnapshot;
 
+      const resolvedHandAt = nextTransition?.lastHandScoredAt ?? null;
+      if (!hasSeenInitialHandSummarySyncRef.current) {
+        hasSeenInitialHandSummarySyncRef.current = true;
+        lastShownHandSummaryAtRef.current = resolvedHandAt;
+      } else if (
+        resolvedHandAt &&
+        nextTransition?.handSummary.state === "resolved" &&
+        resolvedHandAt !== lastShownHandSummaryAtRef.current
+      ) {
+        const fallbackMatchView = nextMatchView ?? null;
+        const fallbackState = nextState ?? {
+          phase: nextSnapshot.phase,
+          handNumber: fallbackMatchView?.handNumber ?? 0,
+          trickNumber: fallbackMatchView?.trickNumber ?? 0,
+          dealerSeatId: fallbackMatchView?.dealerSeatId ?? null,
+          currentTurnSeatId: fallbackMatchView?.currentTurnSeatId ?? null,
+          handTrickWins: { A: 0, B: 0 },
+          tableCards: fallbackMatchView?.tableCards ?? [],
+          resolvedTricks: fallbackMatchView?.trickResults ?? [],
+          score: fallbackMatchView?.score ?? nextSnapshot.score,
+          statusText: fallbackMatchView?.statusText ?? nextSnapshot.statusText,
+          turnDeadlineAt: fallbackMatchView?.turnDeadlineAt ?? nextSnapshot.turnDeadlineAt,
+          reconnectDeadlineAt:
+            fallbackMatchView?.reconnectDeadlineAt ?? nextSnapshot.reconnectDeadlineAt,
+          summary: fallbackMatchView?.summary ?? null,
+          picaPica: null,
+        };
+
+        setLastHandScoredEvent({
+          roomCode: nextSnapshot.code,
+          handNumber: fallbackState.handNumber,
+          dealerSeatId: fallbackState.dealerSeatId,
+          currentTurnSeatId: fallbackState.currentTurnSeatId,
+          handTrickWins: fallbackState.handTrickWins,
+          handWinnerTeamSide: nextTransition.lastHandWinnerTeamSide,
+          tableCards: fallbackState.tableCards,
+          resolvedTricks: fallbackState.resolvedTricks,
+          score: fallbackState.score,
+          scoredAt: resolvedHandAt,
+          statusText: fallbackState.statusText,
+          turnDeadlineAt: fallbackState.turnDeadlineAt,
+          reconnectDeadlineAt: fallbackState.reconnectDeadlineAt,
+          transition: nextTransition,
+          state: fallbackState,
+          snapshot: nextSnapshot,
+          matchView: fallbackMatchView,
+          summary: fallbackMatchView?.summary ?? null,
+        });
+        lastShownHandSummaryAtRef.current = resolvedHandAt;
+      }
+
       setSnapshot(nextSnapshot);
       setMatchView(nextMatchView);
       setMatchState(nextState);
@@ -1418,10 +1524,9 @@ export function LobbyClient({ code }: { code: string }) {
           if (!lastKnownSnapshot) return;
           if (event.stateVersion < localStateVersion) return;
           try {
-             
             const { newDocument } = applyPatch(
               structuredClone(lastKnownSnapshot) as object,
-              event.ops as any[],
+              event.ops as Operation[],
               /*validate*/ false,
               /*mutate*/ false,
             );
@@ -1430,6 +1535,14 @@ export function LobbyClient({ code }: { code: string }) {
             localStateVersion = event.stateVersion;
             lastServerOffset = new Date().toISOString();
             setSnapshot(patched);
+            setMatchView(event.matchView ?? null);
+            setMatchState(event.state ?? null);
+            setTransition(event.transition ?? null);
+            setActionPending(false);
+            setWildcardSelection(event.wildcardSelection ?? null);
+            setEnvidoSinging(event.envidoSinging ?? null);
+            setError(null);
+            setLoading(false);
           } catch {
             // Patch failed (e.g. baseline drift) — next room:updated will fix state.
           }
@@ -1540,6 +1653,7 @@ export function LobbyClient({ code }: { code: string }) {
           setEnvidoSinging(null);
           setLastTrickCards([]);
           setLastHandScoredEvent(event);
+          lastShownHandSummaryAtRef.current = event.scoredAt;
           syncRoomState(event);
         });
 
@@ -1862,15 +1976,11 @@ export function LobbyClient({ code }: { code: string }) {
   const actionTurnTrucoOptions: CantoType[] =
     currentHandPoints >= 3 ? ["vale_cuatro"] : currentHandPoints >= 2 ? ["retruco"] : ["truco"];
   const responseRaiseOptions: CantoType[] =
-    pendingCantoType === "truco"
-      ? ["retruco"]
-      : pendingCantoType === "retruco"
-        ? ["vale_cuatro"]
-        : pendingCantoType === "envido"
-          ? ["envido", "real_envido", "falta_envido"]
-          : pendingCantoType === "real_envido"
-            ? ["falta_envido"]
-            : [];
+    pendingCantoType === "envido"
+      ? ["envido", "real_envido", "falta_envido"]
+      : pendingCantoType === "real_envido"
+        ? ["falta_envido"]
+        : [];
   const canArmBongNow =
     snapshot.allowBongs &&
     (actionTurnTrucoOptions.some(canArmBongForCanto) ||
@@ -2590,19 +2700,28 @@ export function LobbyClient({ code }: { code: string }) {
                       </button>
                     </div>
                   ) : null}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {actionTurnTrucoOptions.map((cantoType) => (
-                      <div key={cantoType} className="flex">
-                        <button
-                          type="button"
-                          disabled={actionPending}
-                          onClick={() => handleOpenCanto(cantoType)}
-                          className="canto-action-btn canto-action-btn-truco"
-                        >
-                          {getCantoLabel(cantoType)}
-                          {bongArmedReady && canArmBongForCanto(cantoType) ? " + BONG" : ""}
-                        </button>
-                      </div>
+                      <button
+                        key={cantoType}
+                        type="button"
+                        disabled={actionPending}
+                        onClick={() => handleOpenCanto(cantoType)}
+                        className="canto-action-btn canto-action-btn-truco flex min-h-[5rem] w-full touch-manipulation items-start justify-between rounded-[1.4rem] px-4 py-3 text-left"
+                      >
+                        <span className="block min-w-0">
+                          <span className="block text-sm font-black uppercase tracking-[0.18em] text-white">
+                            {getCantoLabel(cantoType)}
+                            {bongArmedReady && canArmBongForCanto(cantoType) ? " + BONG" : ""}
+                          </span>
+                          <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/74">
+                            {getCantoSupportLine(cantoType)}
+                          </span>
+                        </span>
+                        <span className="rounded-full border border-white/16 bg-black/18 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/78">
+                          {getCantoBadge(cantoType)}
+                        </span>
+                      </button>
                     ))}
                     {canCallEnvido ? (
                       <>
@@ -2610,31 +2729,59 @@ export function LobbyClient({ code }: { code: string }) {
                           type="button"
                           disabled={actionPending}
                           onClick={() => handleOpenCanto("envido")}
-                          className="canto-action-btn canto-action-btn-envido"
+                          className="canto-action-btn canto-action-btn-envido flex min-h-[5rem] w-full touch-manipulation items-start justify-between rounded-[1.4rem] px-4 py-3 text-left"
                           title="Vale 2 puntos"
                         >
-                          Envido
+                          <span className="block min-w-0">
+                            <span className="block text-sm font-black uppercase tracking-[0.18em] text-white">
+                              Envido
+                            </span>
+                            <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/74">
+                              {getCantoSupportLine("envido")}
+                            </span>
+                          </span>
+                          <span className="rounded-full border border-white/16 bg-black/18 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/78">
+                            {getCantoBadge("envido")}
+                          </span>
                         </button>
                         <button
                           type="button"
                           disabled={actionPending}
                           onClick={() => handleOpenCanto("real_envido")}
-                          className="canto-action-btn canto-action-btn-envido"
+                          className="canto-action-btn canto-action-btn-envido flex min-h-[5rem] w-full touch-manipulation items-start justify-between rounded-[1.4rem] px-4 py-3 text-left"
                           title="Vale 3 puntos"
                         >
-                          Real Envido
+                          <span className="block min-w-0">
+                            <span className="block text-sm font-black uppercase tracking-[0.18em] text-white">
+                              Real Envido
+                            </span>
+                            <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/74">
+                              {getCantoSupportLine("real_envido")}
+                            </span>
+                          </span>
+                          <span className="rounded-full border border-white/16 bg-black/18 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/78">
+                            {getCantoBadge("real_envido")}
+                          </span>
                         </button>
-                        <div className="flex">
-                          <button
-                            type="button"
-                            disabled={actionPending}
-                            onClick={() => handleOpenCanto("falta_envido")}
-                            className="canto-action-btn canto-action-btn-envido"
-                            title="Vale lo que le falta al rival para ganar"
-                          >
-                            Falta Envido{bongArmedReady ? " + BONG" : ""}
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() => handleOpenCanto("falta_envido")}
+                          className="canto-action-btn canto-action-btn-envido flex min-h-[5rem] w-full touch-manipulation items-start justify-between rounded-[1.4rem] px-4 py-3 text-left"
+                          title="Vale lo que le falta al rival para ganar"
+                        >
+                          <span className="block min-w-0">
+                            <span className="block text-sm font-black uppercase tracking-[0.18em] text-white">
+                              Falta Envido{bongArmedReady ? " + BONG" : ""}
+                            </span>
+                            <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/74">
+                              {getCantoSupportLine("falta_envido")}
+                            </span>
+                          </span>
+                          <span className="rounded-full border border-white/16 bg-black/18 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/78">
+                            {getCantoBadge("falta_envido")}
+                          </span>
+                        </button>
                       </>
                     ) : null}
                   </div>
@@ -2779,12 +2926,12 @@ export function LobbyClient({ code }: { code: string }) {
                   <p className="mt-1 text-xs font-bold uppercase tracking-[0.22em] text-amber-300/80">Si aceptás, aceptás el BONG también</p>
                 ) : null}
                 <p className="mt-2 text-sm text-slate-200">¿Querés aceptar, subir o rechazar?</p>
-                <div className="mt-5 flex gap-3">
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <button
                     type="button"
                     disabled={actionPending}
                     onClick={() => handleResolveCanto(pendingCantoType, "quiero")}
-                    className="flex-1 rounded-full bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-[1.2rem] bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Quiero
                   </button>
@@ -2792,7 +2939,7 @@ export function LobbyClient({ code }: { code: string }) {
                     type="button"
                     disabled={actionPending}
                     onClick={() => handleResolveCanto(pendingCantoType, "no_quiero")}
-                    className="flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-[1.2rem] border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     No Quiero
                   </button>
@@ -2827,20 +2974,29 @@ export function LobbyClient({ code }: { code: string }) {
                         </button>
                       </div>
                     ) : null}
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid gap-3 sm:grid-cols-2">
                       <p className="w-full text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Subir a</p>
                       {responseRaiseOptions.map((cantoType) => (
-                        <div key={cantoType} className="flex">
-                          <button
-                            type="button"
-                            disabled={actionPending}
-                            onClick={() => handleOpenCanto(cantoType)}
-                            className="rounded-full border border-violet-300/30 bg-violet-300/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-300/20 disabled:opacity-60"
-                          >
-                            {getCantoLabel(cantoType)}
-                            {bongArmedReady && canArmBongForCanto(cantoType) ? " + BONG" : ""}
-                          </button>
-                        </div>
+                        <button
+                          key={cantoType}
+                          type="button"
+                          disabled={actionPending}
+                          onClick={() => handleOpenCanto(cantoType)}
+                          className="canto-action-btn canto-action-btn-truco flex min-h-[5.25rem] w-full touch-manipulation items-start justify-between rounded-[1.35rem] px-4 py-3 text-left disabled:opacity-60"
+                        >
+                          <span className="block min-w-0">
+                            <span className="block text-base font-black uppercase tracking-[0.18em] text-white">
+                              {getCantoLabel(cantoType)}
+                              {bongArmedReady && canArmBongForCanto(cantoType) ? " + BONG" : ""}
+                            </span>
+                            <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/74">
+                              {getCantoSupportLine(cantoType)}
+                            </span>
+                          </span>
+                          <span className="rounded-full border border-white/16 bg-black/20 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/78">
+                            {getCantoBadge(cantoType)}
+                          </span>
+                        </button>
                       ))}
                     </div>
                   </div>

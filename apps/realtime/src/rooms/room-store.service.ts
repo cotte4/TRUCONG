@@ -574,16 +574,18 @@ export class RoomStoreService {
       throw new NotFoundException('Session not found.');
     }
 
+    let staleSocketId: string | null = null;
     if (
       seat.status === 'occupied' &&
       seat.socketId &&
       seat.socketId !== socketId
     ) {
       // Allow same session token to take over with a fresh socket after network churn.
-      // The stale socket (if still alive) becomes orphaned and will be ignored on disconnect.
+      // Return the old socket ID so the gateway can explicitly disconnect it.
       this.logger.debug(
         `Replacing stale socket ${seat.socketId} with ${socketId} for seat ${seat.id}`,
       );
+      staleSocketId = seat.socketId;
     }
 
     seat.socketId = socketId;
@@ -612,6 +614,7 @@ export class RoomStoreService {
     return {
       snapshot: this.buildSnapshot(room),
       session: this.getSession(roomSessionToken),
+      staleSocketId,
     };
   }
 
@@ -2071,6 +2074,7 @@ export class RoomStoreService {
       winnerTeamSide: room.match?.summary?.winnerTeamSide ?? null,
       turnDeadlineAt: room.match?.turnDeadlineAt ?? null,
       reconnectDeadlineAt: room.match?.reconnectDeadlineAt ?? null,
+      stateVersion: room.match?.snapshotVersion ?? room.snapshotVersion,
     };
   }
 
