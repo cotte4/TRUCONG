@@ -10,7 +10,7 @@ import {
 import { BadRequestException } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { Mutex } from 'async-mutex';
-import { compare, applyPatch } from 'fast-json-patch';
+import { compare } from 'fast-json-patch';
 import type {
   ActionSubmitAck,
   ActionSubmitPayload,
@@ -455,7 +455,7 @@ export class GameGateway implements OnGatewayDisconnect {
    * session:history so the client can show what happened during disconnect.
    */
   @SubscribeMessage('session:resync')
-  async handleSessionResync(
+  handleSessionResync(
     @MessageBody() payload: { roomCode: string; serverOffset?: string },
     @ConnectedSocket() client: RealtimeSocket,
     @Ack() ack: (response: { ok: boolean; message?: string }) => void,
@@ -2264,8 +2264,13 @@ export class GameGateway implements OnGatewayDisconnect {
           };
           // Gap 1 — try sending a patch instead of the full snapshot.
           // matchView and sub-payloads are always sent in full (per-player).
-          this.tryEmitPatch(client.id, roomCode, snapshot, personalizedEvent, () =>
-            this.server.to(client.id).emit('room:updated', personalizedEvent),
+          this.tryEmitPatch(
+            client.id,
+            roomCode,
+            snapshot,
+            personalizedEvent,
+            () =>
+              this.server.to(client.id).emit('room:updated', personalizedEvent),
           );
         }
       } catch {

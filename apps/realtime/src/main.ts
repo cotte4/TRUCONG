@@ -5,7 +5,10 @@ import { IoAdapter } from '@nestjs/platform-socket.io';
 import type { ServerOptions } from 'socket.io';
 
 class RecoveryIoAdapter extends IoAdapter {
-  createIOServer(port: number, options?: ServerOptions) {
+  createIOServer(
+    port: number,
+    options?: ServerOptions,
+  ): ReturnType<IoAdapter['createIOServer']> {
     return super.createIOServer(port, {
       ...options,
       connectionStateRecovery: {

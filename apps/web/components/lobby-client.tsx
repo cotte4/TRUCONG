@@ -264,6 +264,10 @@ type RealtimePayload = {
 
 type AlienTone = "green" | "red" | "white" | "cyan";
 
+/** Visual label for a team side — "B" shows as "51" to users */
+const sideLabel = (side: TeamSide | null | undefined): string =>
+  side === "B" ? "51" : side ?? "?";
+
 function getAlienTone(seat: RoomSnapshot["seats"][number], index: number): AlienTone {
   if (seat.teamSide === "A") {
     return index % 2 === 0 ? "green" : "cyan";
@@ -902,7 +906,7 @@ function HandSummaryOverlay({
       .filter((s) => s.teamSide === side)
       .map((s) => s.displayName ?? "?")
       .filter(Boolean);
-    return names.length ? names.join(" & ") : `Equipo ${side}`;
+    return names.length ? names.join(" & ") : `Equipo ${sideLabel(side)}`;
   };
 
   return (
@@ -921,7 +925,7 @@ function HandSummaryOverlay({
             Mano {event.handNumber} terminada
           </p>
           <p className="font-brand-display mt-2 text-2xl text-white">
-            {!winnerSide ? "Mano empatada" : `Ganó Equipo ${winnerSide}`}
+            {!winnerSide ? "Mano empatada" : `Ganó Equipo ${sideLabel(winnerSide)}`}
           </p>
           {winnerSide ? (
             <p className="mt-1 text-sm text-slate-300">{teamLabel(winnerSide)}</p>
@@ -1459,6 +1463,10 @@ export function LobbyClient({ code }: { code: string }) {
         wildcardSelection: result.wildcardSelection,
         session: result.session,
       });
+      // Restore live label if socket is still connected so isLive stays true.
+      if (activeSocket?.connected) {
+        setConnectionLabel("En vivo");
+      }
     };
     refreshRoomStateRef.current = refreshRoomState;
 
@@ -1521,8 +1529,19 @@ export function LobbyClient({ code }: { code: string }) {
         // Gap 1 — JSON Patch: apply diff to last known snapshot instead of
         // replacing the full state. Falls back to no-op if baseline is missing.
         activeSocket.on("room:patch", (event: RoomPatchEvent) => {
-          if (!lastKnownSnapshot) return;
           if (event.stateVersion < localStateVersion) return;
+          // When we have no baseline, skip the snapshot patch but still apply
+          // matchView/matchState/transition so turn state stays current.
+          if (!lastKnownSnapshot) {
+            lastServerOffset = new Date().toISOString();
+            setMatchView(event.matchView ?? null);
+            setMatchState(event.state ?? null);
+            setTransition(event.transition ?? null);
+            setActionPending(false);
+            setWildcardSelection(event.wildcardSelection ?? null);
+            setEnvidoSinging(event.envidoSinging ?? null);
+            return;
+          }
           try {
             const { newDocument } = applyPatch(
               structuredClone(lastKnownSnapshot) as object,
@@ -1544,7 +1563,13 @@ export function LobbyClient({ code }: { code: string }) {
             setError(null);
             setLoading(false);
           } catch {
-            // Patch failed (e.g. baseline drift) — next room:updated will fix state.
+            // Patch failed (baseline drift) — apply sub-payloads so turn stays
+            // current, then trigger a background resync to fix the snapshot.
+            setMatchView(event.matchView ?? null);
+            setMatchState(event.state ?? null);
+            setTransition(event.transition ?? null);
+            setActionPending(false);
+            void refreshRoomStateRef.current?.().catch(() => { /* best-effort */ });
           }
         });
 
@@ -1953,8 +1978,8 @@ export function LobbyClient({ code }: { code: string }) {
         null;
   const isLobby = phase === "lobby" || phase === "ready_check";
   const isLive = connectionLabel === "En vivo";
-  const isMyTurn = phase === "action_turn" && activeSeatId === currentSeat?.id && isLive;
-  const isMyCantoResponse = phase === "response_pending" && activeSeatId === currentSeat?.id && isLive;
+  const isMyTurn = phase === "action_turn" && activeSeatId === currentSeat?.id;
+  const isMyCantoResponse = phase === "response_pending" && activeSeatId === currentSeat?.id;
   const pendingCantoType: CantoType | null =
     phase === "response_pending" && transition?.phaseDetail
       ? (transition.phaseDetail.split(" ")[0] as CantoType)
@@ -2039,24 +2064,26 @@ export function LobbyClient({ code }: { code: string }) {
       ) : null}
       {/* Collapsable nav — auto-hides when game starts */}
       {navVisible ? (
-        <nav className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-white/10 bg-slate-950/72 px-5 py-3 backdrop-blur">
+        <nav className="trap-topbar flex flex-wrap items-center justify-between gap-4 rounded-[1.1rem] px-5 py-3">
           <div className="flex items-center gap-3">
-            <span className="text-xl ufo-pulse inline-block">🛸</span>
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[0.75rem] border border-fuchsia-300/25 bg-fuchsia-400/12 text-[9px] font-black uppercase tracking-[0.2em] text-fuchsia-100">
+              UFO
+            </span>
             <p className="font-brand-display text-xs text-slate-300">Dimadong</p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-slate-300">
               {normalizedCode}
             </span>
             <Link
               href="/manual"
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
+              className="trap-ghost-button px-4 py-2 text-sm font-semibold text-slate-100 transition"
             >
               Cómo se juega
             </Link>
             <Link
               href="/"
-              className="rounded-full bg-cyan-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-200"
+              className="trap-ghost-button px-4 py-2 text-sm font-semibold text-slate-100 transition"
             >
               Inicio
             </Link>
@@ -2067,10 +2094,10 @@ export function LobbyClient({ code }: { code: string }) {
           <button
             type="button"
             onClick={() => setNavVisible(true)}
-            className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-950/72 px-4 py-2 text-sm font-semibold text-slate-300 backdrop-blur transition hover:bg-white/10"
+            className="trap-ghost-button flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-slate-300 transition"
           >
-            <span className="ufo-pulse inline-block">🛸</span>
-            <span>{normalizedCode}</span>
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded text-[8px] font-black uppercase tracking-wide text-fuchsia-200">UFO</span>
+            <span className="font-black uppercase tracking-[0.14em] text-xs">{normalizedCode}</span>
             <span className="text-xs text-slate-500">▾</span>
           </button>
         </div>
@@ -2162,21 +2189,43 @@ export function LobbyClient({ code }: { code: string }) {
           <section className={`${panelClass()} overflow-hidden`}>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.28em] text-slate-500">Previa</p>
-                <h2 className="mt-1.5 text-xl font-bold text-white">Mesa alien</h2>
+                <p className="landing-copy-kicker">SALA // PREVIA</p>
+                <h2 className="font-brand-display mt-1 text-2xl text-white" style={{textShadow:"0 0 28px rgba(103,246,255,0.18)"}}>
+                  Mesa alien
+                </h2>
               </div>
-              <span className={`rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] ${badgeClass(everybodyReady)}`}>
-                {filledSeats.length}/{snapshot.maxPlayers}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="landing-info-chip-bong landing-info-chip font-brand-display text-sm" style={{textShadow:"0 0 12px rgba(142,251,69,0.5)"}}>
+                  {snapshot.code}
+                </span>
+                <span className={`rounded-full border px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] ${badgeClass(everybodyReady)}`}>
+                  {filledSeats.length}/{snapshot.maxPlayers}
+                </span>
+              </div>
             </div>
 
-            <div className="ovni-table-surface relative mt-8 min-h-[520px] overflow-hidden rounded-[2rem] border border-white/10">
-              <div className="ufo-pulse absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-300/30 bg-[radial-gradient(circle_at_center,rgba(83,234,253,0.2),rgba(13,19,38,0.96)_58%,rgba(9,16,29,1)_100%)] shadow-[0_0_70px_rgba(83,234,253,0.18)]" />
-              <div className="absolute left-1/2 top-1/2 h-[210px] w-[210px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/20 bg-[radial-gradient(circle_at_center,rgba(255,212,54,0.12),rgba(6,11,24,0.82)_62%,rgba(6,11,24,0)_100%)]" />
-              <div className="absolute left-1/2 top-1/2 flex w-[220px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
-                <p className="text-[10px] font-bold uppercase tracking-[0.38em] text-cyan-300/50">{snapshot.code}</p>
-                <p className="font-brand-display mt-2 text-2xl text-white">Plato volador</p>
-                <p className="mt-3 text-xl text-cyan-200/20 select-none">⬡</p>
+            <div className="space-table-surface relative mt-8 min-h-[520px] overflow-hidden rounded-[2rem] border border-white/8">
+              {/* outer slow ring */}
+              <div className="space-orbit-3 pointer-events-none absolute left-1/2 top-1/2 h-[420px] w-[420px] rounded-full border border-fuchsia-400/10" style={{borderStyle:"dashed"}} />
+              {/* mid ring with dots */}
+              <div className="space-orbit-2 pointer-events-none absolute left-1/2 top-1/2 h-[300px] w-[300px] rounded-full border border-cyan-300/18" />
+              {/* inner ring */}
+              <div className="space-orbit-1 pointer-events-none absolute left-1/2 top-1/2 h-[190px] w-[190px] rounded-full border border-[rgba(142,251,69,0.22)]" />
+              {/* portal glow core */}
+              <div className="space-portal-core pointer-events-none absolute left-1/2 top-1/2 h-[120px] w-[120px] rounded-full" style={{background:"radial-gradient(circle at center, rgba(103,246,255,0.28) 0%, rgba(83,60,180,0.18) 45%, transparent 75%)", boxShadow:"0 0 60px rgba(103,246,255,0.2), 0 0 120px rgba(83,60,180,0.15)"}} />
+              {/* crosshair lines */}
+              <div className="pointer-events-none absolute left-1/2 top-1/2 h-px w-[160px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-cyan-300/30 to-transparent" />
+              <div className="pointer-events-none absolute left-1/2 top-1/2 h-[160px] w-px -translate-x-1/2 -translate-y-1/2 bg-gradient-to-b from-transparent via-cyan-300/30 to-transparent" />
+              {/* center label */}
+              <div className="absolute left-1/2 top-1/2 flex w-[200px] -translate-x-1/2 -translate-y-1/2 flex-col items-center text-center">
+                <p className="font-brand-display text-[11px] tracking-[0.55em]" style={{color:"rgba(103,246,255,0.35)"}}>DIMADONG</p>
+                <p className="font-brand-display mt-1 text-3xl" style={{color:"#67f6ff", textShadow:"0 0 20px rgba(103,246,255,0.8), 0 0 50px rgba(103,246,255,0.35)"}}>
+                  UFO
+                </p>
+                <div className="mt-2 h-px w-10 bg-gradient-to-r from-transparent via-cyan-300/50 to-transparent" />
+                <p className="mt-2 text-[9px] font-black uppercase tracking-[0.48em] transition-all duration-500" style={{color: everybodyReady ? "#8efb45" : "rgba(103,246,255,0.45)", textShadow: everybodyReady ? "0 0 12px rgba(142,251,69,0.7)" : "none"}}>
+                  {everybodyReady ? "◈ ready ◈" : `${filledSeats.length} / ${snapshot.maxPlayers}`}
+                </p>
               </div>
 
               {snapshot.seats.map((seat) => {
@@ -2190,30 +2239,37 @@ export function LobbyClient({ code }: { code: string }) {
                 );
                 const seatReactions = visibleReactions.filter((r) => r.seatId === seat.id).slice(-3);
 
+                const seatCardStyle = seat.isReady
+                  ? { boxShadow: "0 0 22px rgba(142,251,69,0.14), inset 0 1px 0 rgba(142,251,69,0.08)" }
+                  : isCurrentSeat
+                  ? { boxShadow: "0 0 22px rgba(103,246,255,0.14), inset 0 1px 0 rgba(103,246,255,0.08)" }
+                  : {};
+
                 return (
                   <div key={seat.id} className={`absolute ${getSeatPositionClass(snapshot.maxPlayers, relativeOffset)}`}>
                     {isCurrentSeat ? <div className="alien-beam absolute left-1/2 top-12 h-28 w-20 -translate-x-1/2 rounded-full bg-cyan-300/12 blur-xl" /> : null}
-                    <div className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 ${palette.panel} ${palette.glow}`}>
+                    <div
+                      className={`w-44 rounded-[1.6rem] border bg-[#0c1326]/92 px-4 py-4 transition-shadow duration-500 ${palette.panel} ${palette.glow}`}
+                      style={seatCardStyle}
+                    >
                       <div className="flex items-center gap-3">
                           <AvatarCircle avatarId={seat.avatarId} tone={tone} active={isCurrentSeat} size={40} />
                         <div className="min-w-0">
-                          <p className="truncate text-base font-semibold text-white">
+                          <p className="truncate text-sm font-bold text-white">
                             {seat.displayName ?? "—"}
                           </p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">
-                            {seat.teamSide ? `Equipo ${seat.teamSide}` : "Equipo ?"}
+                          <p className="mt-0.5 text-[10px] font-black uppercase tracking-[0.22em] text-slate-600">
+                            {`// ${sideLabel(seat.teamSide)}`}
                           </p>
                           {(() => {
                             if (!seat.displayName) return (
-                              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
-                                <span className="h-1.5 w-1.5 rounded-full bg-slate-600" />
+                              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-white/8 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-600">
                                 libre
                               </span>
                             );
                             if (seat.isReady) return (
-                              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-300">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                                listo
+                              <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[rgba(142,251,69,0.3)] bg-[rgba(142,251,69,0.08)] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.22em]" style={{color:"#8efb45", textShadow:"0 0 8px rgba(142,251,69,0.6)"}}>
+                                ✓ listo
                               </span>
                             );
                             return (
@@ -2227,20 +2283,20 @@ export function LobbyClient({ code }: { code: string }) {
                       </div>
 
                       {isHost && seat.displayName && seat.status !== "disconnected" ? (
-                        <div className="mt-4 flex gap-2">
+                        <div className="mt-3 flex gap-1.5">
                           {(["A", "B"] as TeamSide[]).map((teamSide) => (
                             <button
                               key={teamSide}
                               type="button"
                               disabled={actionPending}
                               onClick={() => handleSetTeam(seat.id, teamSide)}
-                              className={`rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
+                              className={`flex-1 rounded-full py-1.5 text-[10px] font-black uppercase tracking-[0.18em] transition ${
                                 seat.teamSide === teamSide
                                   ? "bg-white text-slate-950"
-                                  : "border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                                  : "border border-white/10 bg-white/4 text-slate-400 hover:bg-white/10 hover:text-white"
                               } disabled:cursor-not-allowed disabled:opacity-60`}
                             >
-                              Equipo {teamSide}
+                              {sideLabel(teamSide)}
                             </button>
                           ))}
                         </div>
@@ -2250,9 +2306,9 @@ export function LobbyClient({ code }: { code: string }) {
                           type="button"
                           disabled={actionPending}
                           onClick={() => handleFreeSeat(seat.id)}
-                          className="mt-4 w-full rounded-full border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-rose-100 transition hover:bg-rose-300/20 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="mt-3 w-full rounded-full border border-rose-300/20 bg-rose-300/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-rose-300 transition hover:bg-rose-300/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Liberar asiento
+                          Liberar
                         </button>
                       ) : null}
                       {seatReactions.length > 0 ? (
@@ -2271,63 +2327,78 @@ export function LobbyClient({ code }: { code: string }) {
             </div>
           </section>
 
-          <aside className={`${panelClass("space-y-5")} border-amber-200/20 bg-[#121827]/88`}>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.28em] text-amber-300/60">Cabina</p>
+          <aside className={`${panelClass("space-y-5")} relative overflow-hidden`} style={{borderColor:"rgba(255,43,214,0.18)", background:"linear-gradient(160deg, #0a0d1a 0%, #0c0e1c 60%, #08090f 100%)", boxShadow:"0 18px 60px rgba(2,6,23,0.4), 0 0 60px rgba(255,43,214,0.06) inset"}}>
+            {/* ambient glow top-right */}
+            <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-20" style={{background:"radial-gradient(circle, rgba(255,43,214,0.6), transparent 70%)"}} />
+
+            <div className="relative flex items-end justify-between gap-3">
+              <div>
+                <p className="landing-copy-kicker">PRE-VUELO</p>
+                <p className="font-brand-display mt-0.5 text-xl" style={{color:"#ff2bd6", textShadow:"0 0 14px rgba(255,43,214,0.7), 0 0 36px rgba(255,43,214,0.3)"}}>
+                  Cabina
+                </p>
+              </div>
+              <span className="mb-0.5 rounded-full border border-[rgba(255,43,214,0.22)] bg-[rgba(255,43,214,0.08)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.3em] text-[rgba(255,150,230,0.8)]">
+                {everybodyReady ? "ALL READY" : `${filledSeats.length}/${snapshot.maxPlayers}`}
+              </span>
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-px overflow-hidden rounded-2xl border border-white/6">
               {([
-                { label: "MODO", value: snapshot.maxPlayers === 2 ? "1×1" : snapshot.maxPlayers === 6 ? "3×3" : "2×2", ok: true },
-                { label: "PUNTOS", value: `${snapshot.targetScore}`, ok: true },
-                { label: "EQUIPOS", value: teamsBalanced ? "OK" : "FALTA", ok: teamsBalanced },
-                { label: "BONGS", value: snapshot.allowBongs ? "ON" : "OFF", ok: snapshot.allowBongs },
-              ] as { label: string; value: string; ok: boolean }[]).map((item) => (
-                <div key={item.label} className="hud-row flex items-center justify-between rounded-[1.2rem] border border-white/8 bg-white/[0.03] px-4 py-3">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">{item.label}</span>
-                  <span className={`text-sm font-bold tracking-wide ${item.ok ? "text-cyan-200" : "text-amber-300"}`}>{item.value}</span>
+                { label: "MODO", value: snapshot.maxPlayers === 2 ? "1×1" : snapshot.maxPlayers === 6 ? "3×3" : "2×2", neon: "#67f6ff" },
+                { label: "PUNTOS", value: `${snapshot.targetScore}`, neon: "#67f6ff" },
+                { label: "EQUIPOS", value: teamsBalanced ? "OK" : "FALTA", neon: teamsBalanced ? "#8efb45" : "#fbbf24" },
+                ...(snapshot.allowBongs ? [{ label: "PROTOCOLO", value: "BONG", neon: "#8efb45" }] : []),
+              ] as { label: string; value: string; neon: string }[]).map((item, i) => (
+                <div key={item.label} className={`flex items-center justify-between bg-[rgba(255,255,255,0.025)] px-4 py-3 ${i === 0 ? "" : "border-t border-white/4"}`}>
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600">{item.label}</span>
+                  <span className="text-xs font-black uppercase tracking-[0.18em]" style={{color: item.neon, textShadow: `0 0 10px ${item.neon}88`}}>{item.value}</span>
                 </div>
               ))}
             </div>
 
-            {currentSeat ? (
-              <button
-                type="button"
-                disabled={actionPending}
-                onClick={handleToggleReady}
-                className={`w-full rounded-full px-4 py-3 text-sm font-semibold transition ${
-                  currentSeat.isReady
-                    ? "border border-white/10 bg-white/5 text-white hover:bg-white/10"
-                    : "bg-white text-slate-950 hover:bg-slate-200"
-                } disabled:cursor-not-allowed disabled:opacity-60`}
-              >
-                {currentSeat.isReady ? "No listo" : "Estoy listo"}
-              </button>
-            ) : null}
+            <div className="flex flex-col gap-2">
+              {currentSeat ? (
+                <button
+                  type="button"
+                  disabled={actionPending}
+                  onClick={handleToggleReady}
+                  className={`w-full rounded-full px-4 py-3 text-sm font-black uppercase tracking-[0.16em] transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    currentSeat.isReady
+                      ? "border border-white/10 bg-white/5 text-slate-400 hover:bg-white/8"
+                      : "border border-[rgba(103,246,255,0.3)] bg-[rgba(103,246,255,0.08)] text-[#67f6ff] hover:bg-[rgba(103,246,255,0.14)]"
+                  }`}
+                  style={!currentSeat.isReady ? {textShadow:"0 0 10px rgba(103,246,255,0.6)", boxShadow:"0 0 20px rgba(103,246,255,0.1)"} : {}}
+                >
+                  {currentSeat.isReady ? "Cancelar" : "Estoy listo"}
+                </button>
+              ) : null}
 
-            {isHost ? (
-              <button
-                type="button"
-                disabled={actionPending || !everybodyReady || !teamsBalanced}
-                onClick={handleStart}
-                className="w-full rounded-full bg-amber-300 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Despegar partida
-              </button>
-            ) : null}
+              {isHost ? (
+                <button
+                  type="button"
+                  disabled={actionPending || !everybodyReady || !teamsBalanced}
+                  onClick={handleStart}
+                  className="w-full rounded-full bg-amber-300 px-4 py-3.5 text-sm font-black uppercase tracking-[0.18em] text-slate-950 transition-all duration-200 hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{boxShadow: everybodyReady && teamsBalanced ? "0 0 28px rgba(251,191,36,0.35), 0 4px 16px rgba(0,0,0,0.3)" : "none"}}
+                >
+                  Despegar
+                </button>
+              ) : null}
+            </div>
 
-            <div className="flex flex-col gap-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Chat</p>
-              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+            <div className="flex flex-col gap-2.5 border-t border-white/5 pt-4">
+              <p className="landing-copy-kicker">Chat</p>
+              <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
                 {chatMessages.length === 0 ? (
-                  <p className="text-sm text-slate-400">Sin mensajes aún.</p>
+                  <p className="text-xs text-slate-600">Sin señal todavía.</p>
                 ) : (
                   chatMessages.map((msg) => {
                     const seatName = snapshot.seats.find((s) => s.id === msg.seatId)?.displayName ?? "Anon";
                     const isMe = msg.seatId === currentSeat?.id;
                     return (
-                      <div key={msg.id} className={`rounded-2xl px-4 py-2.5 text-sm ${isMe ? "border border-cyan-300/20 bg-cyan-300/10 text-cyan-50" : "border border-white/10 bg-white/[0.03] text-slate-200"}`}>
-                        <span className="font-semibold">{seatName}: </span>
+                      <div key={msg.id} className={`rounded-xl px-3 py-2 text-xs ${isMe ? "border border-[rgba(103,246,255,0.18)] bg-[rgba(103,246,255,0.07)] text-cyan-100" : "border border-white/6 bg-white/[0.025] text-slate-300"}`}>
+                        <span className="font-bold text-white/60">{seatName} </span>
                         {msg.message}
                       </div>
                     );
@@ -2345,15 +2416,15 @@ export function LobbyClient({ code }: { code: string }) {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     maxLength={200}
-                    placeholder="Escribí un mensaje…"
-                    className="min-w-0 flex-1 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-white/20"
+                    placeholder="transmitir…"
+                    className="min-w-0 flex-1 rounded-full border border-white/8 bg-white/4 px-4 py-2 text-xs text-white outline-none placeholder:text-slate-600 focus:border-[rgba(103,246,255,0.25)] focus:bg-[rgba(103,246,255,0.04)]"
                   />
                   <button
                     type="submit"
                     disabled={!chatInput.trim() || actionPending}
-                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-full border border-white/8 bg-white/4 px-3 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-400 transition hover:bg-white/8 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Enviar
+                    TX
                   </button>
                 </form>
               ) : null}
@@ -2531,7 +2602,7 @@ export function LobbyClient({ code }: { code: string }) {
                               {seat.displayName ?? `Asiento ${seat.seatIndex + 1}`}
                             </p>
                             <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">
-                              {seat.teamSide ? `Equipo ${seat.teamSide}` : "Libre"}
+                              {seat.teamSide ? `Equipo ${sideLabel(seat.teamSide)}` : "Libre"}
                             </p>
                             <p className="mt-1 text-sm text-slate-300">
                               {isActiveSeat
@@ -2621,7 +2692,7 @@ export function LobbyClient({ code }: { code: string }) {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-100/70">Tu mano</p>
                   <h2 className="mt-2 text-2xl font-semibold text-white">
-                    {matchView?.yourTeamSide ? `Equipo ${matchView.yourTeamSide}` : "Esperando asiento"}
+                    {matchView?.yourTeamSide ? `Equipo ${sideLabel(matchView.yourTeamSide)}` : "Esperando asiento"}
                   </h2>
                   <p className="mt-2 text-sm text-slate-300">
                     {matchView?.yourHand.length
@@ -2850,7 +2921,7 @@ export function LobbyClient({ code }: { code: string }) {
                             </p>
                             <div className="mt-1 flex flex-wrap gap-2">
                               <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
-                                Equipo {decl.teamSide}
+                                Equipo {sideLabel(decl.teamSide)}
                               </span>
                               {isMano ? (
                                 <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-100">
