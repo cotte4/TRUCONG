@@ -408,17 +408,11 @@ export function HomeClient({ bongUnlocked = false }: { bongUnlocked?: boolean })
             </div>
           </div>
         </div>
-        <div
-          className={`mt-4 rounded-2xl border px-4 py-3 text-sm ${
-            bongUnlocked
-              ? "border-lime-300/25 bg-lime-300/10 text-lime-50"
-              : "border-white/10 bg-white/[0.03] text-slate-300"
-          }`}
-        >
-          {bongUnlocked
-            ? "Esta sala va a crearse con el protocolo BONG activo."
-            : "Las salas nuevas arrancan sin BONG. Si queres ese modo raro, primero encontra la senal alien en la landing."}
-        </div>
+        {bongUnlocked && (
+          <div className="mt-4 rounded-2xl border border-lime-300/25 bg-lime-300/10 px-4 py-3 text-sm text-lime-50">
+            Esta sala va a crearse con el protocolo BONG activo.
+          </div>
+        )}
         <button
           type="submit"
           disabled={isBusy}

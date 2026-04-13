@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { TrucoScoreboard } from "@/components/surfaces/truco-scoreboard";
+import { AlienCanvas } from "@/components/alien-canvas";
+import { FreeCanvas } from "@/components/free-canvas";
 
 const STORAGE_KEY = "dimadong:manual-scorekeeper";
 
@@ -59,7 +61,10 @@ function getInitialScorekeeperState() {
   }
 }
 
+type Mode = "digital" | "aliens" | "pizarra";
+
 export function ManualScorekeeper() {
+  const [mode, setMode] = useState<Mode>("digital");
   const [targetScore, setTargetScore] = useState<TargetScore>(
     () => getInitialScorekeeperState().targetScore,
   );
@@ -94,6 +99,7 @@ export function ManualScorekeeper() {
 
   return (
     <section className="rounded-[2rem] border border-fuchsia-300/16 bg-[linear-gradient(160deg,rgba(17,20,32,0.95),rgba(7,9,14,0.98))] p-6 shadow-[0_24px_80px_rgba(6,10,24,0.35)] backdrop-blur">
+      {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-fuchsia-200/72">
@@ -102,21 +108,38 @@ export function ManualScorekeeper() {
           <h2 className="mt-3 text-2xl font-semibold text-white">
             Sumá los puntos sin armar una sala.
           </h2>
-          <p className="mt-2 max-w-xl text-sm leading-7 text-slate-300">
-            Este marcador queda guardado en tu navegador. Sirve para llevar una mesa casual o
-            destrabar una partida cuando todavía no querés entrar al realtime.
-          </p>
         </div>
 
-        <button
-          type="button"
-          onClick={resetScore}
-          className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
-        >
-          Reiniciar
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Mode toggle */}
+          <div className="flex rounded-full border border-white/10 bg-white/[0.03] p-1">
+            {(["digital", "aliens", "pizarra"] as Mode[]).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold capitalize transition ${
+                  mode === m
+                    ? "bg-fuchsia-400/18 text-fuchsia-50"
+                    : "text-slate-300 hover:text-white"
+                }`}
+              >
+                {m === "digital" ? "Digital" : m === "aliens" ? "Aliens" : "Pizarra"}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={resetScore}
+            className="rounded-full border border-white/12 bg-white/6 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
+          >
+            Reiniciar
+          </button>
+        </div>
       </div>
 
+      {/* Target score selector */}
       <div className="mt-5 flex flex-wrap gap-2">
         {targetOptions.map((value) => (
           <button
@@ -134,67 +157,90 @@ export function ManualScorekeeper() {
         ))}
       </div>
 
-      <div className="mt-6">
-        <TrucoScoreboard
-          teamA={score.A}
-          teamB={score.B}
-          targetScore={targetScore}
-          compact
-        />
-      </div>
+      {/* Scoreboard */}
+      {mode === "digital" ? (
+        <>
+          <div className="mt-6">
+            <TrucoScoreboard
+              teamA={score.A}
+              teamB={score.B}
+              targetScore={targetScore}
+              compact
+            />
+          </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        {(["A", "B"] as TeamSide[]).map((team) => {
-          const isWinner = winner === team;
-          const tone =
-            team === "A"
-              ? "border-cyan-300/22 bg-cyan-300/8"
-              : "border-emerald-300/22 bg-emerald-300/8";
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            {(["A", "B"] as TeamSide[]).map((team) => {
+              const isWinner = winner === team;
+              const tone =
+                team === "A"
+                  ? "border-cyan-300/22 bg-cyan-300/8"
+                  : "border-emerald-300/22 bg-emerald-300/8";
 
-          return (
-            <div
-              key={team}
-              className={`rounded-[1.5rem] border px-4 py-4 ${tone} ${isWinner ? "ring-1 ring-white/18" : ""}`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/62">
-                    Equipo {team}
-                  </p>
-                  <p className="mt-1 text-3xl font-black text-white">{score[team]}</p>
-                </div>
-                {isWinner ? (
-                  <span className="rounded-full border border-amber-300/30 bg-amber-300/12 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-100">
-                    Ganando
-                  </span>
-                ) : null}
-              </div>
+              return (
+                <div
+                  key={team}
+                  className={`rounded-[1.5rem] border px-4 py-4 ${tone} ${isWinner ? "ring-1 ring-white/18" : ""}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/62">
+                        Equipo {team}
+                      </p>
+                      <p className="mt-1 text-3xl font-black text-white">{score[team]}</p>
+                    </div>
+                    {isWinner ? (
+                      <span className="rounded-full border border-amber-300/30 bg-amber-300/12 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-100">
+                        Ganando
+                      </span>
+                    ) : null}
+                  </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {deltaOptions.map((delta) => (
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {deltaOptions.map((delta) => (
+                      <button
+                        key={`${team}-plus-${delta}`}
+                        type="button"
+                        onClick={() => adjustScore(team, delta)}
+                        className="rounded-[1rem] border border-white/10 bg-white/6 px-3 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                      >
+                        +{delta}
+                      </button>
+                    ))}
+                  </div>
+
                   <button
-                    key={`${team}-plus-${delta}`}
                     type="button"
-                    onClick={() => adjustScore(team, delta)}
-                    className="rounded-[1rem] border border-white/10 bg-white/6 px-3 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                    onClick={() => adjustScore(team, -1)}
+                    className="mt-3 w-full rounded-[1rem] border border-white/10 bg-slate-950/55 px-3 py-3 text-sm font-semibold text-slate-200 transition hover:bg-slate-900"
                   >
-                    +{delta}
+                    Restar 1
                   </button>
-                ))}
-              </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : mode === "aliens" ? (
+        <div className="mt-6 flex flex-col gap-5">
+          {(["A", "B"] as TeamSide[]).map((team) => (
+            <AlienCanvas
+              key={`${team}-${targetScore}`}
+              team={team}
+              count={score[team]}
+              targetScore={targetScore}
+              onAdd={() => adjustScore(team, 1)}
+              onUndo={() => adjustScore(team, -1)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-6">
+          <FreeCanvas />
+        </div>
+      )}
 
-              <button
-                type="button"
-                onClick={() => adjustScore(team, -1)}
-                className="mt-3 w-full rounded-[1rem] border border-white/10 bg-slate-950/55 px-3 py-3 text-sm font-semibold text-slate-200 transition hover:bg-slate-900"
-              >
-                Restar 1
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
+      {/* Status bar */}
       <div className="mt-5 rounded-[1.35rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
         {winner
           ? `Equipo ${winner} ya llego al objetivo de ${targetScore}.`

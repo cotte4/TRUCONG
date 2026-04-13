@@ -246,6 +246,76 @@ body {
     linear-gradient(180deg, #090e1d 0%, #0a1224 56%, #060a14 100%);
 }
 
+/* ── Space table ──────────────────────────────────────── */
+.space-table-surface {
+  background:
+    radial-gradient(circle at 22% 18%, rgba(255, 43, 214, 0.13), transparent 30%),
+    radial-gradient(circle at 78% 12%, rgba(103, 246, 255, 0.16), transparent 28%),
+    radial-gradient(circle at 50% 90%, rgba(142, 251, 69, 0.08), transparent 38%),
+    radial-gradient(circle at 50% 50%, rgba(83, 60, 180, 0.18), transparent 55%),
+    linear-gradient(180deg, #02030a 0%, #030510 55%, #010208 100%);
+}
+
+.space-table-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 12% 8%, rgba(255,255,255,0.9) 0%, transparent 100%),
+    radial-gradient(1px 1px at 28% 22%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 43% 6%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(1px 1px at 67% 15%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 81% 28%, rgba(255,255,255,0.85) 0%, transparent 100%),
+    radial-gradient(1px 1px at 91% 9%, rgba(255,255,255,0.65) 0%, transparent 100%),
+    radial-gradient(1px 1px at 5% 35%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 55% 38%, rgba(255,255,255,0.75) 0%, transparent 100%),
+    radial-gradient(1px 1px at 73% 42%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 18% 55%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 36% 68%, rgba(255,255,255,0.5) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 88% 62%, rgba(255,255,255,0.8) 0%, transparent 100%),
+    radial-gradient(1px 1px at 62% 78%, rgba(255,255,255,0.55) 0%, transparent 100%),
+    radial-gradient(1px 1px at 8% 82%, rgba(255,255,255,0.65) 0%, transparent 100%),
+    radial-gradient(1px 1px at 48% 92%, rgba(255,255,255,0.6) 0%, transparent 100%),
+    radial-gradient(1px 1px at 94% 85%, rgba(255,255,255,0.7) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 33% 45%, rgba(103,246,255,0.8) 0%, transparent 100%),
+    radial-gradient(1px 1px at 71% 55%, rgba(255,43,214,0.75) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 15% 70%, rgba(142,251,69,0.7) 0%, transparent 100%);
+}
+
+@keyframes orbit-cw {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+@keyframes orbit-ccw {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(-360deg); }
+}
+@keyframes portal-breathe {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+  50%       { opacity: 0.85; transform: translate(-50%, -50%) scale(1.04); }
+}
+@keyframes portal-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.space-orbit-1 {
+  animation: orbit-cw 18s linear infinite;
+}
+.space-orbit-2 {
+  animation: orbit-ccw 28s linear infinite;
+}
+.space-orbit-3 {
+  animation: orbit-cw 42s linear infinite;
+}
+.space-portal-core {
+  animation: portal-breathe 4s ease-in-out infinite;
+}
+.space-portal-spin {
+  animation: portal-spin 12s linear infinite;
+}
+
 .canto-action-btn {
   position: relative;
   overflow: hidden;

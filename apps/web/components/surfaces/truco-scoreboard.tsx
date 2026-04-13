@@ -77,7 +77,7 @@ function TeamScorePanel({
     <div className={`rounded-[1.6rem] border ${tone.border} ${tone.bg} ${compact ? "p-3" : "p-4"}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className={`text-xs uppercase tracking-[0.2em] ${tone.badge}`}>Equipo {side}</p>
+          <p className={`text-xs uppercase tracking-[0.2em] ${tone.badge}`}>Equipo {side === "B" ? "51" : side}</p>
           <p className={`mt-2 font-semibold ${compact ? "text-3xl" : "text-4xl"} ${tone.number}`}>{score}</p>
         </div>
         <span className="rounded-full border border-white/10 bg-slate-950/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300">

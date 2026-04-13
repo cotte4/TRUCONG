@@ -4,7 +4,6 @@ import { HomeClient } from "@/components/home-client";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 
-const BONG_UNLOCK_STORAGE_KEY = "dimadong:landing:bong-unlocked";
 const LANDING_TRANSITION_MS = 340;
 
 function AlienSignal({
@@ -31,18 +30,16 @@ function AlienSignal({
       return;
     }
 
-    setTapCount((current) => {
-      const next = current + 1;
+    const next = tapCount + 1;
 
-      if (next < 3) {
-        return next;
-      }
-
+    if (next < 3) {
+      setTapCount(next);
+    } else {
+      setTapCount(0);
       onUnlock();
       setIsSignalGlitching(true);
       window.setTimeout(() => setIsSignalGlitching(false), 760);
-      return 0;
-    });
+    }
   };
 
   return (
@@ -127,8 +124,8 @@ function AlienSignal({
           />
           {[0, 36, 72, 108, 144, 180, 216, 252, 288, 324].map((deg, index) => {
             const rad = (deg * Math.PI) / 180;
-            const x = 100 + 54 * Math.cos(rad);
-            const y = 109 + 14 * Math.sin(rad);
+            const x = Math.round((100 + 54 * Math.cos(rad)) * 1e4) / 1e4;
+            const y = Math.round((109 + 14 * Math.sin(rad)) * 1e4) / 1e4;
             const colors = ["#67f6ff", "#ff2bd6", "#8efb45", "#a855f7"];
 
             return (
@@ -183,18 +180,11 @@ function AlienSignal({
 }
 
 export default function Home() {
-  const [bongUnlocked, setBongUnlocked] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-
-    return window.sessionStorage.getItem(BONG_UNLOCK_STORAGE_KEY) === "true";
-  });
+  const [bongUnlocked, setBongUnlocked] = useState(false);
   const [landingPhase, setLandingPhase] = useState<"intro" | "transition" | "lobby">("intro");
 
   const handleUnlockBong = () => {
     setBongUnlocked(true);
-    window.sessionStorage.setItem(BONG_UNLOCK_STORAGE_KEY, "true");
   };
 
   useEffect(() => {
@@ -306,7 +296,9 @@ export default function Home() {
                 <div className="flex flex-wrap gap-2 text-[0.68rem] font-black uppercase tracking-[0.28em] text-white/75">
                   <span className="landing-info-chip">Sin login</span>
                   <span className="landing-info-chip">Salas privadas</span>
-                  <span className="landing-info-chip landing-info-chip-bong">BONG ready</span>
+                  {bongUnlocked && (
+                    <span className="landing-info-chip landing-info-chip-bong">BONG ready</span>
+                  )}
                 </div>
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                   <button
@@ -318,18 +310,18 @@ export default function Home() {
                     Entrar a la nave
                   </button>
                   <Link
-                    href="/manual"
+                    href="/anotador"
                     className="trap-ghost-button inline-flex items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-100 transition"
                   >
-                    <span className="text-[10px] font-black uppercase tracking-[0.24em] text-fuchsia-200/75">
-                      Manual
-                    </span>
-                    <span>Manual y anotador</span>
+                    Anotador
+                  </Link>
+                  <Link
+                    href="/manual"
+                    className="px-2 py-1 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-slate-400 transition hover:text-slate-200"
+                  >
+                    Manual
                   </Link>
                 </div>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-400">
-                  El manual y el anotador manual ahora estan visibles desde la home.
-                </p>
               </div>
 
               <div className="flex items-center justify-center">

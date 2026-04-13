@@ -7,6 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "dev": "pnpm run dev:realtime & pnpm run dev:web",
     "dev:web": "pnpm --filter @dimadong/web dev",
     "dev:realtime": "pnpm --filter @dimadong/realtime start:dev",
     "build": "pnpm -r build",
