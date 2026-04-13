@@ -18,6 +18,13 @@ export type TeamSide = 'A' | 'B';
 export type SeatStatus = 'open' | 'occupied' | 'disconnected' | 'replaced';
 export type NormalCardSuit = 'espada' | 'basto' | 'oro' | 'copa';
 export type CardSuit = NormalCardSuit | 'comodin';
+export type CantoType =
+  | 'envido'
+  | 'real_envido'
+  | 'falta_envido'
+  | 'truco'
+  | 'retruco'
+  | 'vale_cuatro';
 export const AVATAR_IDS = [
   'alien-neon-ace',
   'alien-beanie',
@@ -73,8 +80,19 @@ export interface MatchLifecycleSummaryState {
   reason: string | null;
 }
 
+export interface PendingCantoState {
+  cantoType: CantoType;
+  callChain: CantoType[];
+  actorSeatId: string;
+  targetSeatId: string | null;
+  openedAt: string;
+  responseDeadlineAt: string | null;
+  hasBong: boolean;
+}
+
 export interface MatchTransitionState {
   phaseDetail: string | null;
+  pendingCanto: PendingCantoState | null;
   activeActionSeatId: string | null;
   latestTrickResult: TrickResultView | null;
   latestTrickResolvedAt: string | null;
@@ -415,8 +433,6 @@ export interface ReactionSendPayload extends LobbyActionPayload {
   reaction: string;
   targetSeatId?: string | null;
 }
-
-export type CantoType = 'envido' | 'real_envido' | 'falta_envido' | 'truco' | 'retruco' | 'vale_cuatro';
 
 export interface CantoOpenPayload extends LobbyActionPayload {
   clientActionId: string;

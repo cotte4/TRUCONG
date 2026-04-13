@@ -250,6 +250,15 @@ type MutableRoom = {
 
 type MatchTransitionState = {
   phaseDetail: string | null;
+  pendingCanto: {
+    cantoType: MutablePendingCanto['cantoType'];
+    callChain: MutablePendingCanto['callChain'];
+    actorSeatId: string;
+    targetSeatId: string | null;
+    openedAt: string;
+    responseDeadlineAt: string | null;
+    hasBong: boolean;
+  } | null;
   activeActionSeatId: string | null;
   latestTrickResult: TrickResultView | null;
   latestTrickResolvedAt: string | null;
@@ -830,6 +839,17 @@ export class RoomStoreService {
 
     return {
       phaseDetail: this.getPhaseDetail(room),
+      pendingCanto: match.pendingCanto
+        ? {
+            cantoType: match.pendingCanto.cantoType,
+            callChain: this.getPendingCantoCallChain(match.pendingCanto),
+            actorSeatId: match.pendingCanto.actorSeatId,
+            targetSeatId: match.pendingCanto.targetSeatId,
+            openedAt: match.pendingCanto.openedAt,
+            responseDeadlineAt: match.pendingCanto.responseDeadlineAt,
+            hasBong: match.pendingCanto.hasBong,
+          }
+        : null,
       activeActionSeatId: this.getActiveActionSeatId(room),
       latestTrickResult,
       latestTrickResolvedAt: match.lastTrickResolvedAt,
@@ -1242,16 +1262,17 @@ export class RoomStoreService {
     const callChain = raisedEnvidoFromCanto
       ? [...this.getPendingCantoCallChain(raisedEnvidoFromCanto), cantoType]
       : [cantoType];
+    const effectiveTargetSeatId =
+      raisedFromCanto?.actorSeatId ??
+      raisedEnvidoFromCanto?.actorSeatId ??
+      interruptedPendingTruco?.actorSeatId ??
+      targetSeatId ??
+      this.getDerivedPendingCantoTargetSeatId(room, actorSeat.id);
     room.match.pendingCanto = {
       cantoType,
       callChain,
       actorSeatId: actorSeat.id,
-      targetSeatId:
-        raisedFromCanto?.actorSeatId ??
-        raisedEnvidoFromCanto?.actorSeatId ??
-        interruptedPendingTruco?.actorSeatId ??
-        targetSeatId ??
-        null,
+      targetSeatId: effectiveTargetSeatId,
       openedAt: new Date().toISOString(),
       responseDeadlineAt: new Date(Date.now() + 12_000).toISOString(),
       hasBong:
@@ -1322,14 +1343,16 @@ export class RoomStoreService {
       room.seats.find((seat) => seat.id === pending.actorSeatId)?.teamSide ??
       null;
 
-    if (pending.targetSeatId && pending.targetSeatId !== actorSeat.id) {
+    const effectiveTargetSeatId = this.getPendingCantoTargetSeatId(room, pending);
+
+    if (effectiveTargetSeatId && effectiveTargetSeatId !== actorSeat.id) {
       throw new BadRequestException(
         'This canto must be resolved by the targeted seat.',
       );
     }
 
     if (
-      !pending.targetSeatId &&
+      !effectiveTargetSeatId &&
       actorTeamSide !== null &&
       actorTeamSide === callerTeamSide
     ) {
@@ -2745,7 +2768,7 @@ export class RoomStoreService {
     }
 
     // Only the target of the pending canto can raise
-    if (pending.targetSeatId !== actorSeatId) {
+    if (this.getPendingCantoTargetSeatId(room, pending) !== actorSeatId) {
       return false;
     }
 
@@ -2765,6 +2788,31 @@ export class RoomStoreService {
     return pending.callChain.length > 0
       ? [...pending.callChain]
       : [pending.cantoType];
+  }
+
+  private getDerivedPendingCantoTargetSeatId(
+    room: MutableRoom,
+    actorSeatId: string | null,
+  ) {
+    const callerSeat = room.seats.find((seat) => seat.id === actorSeatId);
+    const responder = room.seats.find(
+      (seat) =>
+        seat.displayName &&
+        seat.teamSide !== null &&
+        seat.teamSide !== callerSeat?.teamSide,
+    );
+
+    return responder?.id ?? null;
+  }
+
+  private getPendingCantoTargetSeatId(
+    room: MutableRoom,
+    pending: MutablePendingCanto,
+  ) {
+    return (
+      pending.targetSeatId ??
+      this.getDerivedPendingCantoTargetSeatId(room, pending.actorSeatId)
+    );
   }
 
   private getAllowedNextEnvidoCalls(
@@ -2813,7 +2861,7 @@ export class RoomStoreService {
       return false;
     }
 
-    if (pending.targetSeatId !== actorSeatId) {
+    if (this.getPendingCantoTargetSeatId(room, pending) !== actorSeatId) {
       return false;
     }
 
@@ -2920,20 +2968,9 @@ export class RoomStoreService {
     }
 
     if (room.phase === 'response_pending') {
-      if (match.pendingCanto?.targetSeatId) {
-        return match.pendingCanto.targetSeatId;
-      }
-      // No explicit target: find the first occupied opposing-team seat
-      const callerSeat = room.seats.find(
-        (s) => s.id === match.pendingCanto?.actorSeatId,
-      );
-      const responder = room.seats.find(
-        (s) =>
-          s.displayName &&
-          s.teamSide !== null &&
-          s.teamSide !== callerSeat?.teamSide,
-      );
-      return responder?.id ?? null;
+      return match.pendingCanto
+        ? this.getPendingCantoTargetSeatId(room, match.pendingCanto)
+        : null;
     }
 
     if (room.phase === 'wildcard_selection') {

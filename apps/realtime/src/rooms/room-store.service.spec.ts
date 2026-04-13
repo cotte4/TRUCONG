@@ -1457,6 +1457,67 @@ describe('RoomStoreService', () => {
     });
   });
 
+  it('allows envido raises and responses when the target seat is implicit', async () => {
+    const created = service.createRoom({
+      displayName: 'Host',
+      maxPlayers: 2,
+      targetScore: 30,
+    });
+    const joined = await service.joinRoom(created.snapshot.code, {
+      displayName: 'Guest',
+    });
+
+    service.toggleReady(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+    );
+    service.toggleReady(created.snapshot.code, joined.session.roomSessionToken);
+    service.startMatch(created.snapshot.code, created.session.roomSessionToken);
+
+    service.openCanto(
+      created.snapshot.code,
+      created.session.roomSessionToken,
+      'envido',
+    );
+
+    let lifecycle = service.getRoomLifecycleState(
+      created.snapshot.code,
+      created.session.seatId,
+    );
+    expect(lifecycle.transitionState?.pendingCanto?.targetSeatId).toBe(
+      joined.session.seatId,
+    );
+    expect(lifecycle.transitionState?.activeActionSeatId).toBe(
+      joined.session.seatId,
+    );
+
+    service.openCanto(
+      created.snapshot.code,
+      joined.session.roomSessionToken,
+      'envido',
+    );
+
+    lifecycle = service.getRoomLifecycleState(
+      created.snapshot.code,
+      created.session.seatId,
+    );
+    expect(lifecycle.transitionState?.pendingCanto?.callChain).toEqual([
+      'envido',
+      'envido',
+    ]);
+    expect(lifecycle.transitionState?.activeActionSeatId).toBe(
+      created.session.seatId,
+    );
+
+    expect(() =>
+      service.resolveCanto(
+        created.snapshot.code,
+        created.session.roomSessionToken,
+        'quiero',
+      ),
+    ).not.toThrow();
+  });
+
   it('awards accepted envido to the team with the better hand and can finish the match', async () => {
     const created = service.createRoom({
       displayName: 'Host',

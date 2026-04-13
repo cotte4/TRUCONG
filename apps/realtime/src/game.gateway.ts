@@ -2442,6 +2442,7 @@ export class GameGateway implements OnGatewayDisconnect {
 
     return {
       phaseDetail: snapshot.statusText,
+      pendingCanto: null,
       activeActionSeatId: matchView?.currentTurnSeatId ?? null,
       latestTrickResult,
       latestTrickResolvedAt:

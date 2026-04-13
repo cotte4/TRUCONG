@@ -32,6 +32,57 @@ body {
   background-size: 42px 42px, 42px 42px, 100% 100%;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  body {
+    cursor: url("/cursors/ufo-default.svg") 16 20, default;
+  }
+
+  button,
+  [role="button"],
+  a[href],
+  label[for],
+  summary {
+    cursor: url("/cursors/ufo-hover.svg") 16 20, pointer;
+    transition:
+      transform 160ms ease,
+      filter 180ms ease,
+      box-shadow 180ms ease,
+      border-color 180ms ease,
+      background-color 180ms ease,
+      opacity 180ms ease;
+  }
+
+  button:hover:not(:disabled),
+  [role="button"]:hover:not([aria-disabled="true"]),
+  a[href]:hover,
+  label[for]:hover,
+  summary:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.04);
+  }
+
+  button:active:not(:disabled),
+  [role="button"]:active:not([aria-disabled="true"]),
+  a[href]:active,
+  summary:active {
+    transform: translateY(0);
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
+  input,
+  textarea {
+    cursor: text;
+  }
+
+  select {
+    cursor: pointer;
+  }
+}
+
 .game-shell {
   position: relative;
   overflow: hidden;
@@ -1116,5 +1167,24 @@ body {
   }
   .trap-cta:hover {
     transform: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: reduce) {
+  button,
+  [role="button"],
+  a[href],
+  label[for],
+  summary {
+    transition: none;
+  }
+
+  button:hover:not(:disabled),
+  [role="button"]:hover:not([aria-disabled="true"]),
+  a[href]:hover,
+  label[for]:hover,
+  summary:hover {
+    transform: none;
+    filter: none;
   }
 }

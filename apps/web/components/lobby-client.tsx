@@ -198,6 +198,57 @@ function getEnvidoChainLabel(callChain: string[] | null | undefined, fallback: s
   return callChain.map((call) => getCantoLabel(call as CantoType)).join(" + ");
 }
 
+function getEnvidoChainSupportLine(callChain: string[] | null | undefined) {
+  if (!callChain || callChain.length === 0) {
+    return null;
+  }
+
+  if (callChain.includes("falta_envido")) {
+    return "Vale lo que falta para ganar";
+  }
+
+  const points = callChain.reduce((total, call) => {
+    if (call === "envido") {
+      return total + 2;
+    }
+
+    if (call === "real_envido") {
+      return total + 3;
+    }
+
+    return total;
+  }, 0);
+
+  if (points <= 0) {
+    return null;
+  }
+
+  return `Vale ${points} punto${points === 1 ? "" : "s"}`;
+}
+
+function getAllowedPendingEnvidoRaises(callChain: CantoType[]) {
+  const lastCall = callChain[callChain.length - 1];
+  const envidoCount = callChain.filter((call) => call === "envido").length;
+
+  if (!lastCall || lastCall === "falta_envido") {
+    return [] as CantoType[];
+  }
+
+  if (lastCall === "real_envido") {
+    return ["falta_envido"] satisfies CantoType[];
+  }
+
+  const nextCalls: CantoType[] = [];
+
+  if (envidoCount < 2) {
+    nextCalls.push("envido");
+  }
+
+  nextCalls.push("real_envido", "falta_envido");
+
+  return nextCalls;
+}
+
 function getEnvidoWinnerSeatId(
   declarations: EnvidoSingingState["declarations"],
   manoSeatId: string | null,
@@ -1980,9 +2031,19 @@ export function LobbyClient({ code }: { code: string }) {
   const isLive = connectionLabel === "En vivo";
   const isMyTurn = phase === "action_turn" && activeSeatId === currentSeat?.id;
   const isMyCantoResponse = phase === "response_pending" && activeSeatId === currentSeat?.id;
+  const pendingCanto =
+    phase === "response_pending" ? transition?.pendingCanto ?? null : null;
   const pendingCantoType: CantoType | null =
-    phase === "response_pending" && transition?.phaseDetail
+    pendingCanto?.cantoType ??
+    (phase === "response_pending" && transition?.phaseDetail
       ? (transition.phaseDetail.split(" ")[0] as CantoType)
+      : null);
+  const pendingEnvidoCallChain =
+    pendingCantoType &&
+    ["envido", "real_envido", "falta_envido"].includes(pendingCantoType)
+      ? ((pendingCanto?.callChain?.length
+          ? pendingCanto.callChain
+          : [pendingCantoType]) as CantoType[])
       : null;
   const trickNumber = matchView?.trickNumber ?? matchState?.trickNumber ?? 1;
   const envidoResolved = matchView?.envidoResolved ?? false;
@@ -2001,11 +2062,24 @@ export function LobbyClient({ code }: { code: string }) {
   const actionTurnTrucoOptions: CantoType[] =
     currentHandPoints >= 3 ? ["vale_cuatro"] : currentHandPoints >= 2 ? ["retruco"] : ["truco"];
   const responseRaiseOptions: CantoType[] =
-    pendingCantoType === "envido"
-      ? ["envido", "real_envido", "falta_envido"]
+    pendingEnvidoCallChain
+      ? getAllowedPendingEnvidoRaises(pendingEnvidoCallChain)
       : pendingCantoType === "real_envido"
         ? ["falta_envido"]
         : [];
+  const pendingCantoLabel =
+    pendingEnvidoCallChain && pendingCantoType
+      ? getEnvidoChainLabel(pendingEnvidoCallChain, getCantoLabel(pendingCantoType))
+      : pendingCantoType
+        ? getCantoLabel(pendingCantoType)
+        : "";
+  const pendingCantoSupportLine =
+    pendingEnvidoCallChain != null
+      ? getEnvidoChainSupportLine(pendingEnvidoCallChain)
+      : pendingCantoType
+        ? getCantoSupportLine(pendingCantoType)
+        : null;
+  const activePendingCantoHasBong = pendingCanto?.hasBong ?? pendingCantoHasBong;
   const canArmBongNow =
     snapshot.allowBongs &&
     (actionTurnTrucoOptions.some(canArmBongForCanto) ||
@@ -2990,19 +3064,29 @@ export function LobbyClient({ code }: { code: string }) {
                   ) : null}
                 </div>
                 <h2 className="mt-2 text-2xl font-semibold text-white">
-                  {getCantoLabel(pendingCantoType)}
-                  {pendingCantoHasBong ? <span className="ml-2 font-brand-display text-amber-300"> + BONG</span> : null}
+                  {pendingCantoLabel}
+                  {activePendingCantoHasBong ? <span className="ml-2 font-brand-display text-amber-300"> + BONG</span> : null}
                 </h2>
-                {pendingCantoHasBong ? (
+                {pendingCantoSupportLine ? (
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/60">
+                    {pendingCantoSupportLine}
+                  </p>
+                ) : null}
+                {activePendingCantoHasBong ? (
                   <p className="mt-1 text-xs font-bold uppercase tracking-[0.22em] text-amber-300/80">Si aceptás, aceptás el BONG también</p>
                 ) : null}
                 <p className="mt-2 text-sm text-slate-200">¿Querés aceptar, subir o rechazar?</p>
+                {error ? (
+                  <div className="mt-3 rounded-[1rem] border border-rose-300/30 bg-rose-300/10 px-3 py-2 text-sm text-rose-50">
+                    {error}
+                  </div>
+                ) : null}
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <button
                     type="button"
                     disabled={actionPending}
                     onClick={() => handleResolveCanto(pendingCantoType, "quiero")}
-                    className="rounded-[1.2rem] bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="trap-cta rounded-[1.2rem] px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Quiero
                   </button>
@@ -3010,7 +3094,7 @@ export function LobbyClient({ code }: { code: string }) {
                     type="button"
                     disabled={actionPending}
                     onClick={() => handleResolveCanto(pendingCantoType, "no_quiero")}
-                    className="rounded-[1.2rem] border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="trap-ghost-button rounded-[1.2rem] px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     No Quiero
                   </button>
@@ -3045,30 +3129,36 @@ export function LobbyClient({ code }: { code: string }) {
                         </button>
                       </div>
                     ) : null}
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <p className="w-full text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Subir a</p>
-                      {responseRaiseOptions.map((cantoType) => (
-                        <button
-                          key={cantoType}
-                          type="button"
-                          disabled={actionPending}
-                          onClick={() => handleOpenCanto(cantoType)}
-                          className="canto-action-btn canto-action-btn-truco flex min-h-[5.25rem] w-full touch-manipulation items-start justify-between rounded-[1.35rem] px-4 py-3 text-left disabled:opacity-60"
-                        >
-                          <span className="block min-w-0">
-                            <span className="block text-base font-black uppercase tracking-[0.18em] text-white">
-                              {getCantoLabel(cantoType)}
-                              {bongArmedReady && canArmBongForCanto(cantoType) ? " + BONG" : ""}
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Subir a</p>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {responseRaiseOptions.map((cantoType) => (
+                          <button
+                            key={cantoType}
+                            type="button"
+                            disabled={actionPending}
+                            onClick={() => handleOpenCanto(cantoType)}
+                            className={`canto-action-btn ${
+                              ["envido", "real_envido", "falta_envido"].includes(cantoType)
+                                ? "canto-action-btn-envido"
+                                : "canto-action-btn-truco"
+                            } flex min-h-[5.25rem] w-full touch-manipulation items-start justify-between rounded-[1.35rem] px-4 py-3 text-left disabled:opacity-60`}
+                          >
+                            <span className="block min-w-0">
+                              <span className="block text-base font-black uppercase tracking-[0.18em] text-white">
+                                {getCantoLabel(cantoType)}
+                                {bongArmedReady && canArmBongForCanto(cantoType) ? " + BONG" : ""}
+                              </span>
+                              <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/74">
+                                {getCantoSupportLine(cantoType)}
+                              </span>
                             </span>
-                            <span className="mt-1 block text-[11px] font-medium uppercase tracking-[0.14em] text-white/74">
-                              {getCantoSupportLine(cantoType)}
+                            <span className="rounded-full border border-white/16 bg-black/20 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/78">
+                              {getCantoBadge(cantoType)}
                             </span>
-                          </span>
-                          <span className="rounded-full border border-white/16 bg-black/20 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white/78">
-                            {getCantoBadge(cantoType)}
-                          </span>
-                        </button>
-                      ))}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ) : null}
